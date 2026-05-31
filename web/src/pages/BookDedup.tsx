@@ -2371,6 +2371,25 @@ function AcousticDedupTab() {
   // a full rescan. Use when prior fingerprints are suspected bad (e.g. the
   // "AQAAAA" sentinel pollution that made every book a 100% match against
   // one anchor). Heavy: 5–10 minute clear, then a multi-hour rescan.
+  // Online AcoustID lookup — sends every fingerprint to acoustid.org's
+  // /v2/lookup and stores the top MusicBrainz recording match. Rate-
+  // limited (~3 req/sec) so this takes hours on a large library.
+  // Audiobook hit rate is modest (5–15%); the value is the "free wins"
+  // when a chapter happens to be in MusicBrainz.
+  const [onlineLookingUp, setOnlineLookingUp] = useState(false);
+  const handleAcoustIDOnline = async () => {
+    setOnlineLookingUp(true);
+    setStatusMsg(null);
+    try {
+      const op = await api.triggerAcoustIDOnlineLookup();
+      setStatusMsg(`AcoustID.org lookup queued — see bell (op ${op.id.slice(-6)}).`);
+    } catch (err) {
+      setStatusMsg(err instanceof Error ? err.message : 'AcoustID online lookup failed to start');
+    } finally {
+      setOnlineLookingUp(false);
+    }
+  };
+
   const [resetting, setResetting] = useState(false);
   const handleResetAcoustID = async () => {
     if (!window.confirm(
@@ -2530,6 +2549,12 @@ function AcousticDedupTab() {
         <Tooltip title="Nuke every stored AcoustID fingerprint and force a full rescan. Use when stored fingerprints are suspected bad (e.g. every book matching one anchor at 100%). Multi-hour.">
           <Button variant="outlined" color="error" onClick={handleResetAcoustID} disabled={resetting}>
             {resetting ? 'Queuing…' : 'Reset & Rescan All AcoustID'}
+          </Button>
+        </Tooltip>
+
+        <Tooltip title="Send every file's whole-file chromaprint to acoustid.org's /v2/lookup and store the top MusicBrainz recording_id (score ≥ 0.85). Requires ACOUSTID_API_KEY. Rate-limited to ~3 req/sec; takes hours over a full library. Audiobook coverage in AcoustID's DB is sparse — expect a 5–15% hit rate.">
+          <Button variant="outlined" color="info" onClick={handleAcoustIDOnline} disabled={onlineLookingUp}>
+            {onlineLookingUp ? 'Queuing…' : 'Look Up on AcoustID.org'}
           </Button>
         </Tooltip>
 

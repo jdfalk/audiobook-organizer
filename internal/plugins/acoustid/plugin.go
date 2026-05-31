@@ -49,6 +49,7 @@ func (p *Plugin) Register(r sdk.Registry) error {
 		p.fingerprintRescanDef(),
 		p.resetAllDef(),
 		p.lshBackfillDef(),
+		p.onlineLookupDef(),
 	}
 
 	for _, op := range ops {

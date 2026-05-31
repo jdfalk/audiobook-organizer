@@ -4772,6 +4772,25 @@ export async function triggerDedupAcoustID(): Promise<Operation> {
   });
 }
 
+// Triggers the acoustid.lookup-online op via the generic /operations/v2
+// endpoint. Sends every BookFile's whole-file chromaprint to
+// acoustid.org's /v2/lookup and stores the top MusicBrainz recording
+// match (score ≥ 0.85). Requires the server-side ACOUSTID_API_KEY env
+// var; otherwise the op fails fast with a clear message.
+export async function triggerAcoustIDOnlineLookup(force = false): Promise<Operation> {
+  return wrapTrigger('acoustid.lookup-online', async () => {
+    const response = await fetch(`${API_BASE}/operations/v2`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ def_id: 'acoustid.lookup-online', params: { force } }),
+    });
+    if (!response.ok) throw await buildApiError(response, 'Failed to trigger AcoustID online lookup');
+    const raw = await response.json();
+    const opID = raw.op_id ?? raw.data?.op_id ?? raw.data?.id ?? '';
+    return { id: opID, type: 'acoustid.lookup-online' } as Operation;
+  });
+}
+
 export async function triggerFingerprintBackfill(scope: 'missing' | 'all' = 'missing'): Promise<Operation> {
   return wrapTrigger('acoustid.fingerprint-rescan', async () => {
     const response = await fetch(`${API_BASE}/dedup/fingerprint-rescan`, {
