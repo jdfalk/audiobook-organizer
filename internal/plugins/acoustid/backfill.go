@@ -1,13 +1,14 @@
 // file: internal/plugins/acoustid/backfill.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: f6a7b8c9-d0e1-2345-def0-123456789abc
-// last-edited: 2026-05-30
+// last-edited: 2026-05-31
 
 package acoustid
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -215,39 +216,53 @@ func fingerprintEligibility(f database.BookFile, force bool) (fingerprintFileOut
 	return 0, false
 }
 
-// fingerprintBookFile generates and persists a whole-file chromaprint for a
-// single book_file row. Also populates AcoustIDSeg0 as a transition
-// fallback for code paths still reading the segment field; Seg1..6 are no
-// longer written (the offset-based segment extraction had a seek-past-EOF
-// failure mode and is being retired — see PLAN.md in this branch).
+// fingerprintBookFile generates and persists a chromaprint for a single
+// book_file row. Prefers whole-file mode (fpcalc) when available; falls back
+// to 7-segment ffmpeg mode when fpcalc is not installed. In segment mode only
+// Seg0-Seg6 are written; AcoustIDFingerprint stays empty until fpcalc is
+// installed and a force-rescan is run.
 func fingerprintBookFile(store database.Store, f database.BookFile, force bool) fingerprintFileOutcome {
 	if outcome, stop := fingerprintEligibility(f, force); stop {
 		return outcome
 	}
 
 	wf, err := fingerprint.FileWholeFingerprint(f.FilePath)
-	if err != nil {
+	if err != nil && !errors.Is(err, fingerprint.ErrNotAvailable) {
 		slog.Warn("fingerprint", "path", f.FilePath, "err", err)
 		return fingerprintOutcomeFailed
 	}
 
 	updated := f
-	updated.AcoustIDFingerprint = wf.Raw
-	updated.AcoustIDFingerprintDurationSec = wf.DurationSec
-	// Derive Seg0 from the first SegmentSeconds of the whole-file fp so
-	// callers that still read the segment field get a comparable value
-	// without a second fpcalc invocation.
-	updated.AcoustIDSeg0 = fingerprint.NormalizeForStorage(fingerprint.DeriveSeg0(wf.Raw))
-	// Stop writing Seg1..6 — clear them so a force-rescan retires the
-	// poisoned sentinel values that prompted this migration.
-	if force {
-		updated.AcoustIDSeg1 = ""
-		updated.AcoustIDSeg2 = ""
-		updated.AcoustIDSeg3 = ""
-		updated.AcoustIDSeg4 = ""
-		updated.AcoustIDSeg5 = ""
-		updated.AcoustIDSeg6 = ""
+
+	if err == nil {
+		// Whole-file path (fpcalc available).
+		updated.AcoustIDFingerprint = wf.Raw
+		updated.AcoustIDFingerprintDurationSec = wf.DurationSec
+		updated.AcoustIDSeg0 = fingerprint.NormalizeForStorage(fingerprint.DeriveSeg0(wf.Raw))
+		if force {
+			updated.AcoustIDSeg1 = ""
+			updated.AcoustIDSeg2 = ""
+			updated.AcoustIDSeg3 = ""
+			updated.AcoustIDSeg4 = ""
+			updated.AcoustIDSeg5 = ""
+			updated.AcoustIDSeg6 = ""
+		}
+	} else {
+		// Segment fallback (ffmpeg available, fpcalc not installed).
+		segs, serr := fingerprint.FileSegments(f.FilePath, f.Duration)
+		if serr != nil {
+			slog.Warn("fingerprint segments", "path", f.FilePath, "err", serr)
+			return fingerprintOutcomeFailed
+		}
+		updated.AcoustIDSeg0 = fingerprint.NormalizeForStorage(segs[0])
+		updated.AcoustIDSeg1 = fingerprint.NormalizeForStorage(segs[1])
+		updated.AcoustIDSeg2 = fingerprint.NormalizeForStorage(segs[2])
+		updated.AcoustIDSeg3 = fingerprint.NormalizeForStorage(segs[3])
+		updated.AcoustIDSeg4 = fingerprint.NormalizeForStorage(segs[4])
+		updated.AcoustIDSeg5 = fingerprint.NormalizeForStorage(segs[5])
+		updated.AcoustIDSeg6 = fingerprint.NormalizeForStorage(segs[6])
 	}
+
 	if err := store.UpdateBookFile(f.ID, &updated); err != nil {
 		slog.Warn("fingerprint update", "id", f.ID, "err", err)
 		return fingerprintOutcomeFailed
