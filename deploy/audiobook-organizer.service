@@ -1,5 +1,5 @@
 # file: deploy/audiobook-organizer.service
-# version: 4.0.0
+# version: 4.1.0
 # guid: f1e2d3c4-b5a6-9870-8765-4321fedcba98
 #
 # systemd service unit for audiobook-organizer on Linux
@@ -54,6 +54,15 @@ WorkingDirectory=/var/lib/audiobook-organizer
 Environment="HOME=/var/lib/audiobook-organizer"
 Environment="AUDIOBOOK_ROOT_DIR=/var/lib/audiobooks"
 Environment="DATABASE_PATH=/var/lib/audiobook-organizer/audiobooks.pebble"
+# Allow heap to grow to 9 GiB before aggressive GC; reduces GC CPU overhead
+# while fingerprint blobs remain in the fast cache (see GOMEMLIMIT refactor TODO).
+Environment="GOMEMLIMIT=9GiB"
+# GC at 200% heap growth instead of 100% -- halves GC frequency at the cost
+# of more memory. GOMEMLIMIT acts as the safety net.
+Environment="GOGC=200"
+# Number of parallel fpcalc workers during fingerprint rescan. 4 is conservative
+# on a shared server; bump to 8-16 on a dedicated machine.
+Environment="FP_PARALLEL_WORKERS=4"
 
 # Restart policy: restart on failure with 5-second delay
 Restart=on-failure
@@ -61,9 +70,9 @@ RestartSec=5
 StartLimitBurst=5
 StartLimitIntervalSec=60
 
-# Memory limit: prevent service from consuming entire system (previous crash: 81GB)
-# If warm-up cache logic allocates unbounded memory, this kills it gracefully
-MemoryLimit=8G
+# cgroup memory limit — prevents OOM taking down the whole system. Set above
+# GOMEMLIMIT so the Go soft limit triggers GC before systemd kills the process.
+MemoryLimit=12G
 
 # Security hardening — kept minimal to allow reading from various mount points
 # (NFS, external drives, etc). The service needs:
