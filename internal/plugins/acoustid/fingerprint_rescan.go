@@ -116,7 +116,7 @@ func (p *Plugin) runFingerprintRescan(ctx context.Context, params json.RawMessag
 			continue
 		}
 
-		for _, f := range files {
+		for fi, f := range files {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -133,6 +133,20 @@ func (p *Plugin) runFingerprintRescan(ctx context.Context, params json.RawMessag
 				ineligible++
 			case fingerprintOutcomeFailed:
 				failed++
+			}
+
+			// Heartbeat from inside the file loop so the registry watchdog
+			// (5-minute idle timeout) doesn't kill the op while we're
+			// grinding through a single book's 30–50 files. We don't bump
+			// progress_current here — that still tracks book index — but
+			// the message refresh keeps the op's last-updated wall clock
+			// fresh. Without this, a 40-file audiobook (4–6 min) can
+			// trigger the stuck-op watchdog.
+			if len(files) > 5 && (fi%5 == 4 || fi == len(files)-1) {
+				_ = reporter.UpdateProgress(i+1, total,
+					fmt.Sprintf("Books %d/%d file %d/%d (fp=%d skip=%d ineligible=%d fail=%d)",
+						i+1, total, fi+1, len(files),
+						fingerprinted, skipped, ineligible, failed))
 			}
 		}
 

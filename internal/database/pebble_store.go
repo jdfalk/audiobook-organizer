@@ -6,6 +6,7 @@
 package database
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/json"
@@ -9914,6 +9915,50 @@ func (s *PebbleStore) ClearAllAcoustIDFingerprints(ctx context.Context, batchSiz
 		return nil
 	}
 
+	// Pre-check needles: a row whose JSON contains none of these is
+	// guaranteed to have no fingerprint data and can be skipped without
+	// the (now-expensive) json.Unmarshal/Marshal round-trip. The
+	// AcoustIDFingerprint []byte field can be 230 KB–1 MB of base64 per
+	// row, so unmarshaling all 308 K rows just to check emptiness costs
+	// ~10 minutes at ~33 rows/sec. With these needles the skip path is
+	// ~5000 rows/sec and the slow path runs only for rows that actually
+	// need clearing.
+	//
+	// Why two needles per seg: omitempty-tagged fields can either be
+	// absent (no key) or present-but-empty (`"":""`). Either way the
+	// fingerprint is empty. Same logic for the raw fp.
+	var (
+		fpNeedle   = []byte(`"acoustid_fingerprint":"`)
+		seg0Needle = []byte(`"acoustid_seg0":"`)
+		seg1Needle = []byte(`"acoustid_seg1":"`)
+		seg2Needle = []byte(`"acoustid_seg2":"`)
+		seg3Needle = []byte(`"acoustid_seg3":"`)
+		seg4Needle = []byte(`"acoustid_seg4":"`)
+		seg5Needle = []byte(`"acoustid_seg5":"`)
+		seg6Needle = []byte(`"acoustid_seg6":"`)
+		emptyStr   = []byte(`""`)
+	)
+	// hasNonEmpty returns true if the needle appears and is not
+	// immediately followed by `""` (i.e. the field exists with a value).
+	hasNonEmpty := func(data, needle []byte) bool {
+		idx := bytes.Index(data, needle)
+		if idx < 0 {
+			return false
+		}
+		after := idx + len(needle)
+		// needle ends with `:"` — the byte after that is the first char
+		// of the value. If it's a closing quote, the value is empty.
+		if after-1 >= 0 && after-1 < len(data) && data[after-1] == '"' {
+			// Check immediately past the needle: if it's the closing
+			// quote of an empty string we have `"":""` — empty value.
+			if after < len(data) && data[after] == '"' {
+				return false
+			}
+		}
+		_ = emptyStr // referenced for documentation; bytes.Equal not needed
+		return true
+	}
+
 	for _, r := range refs {
 		select {
 		case <-ctx.Done():
@@ -9922,12 +9967,30 @@ func (s *PebbleStore) ClearAllAcoustIDFingerprints(ctx context.Context, batchSiz
 		default:
 		}
 
-		var f BookFile
-		if err := json.Unmarshal(r.data, &f); err != nil {
-			processed++
+		processed++
+
+		// Fast skip: raw bytes don't carry any of the fp/seg fields with
+		// a non-empty value. Saves the json.Unmarshal cost — which has
+		// to decode AcoustIDFingerprint's multi-KB base64 even when we
+		// only care about it being empty.
+		if !hasNonEmpty(r.data, fpNeedle) &&
+			!hasNonEmpty(r.data, seg0Needle) &&
+			!hasNonEmpty(r.data, seg1Needle) &&
+			!hasNonEmpty(r.data, seg2Needle) &&
+			!hasNonEmpty(r.data, seg3Needle) &&
+			!hasNonEmpty(r.data, seg4Needle) &&
+			!hasNonEmpty(r.data, seg5Needle) &&
+			!hasNonEmpty(r.data, seg6Needle) {
+			if progress != nil && processed%5000 == 0 {
+				progress(processed, cleared, total)
+			}
 			continue
 		}
-		processed++
+
+		var f BookFile
+		if err := json.Unmarshal(r.data, &f); err != nil {
+			continue
+		}
 
 		if f.AcoustIDSeg0 == "" && f.AcoustIDSeg1 == "" && f.AcoustIDSeg2 == "" &&
 			f.AcoustIDSeg3 == "" && f.AcoustIDSeg4 == "" && f.AcoustIDSeg5 == "" &&
