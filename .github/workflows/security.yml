@@ -1,5 +1,5 @@
 # file: .github/workflows/security.yml
-# version: 2.2.0
+# version: 2.3.0
 # guid: 7f2a3c1d-4e5f-6g7h-8i9j-0k1l2m3n4o5p
 # last-edited: 2026-05-31
 #
@@ -29,37 +29,11 @@ jobs:
     name: Advanced CodeQL Security
     uses: jdfalk/ghcommon/.github/workflows/reusable-security.yml@main
     with:
-      # ghcommon v1.3.2 still maps JavaScript to CodeQL autobuild mode, which
-      # CodeQL no longer supports for JavaScript/TypeScript. Keep JS local.
-      languages: '["go", "actions"]'
+      languages: '["go", "javascript", "actions"]'
       skip-codeql: false
       skip-dependency-review: false
       skip-security-audit: false
     secrets: inherit
-
-  codeql-javascript:
-    name: CodeQL Analysis (javascript-typescript)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4.36.0
-        with:
-          languages: javascript-typescript
-          queries: security-extended,security-and-quality
-          build-mode: none
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4.36.0
-        with:
-          category: /language:javascript-typescript
 
   dependencies-go:
     name: Dependency Submission (go, setup-go)
