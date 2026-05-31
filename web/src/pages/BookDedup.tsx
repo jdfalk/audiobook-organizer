@@ -2390,6 +2390,37 @@ function AcousticDedupTab() {
     }
   };
 
+  // AcoustID API key form. Loads the masked value from /api/v1/config so
+  // the user can see "•••• …xyz" without re-entering it, then PUTs the
+  // new value when they save. The server stores it in the settings DB
+  // and the lookup-online op reads from config.AppConfig.AcoustIDAPIKey
+  // before falling back to the env var.
+  const [acoustidKey, setAcoustidKey] = useState('');
+  const [acoustidKeyMask, setAcoustidKeyMask] = useState('');
+  const [acoustidKeySaving, setAcoustidKeySaving] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    api.getConfig().then((cfg) => {
+      if (!cancelled) setAcoustidKeyMask(cfg.acoustid_api_key || '');
+    }).catch(() => { /* leave blank */ });
+    return () => { cancelled = true; };
+  }, []);
+  const handleSaveAcoustIDKey = async () => {
+    if (!acoustidKey.trim()) return;
+    setAcoustidKeySaving(true);
+    setStatusMsg(null);
+    try {
+      const cfg = await api.updateConfig({ acoustid_api_key: acoustidKey.trim() });
+      setAcoustidKeyMask(cfg.acoustid_api_key || '');
+      setAcoustidKey('');
+      setStatusMsg('AcoustID API key saved.');
+    } catch (err) {
+      setStatusMsg(err instanceof Error ? err.message : 'Failed to save AcoustID API key');
+    } finally {
+      setAcoustidKeySaving(false);
+    }
+  };
+
   const [resetting, setResetting] = useState(false);
   const handleResetAcoustID = async () => {
     if (!window.confirm(
@@ -2564,6 +2595,37 @@ function AcousticDedupTab() {
       <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
         Workflow: <strong>Fingerprint Books</strong> (reads audio, ~hours) → <strong>Find Acoustic Duplicates</strong> (compares hashes, seconds). Merge direction: prefer the book with richer metadata (ASIN/ISBN → cover → sane title).
       </Typography>
+
+      {/* AcoustID online lookup — API key form. Saved to the settings
+          DB via PUT /api/v1/config; the server-side op reads from
+          AppConfig.AcoustIDAPIKey before falling back to env. */}
+      <Paper variant="outlined" sx={{ mb: 2, p: 1.5 }}>
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Typography variant="body2" sx={{ fontWeight: 500, minWidth: 0 }}>
+            AcoustID.org API key
+          </Typography>
+          <TextField
+            size="small"
+            type="password"
+            placeholder={acoustidKeyMask ? `Saved: ${acoustidKeyMask}` : 'Get a free key at acoustid.org/login'}
+            value={acoustidKey}
+            onChange={(e) => setAcoustidKey(e.target.value)}
+            sx={{ flex: 1, minWidth: 280 }}
+            inputProps={{ autoComplete: 'off' }}
+          />
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleSaveAcoustIDKey}
+            disabled={acoustidKeySaving || !acoustidKey.trim()}
+          >
+            {acoustidKeySaving ? 'Saving…' : 'Save'}
+          </Button>
+        </Stack>
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+          Required for "Look Up on AcoustID.org". Stored in the settings database (masked when read back). Falls back to ACOUSTID_API_KEY env var if unset.
+        </Typography>
+      </Paper>
 
       {statusMsg && <Alert severity="info" sx={{ mb: 2 }} onClose={() => setStatusMsg(null)}>{statusMsg}</Alert>}
 

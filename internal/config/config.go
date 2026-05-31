@@ -132,6 +132,12 @@ type Config struct {
 	EnableAIParsing bool   `json:"enable_ai_parsing"`
 	OpenAIAPIKey    string `json:"openai_api_key"`
 
+	// AcoustIDAPIKey is the acoustid.org client ID used by the
+	// acoustid.lookup-online op. Persisted to the settings DB (masked
+	// in API responses). Falls back to the ACOUSTID_API_KEY env var
+	// when empty, for compatibility with the original env-only setup.
+	AcoustIDAPIKey string `json:"acoustid_api_key"`
+
 	// Per-feature OpenAI model selection. Default to gpt-5-mini for all four
 	// to preserve historical behavior. See spec docs/superpowers/specs/2026-04-27-per-feature-llm-model-knob-design.md.
 	DedupReviewModel    string `json:"dedup_review_model"    mapstructure:"dedup_review_model"`
@@ -396,6 +402,7 @@ func InitConfig() {
 	// Set AI parsing defaults
 	viper.SetDefault("enable_ai_parsing", true)
 	viper.SetDefault("openai_api_key", "")
+	viper.SetDefault("acoustid_api_key", "")
 
 	// Per-feature model defaults — gpt-5-mini preserves historical behavior
 	viper.SetDefault("dedup_review_model", "gpt-5-mini")
@@ -577,6 +584,7 @@ func InitConfig() {
 		// AI parsing
 		EnableAIParsing:     viper.GetBool("enable_ai_parsing"),
 		OpenAIAPIKey:        viper.GetString("openai_api_key"),
+		AcoustIDAPIKey:      viper.GetString("acoustid_api_key"),
 		DedupReviewModel:    viper.GetString("dedup_review_model"),
 		MetadataReviewModel: viper.GetString("metadata_review_model"),
 		FilenameParseModel:  viper.GetString("filename_parse_model"),
@@ -974,6 +982,7 @@ func ResetToDefaults() {
 		// AI parsing
 		EnableAIParsing:     true,
 		OpenAIAPIKey:        "",
+		AcoustIDAPIKey:      "",
 		DedupReviewModel:    "gpt-5-mini",
 		MetadataReviewModel: "gpt-5-mini",
 		FilenameParseModel:  "gpt-5-mini",

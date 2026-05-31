@@ -38,6 +38,9 @@ func (us *UpdateService) MaskSecrets(cfg Config) Config {
 	if masked.OpenAIAPIKey != "" {
 		masked.OpenAIAPIKey = database.MaskSecret(masked.OpenAIAPIKey)
 	}
+	if masked.AcoustIDAPIKey != "" {
+		masked.AcoustIDAPIKey = database.MaskSecret(masked.AcoustIDAPIKey)
+	}
 	if masked.GoogleBooksAPIKey != "" {
 		masked.GoogleBooksAPIKey = database.MaskSecret(masked.GoogleBooksAPIKey)
 	}
@@ -54,6 +57,7 @@ func (us *UpdateService) MaskSecrets(cfg Config) Config {
 // JSON round-trip so they are never stored in plaintext in the config blob.
 var secretFieldKeys = []string{
 	"openai_api_key",
+	"acoustid_api_key",
 	"google_books_api_key",
 	"hardcover_api_token",
 	"basic_auth_password",
@@ -88,6 +92,10 @@ func (us *UpdateService) UpdateConfig(payload map[string]any) (int, map[string]a
 	if val, ok := payloadString(payload, "openai_api_key"); ok {
 		slog.Debug("UpdateConfig updating OpenAI API key (len)", "val_count", len(val))
 		AppConfig.OpenAIAPIKey = val
+	}
+	if val, ok := payloadString(payload, "acoustid_api_key"); ok {
+		slog.Debug("UpdateConfig updating AcoustID API key (len)", "val_count", len(val))
+		AppConfig.AcoustIDAPIKey = val
 	}
 	if val, ok := payloadString(payload, "google_books_api_key"); ok {
 		AppConfig.GoogleBooksAPIKey = val

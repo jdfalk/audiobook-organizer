@@ -622,6 +622,10 @@ export interface Config {
   enable_ai_parsing: boolean;
   metadata_llm_scoring_enabled?: boolean;
   openai_api_key: string;
+  // Optional acoustid.org client ID for the acoustid.lookup-online op.
+  // Masked when read back from the API; the user re-enters a new value
+  // to change it. Empty value falls through to the ACOUSTID_API_KEY env.
+  acoustid_api_key?: string;
 
   // Performance
   concurrent_scans: number;
