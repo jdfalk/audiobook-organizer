@@ -1,7 +1,7 @@
 // file: internal/server/acoustid_stats_handler_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f6a7b8c9-d0e1-2345-fabc-345678901234
-// last-edited: 2026-05-16
+// last-edited: 2026-05-31
 
 package server
 
@@ -32,11 +32,7 @@ func TestHandleGetAcoustIDStats_OK(t *testing.T) {
 		GetAcoustIDStatsFunc: func() (*database.AcoustIDStats, error) { return want, nil },
 	}
 
-	orig := database.GetGlobalStore()
-	database.SetGlobalStore(store)
-	t.Cleanup(func() { database.SetGlobalStore(orig) })
-
-	srv := &Server{}
+	srv := &Server{store: store}
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -46,29 +42,20 @@ func TestHandleGetAcoustIDStats_OK(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 
-	// Handler uses httputil.RespondWithOK which wraps in {"data": ...}
-	// and the handler also passes struct{Data any json:"data"}{...},
-	// giving outer envelope: {"data": {"data": <stats>}}.
+	// Handler calls httputil.RespondWithOK(c, stats) which wraps in {"data": <stats>}.
 	var body struct {
-		Data struct {
-			Data database.AcoustIDStats `json:"data"`
-		} `json:"data"`
+		Data database.AcoustIDStats `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
-	assert.Equal(t, want.TotalFiles, body.Data.Data.TotalFiles)
-	assert.Equal(t, want.WithFingerprint, body.Data.Data.WithFingerprint)
-	assert.Len(t, body.Data.Data.ByLibrary, 1)
+	assert.Equal(t, want.TotalFiles, body.Data.TotalFiles)
+	assert.Equal(t, want.WithFingerprint, body.Data.WithFingerprint)
+	assert.Len(t, body.Data.ByLibrary, 1)
 }
 
 func TestHandleGetAcoustIDStats_NilStore(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	orig := database.GetGlobalStore()
-	database.SetGlobalStore(nil)
-	t.Cleanup(func() { database.SetGlobalStore(orig) })
-
-	// Use a bare Server{} so we don't trigger the service registry build.
-	srv := &Server{}
+	srv := &Server{} // store field is nil by default
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)

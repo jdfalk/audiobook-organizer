@@ -6,6 +6,7 @@ package scanner_test
 import (
 	"testing"
 
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
@@ -14,6 +15,7 @@ import (
 func TestScanRegistration(t *testing.T) {
 	c := serviceregistry.NewContainer().
 		Override("store", mocks.NewMockStore(t)).
+		Override("embeddingstore", (*database.EmbeddingStore)(nil)).
 		Include("scan")
 	if err := c.Resolve(); err != nil {
 		t.Fatalf("resolve: %v", err)
