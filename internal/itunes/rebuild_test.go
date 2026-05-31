@@ -158,6 +158,8 @@ func (m *mockRebuildStore) GetBookFiles(bookID string) ([]database.BookFile, err
 func (m *mockRebuildStore) GetAuthorByID(id int) (*database.Author, error) {
 	return nil, nil
 }
+func (m *mockRebuildStore) ListBookIDs() ([]string, error)                                { return nil, nil }
+func (m *mockRebuildStore) ListBooksByITunesPID(limit, offset int) ([]database.Book, error) { return nil, nil }
 
 func TestBuildNewTrackFromBook(t *testing.T) {
 	// Create a mock book

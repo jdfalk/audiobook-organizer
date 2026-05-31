@@ -82,6 +82,7 @@ func (m *MockWorkStore) GetBooksByWorkID(workID string) ([]database.Book, error)
 	}
 	return []database.Book{}, nil
 }
+func (m *MockWorkStore) GetAllWorkBookCounts() (map[string]int, error) { return nil, nil }
 
 // TestWorkService_ListWorks_Empty tests listing works when there are none
 func TestWorkService_ListWorks_Empty(t *testing.T) {

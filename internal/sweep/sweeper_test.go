@@ -140,6 +140,8 @@ func (m *MockBookStore) MergeChapterBooks(primaryID string, srcIDs []string, com
 	return nil
 }
 func (m *MockBookStore) FlagMetadataHashDuplicate(primaryID, duplicateID string) error { return nil }
+func (m *MockBookStore) ListBookIDs() ([]string, error)                                        { return nil, nil }
+func (m *MockBookStore) ListBooksByITunesPID(limit, offset int) ([]database.Book, error)       { return nil, nil }
 
 func TestSweepTombstones_EmptyList(t *testing.T) {
 	store := &MockBookStore{
