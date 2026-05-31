@@ -13,6 +13,11 @@ from pathlib import Path
 from typing import List, Tuple, Optional
 
 class MemoryLeakDetector:
+    # Directories that contain non-React code (services, stores, utilities).
+    # setTimeout/setInterval in these files does NOT cause React unmount leaks;
+    # they run in module or class scope where lifecycle is managed differently.
+    COMPONENT_ONLY_DIRS = {'components', 'pages', 'hooks'}
+
     def __init__(self, web_src_dir: Optional[str] = None):
         if web_src_dir is None:
             # Find web/src by looking up from current directory
@@ -37,6 +42,11 @@ class MemoryLeakDetector:
             r"AbortController",
         ]
 
+    def _is_component_file(self, filepath: str) -> bool:
+        """Return True only for files inside components/, pages/, or hooks/."""
+        parts = Path(filepath).parts
+        return any(d in parts for d in self.COMPONENT_ONLY_DIRS)
+
     def should_ignore(self, line: str) -> bool:
         """Check if line should be ignored"""
         # Ignore empty lines and comments
@@ -50,7 +60,15 @@ class MemoryLeakDetector:
         return False
 
     def check_untracked_timers(self, filepath: str, content: str) -> None:
-        """Find setTimeout/setInterval without proper tracking"""
+        """Find setTimeout/setInterval without proper tracking.
+
+        Only runs on component files (components/, pages/, hooks/) because
+        timers in services, stores, and utilities are not tied to React
+        component lifecycle and cannot cause unmount-after-fire leaks.
+        """
+        if not self._is_component_file(filepath):
+            return
+
         lines = content.split('\n')
 
         for i, line in enumerate(lines, 1):
@@ -93,7 +111,14 @@ class MemoryLeakDetector:
             self.issues.append((filepath, i, f"Untracked {timer_type} (may fire after unmount)"))
 
     def check_untracked_listeners(self, filepath: str, content: str) -> None:
-        """Find addEventListener without removeEventListener"""
+        """Find addEventListener without removeEventListener.
+
+        Searches up to 100 lines ahead for a matching removeEventListener.
+        Stops only when the enclosing function scope fully closes (scope_depth
+        drops below -1), not on the first closing brace — that would produce
+        false positives when add and remove are in sibling blocks (e.g. an
+        XHR onload handler following the addEventListener call).
+        """
         lines = content.split('\n')
 
         for i, line in enumerate(lines, 1):
@@ -111,7 +136,7 @@ class MemoryLeakDetector:
             found_remove = False
             scope_depth = 0
 
-            for j in range(i, min(i + 50, len(lines))):
+            for j in range(i, min(i + 100, len(lines))):
                 line_j = lines[j]
 
                 # Track scope to avoid false positives
@@ -121,31 +146,40 @@ class MemoryLeakDetector:
                     found_remove = True
                     break
 
-                # If we hit end of function/component, stop looking
-                if scope_depth < 0:
+                # Stop only when we leave the enclosing function entirely
+                # (scope_depth < -1 means we've closed more than one extra level).
+                # Using -1 instead of 0 avoids false positives when add and remove
+                # live in sibling blocks at the same depth.
+                if scope_depth < -1:
                     break
 
             if not found_remove:
                 self.issues.append((filepath, i, f"addEventListener('{event_name}') without removeEventListener"))
 
     def check_poll_without_cleanup(self, filepath: str, content: str) -> None:
-        """Find polling functions created in handlers without cleanup tracking"""
+        """Find polling functions created in handlers without cleanup tracking."""
         lines = content.split('\n')
+
+        # Patterns that indicate the polling is properly guarded against leaks.
+        # Includes both explicit cancellation flags and ref-based unmount guards.
+        _CANCELLATION_PATTERNS = re.compile(
+            r'cancelled|AbortController|Ref\.current|isMounted|isUnmounted|isCleanedUp'
+        )
 
         for i, line in enumerate(lines, 1):
             if self.should_ignore(line):
                 continue
 
-            # Look for patterns like: const poll = async () => { ... while true or setTimeout(poll, ...)
+            # Look for patterns like: const poll = async () => { ... setTimeout(poll, ...)
             if re.search(r'const\s+\w*[Pp]oll\s*=\s*async', line):
-                # Check if it has proper cleanup pattern
+                # Collect a 50-line window around the polling function
+                window = ''.join(lines[max(0, i-1):min(i+50, len(lines))])
+                # If any cancellation/cleanup pattern is present, skip
+                if _CANCELLATION_PATTERNS.search(window):
+                    continue
                 for j in range(i, min(i + 50, len(lines))):
-                    if 'cancelled' in lines[j] or 'AbortController' in lines[j]:
-                        break
                     if re.search(r'setTimeout\(\w*[Pp]oll', lines[j]):
-                        # Found recursive setTimeout without cancellation
-                        if 'cancelled' not in ''.join(lines[max(0, j-20):j+5]):
-                            self.issues.append((filepath, j+1, "Recursive polling without cancellation flag"))
+                        self.issues.append((filepath, j+1, "Recursive polling without cancellation flag"))
                         break
 
     def scan(self) -> bool:
