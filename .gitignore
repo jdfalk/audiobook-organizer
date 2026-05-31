@@ -1,5 +1,6 @@
 # Local overrides
 Makefile.local
+deploy/local.conf
 
 # ==============================================================================
 # Go

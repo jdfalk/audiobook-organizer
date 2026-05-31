@@ -1,5 +1,5 @@
 # file: deploy/audiobook-organizer.service
-# version: 4.1.0
+# version: 4.3.0
 # guid: f1e2d3c4-b5a6-9870-8765-4321fedcba98
 #
 # systemd service unit for audiobook-organizer on Linux
@@ -21,6 +21,18 @@
 #   5. Enable and start:
 #      sudo systemctl enable --now audiobook-organizer
 #
+# Server-specific overrides (TLS certs, DB path, HTTP/3 port, etc.):
+#   Create a drop-in file at:
+#     /etc/systemd/system/audiobook-organizer.service.d/local.conf
+#   with the contents:
+#     [Service]
+#     ExecStart=
+#     ExecStart=/usr/local/bin/audiobook-organizer serve --host 0.0.0.0 --port 8484 \
+#           --db /path/to/audiobooks.pebble \
+#           --tls-cert /path/to/server.crt --tls-key /path/to/server.key \
+#           --http3-port 8484
+#   See deploy/local.conf (gitignored) for the production example.
+#
 # File access:
 #   The audiobook service user needs read access to your library. Configure with:
 #   Option A (group membership):
@@ -40,6 +52,8 @@ Description=Audiobook Organizer
 Documentation=https://github.com/jdfalk/audiobook-organizer
 After=network-online.target
 Wants=network-online.target
+StartLimitBurst=5
+StartLimitIntervalSec=60
 
 [Service]
 Type=simple
@@ -67,12 +81,10 @@ Environment="FP_PARALLEL_WORKERS=4"
 # Restart policy: restart on failure with 5-second delay
 Restart=on-failure
 RestartSec=5
-StartLimitBurst=5
-StartLimitIntervalSec=60
 
 # cgroup memory limit — prevents OOM taking down the whole system. Set above
 # GOMEMLIMIT so the Go soft limit triggers GC before systemd kills the process.
-MemoryLimit=12G
+MemoryMax=12G
 
 # Security hardening — kept minimal to allow reading from various mount points
 # (NFS, external drives, etc). The service needs:
