@@ -701,6 +701,18 @@ type BookFile struct {
 	FingerprintFailureReason  *string    `json:"fingerprint_failure_reason,omitempty"`  // e.g. "corrupt_audio"
 	FingerprintFailureDetail  *string    `json:"fingerprint_failure_detail,omitempty"`  // short human-readable explanation
 	FingerprintDiagnosticJSON *string    `json:"fingerprint_diagnostic_json,omitempty"` // full FileDiagnostic JSON blob
+	// AcoustIDOnlineRecordingID is the top-scoring MusicBrainz recording ID
+	// returned by acoustid.org's web /v2/lookup for this file's whole-file
+	// chromaprint. Populated by the acoustid.lookup-online op. Empty when
+	// the lookup hasn't been run, the API has no match, or the top score
+	// is below AcoustIDOnlineMinScore (0.85).
+	AcoustIDOnlineRecordingID string `json:"acoustid_online_recording_id,omitempty"`
+	// AcoustIDOnlineScore is the top match's score (0..1). 0 when no match.
+	AcoustIDOnlineScore float64 `json:"acoustid_online_score,omitempty"`
+	// AcoustIDOnlineLookedUpAt records when the last /v2/lookup completed.
+	// Used to avoid re-querying — the API has rate limits and the answer
+	// is stable for a stable fingerprint.
+	AcoustIDOnlineLookedUpAt *time.Time `json:"acoustid_online_looked_up_at,omitempty"`
 	OrganizeMethod            string     `json:"organize_method,omitempty"`             // "reflink", "hardlink", "copy", "symlink"
 	Missing                   bool       `json:"missing"`
 	SkipScan                  bool       `json:"skip_scan"` // user-set: exclude file from scans/fingerprinting
