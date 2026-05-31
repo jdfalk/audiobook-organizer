@@ -34,6 +34,7 @@ jobs:
           echo "Published release: $TAG  →  base version: $BASE"
 
           # Fetch all RC releases for this version series, sorted newest-first by RC number
+          # shellcheck disable=SC2016  # $base is a jq variable (--arg), not a shell variable
           RELEASES=$(gh release list --repo "$REPO" --limit 200 \
             --json tagName,isPrerelease \
             --jq --arg base "$BASE" \
