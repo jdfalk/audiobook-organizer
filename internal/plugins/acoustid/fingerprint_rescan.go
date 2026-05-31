@@ -1,7 +1,7 @@
 // file: internal/plugins/acoustid/fingerprint_rescan.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a7b8c9d0-e1f2-3456-def0-123456789abc
-// last-edited: 2026-05-19
+// last-edited: 2026-05-31
 
 package acoustid
 
@@ -9,10 +9,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
-	"path/filepath"
-	"strings"
+	"strconv"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -101,8 +101,30 @@ func (p *Plugin) runFingerprintRescan(ctx context.Context, params json.RawMessag
 		return nil
 	}
 
-	var fingerprinted, skipped, ineligible, failed int
+	workers := fpRescanWorkers()
+
+	var (
+		fingerprinted atomic.Int64
+		skipped       atomic.Int64
+		ineligible    atomic.Int64
+		failed        atomic.Int64
+	)
 	startedAt := time.Now()
+
+	// heartbeatTicker fires every 15 seconds so the registry watchdog never
+	// sees the op as idle, regardless of how long individual fpcalc calls take.
+	heartbeat := time.NewTicker(15 * time.Second)
+	defer heartbeat.Stop()
+
+	// progressMsg returns the current counter snapshot as a log string.
+	progressMsg := func(bookIdx, bookTotal, filesDone, filesTotal int) string {
+		return fmt.Sprintf("Books %d/%d files ~%d/%d (fp=%d skip=%d ineligible=%d fail=%d)",
+			bookIdx, bookTotal, filesDone, filesTotal,
+			fingerprinted.Load(), skipped.Load(), ineligible.Load(), failed.Load())
+	}
+
+	totalFiles := 0 // rough estimate, updated per book
+	filesDone := 0
 
 	for i, b := range books {
 		select {
@@ -115,58 +137,74 @@ func (p *Plugin) runFingerprintRescan(ctx context.Context, params json.RawMessag
 		if ferr != nil {
 			continue
 		}
+		totalFiles += len(files)
 
-		for fi, f := range files {
+		// Fan out file fingerprinting across `workers` goroutines.
+		sem := make(chan struct{}, workers)
+		var wg sync.WaitGroup
+		for _, f := range files {
 			select {
 			case <-ctx.Done():
+				wg.Wait()
 				return ctx.Err()
 			default:
 			}
 
-			switch fingerprintBookFileWithForce(p.store, f, req.Force) {
-			case fingerprintOutcomeFingerprinted:
-				fingerprinted++
-				time.Sleep(fingerprintThrottle)
-			case fingerprintOutcomeSkipped:
-				skipped++
-			case fingerprintOutcomeIneligible:
-				ineligible++
-			case fingerprintOutcomeFailed:
-				failed++
-			}
+			sem <- struct{}{} // acquire slot
+			wg.Add(1)
+			go func(bf database.BookFile) {
+				defer func() { <-sem; wg.Done() }()
+				switch fingerprintBookFile(p.store, bf, req.Force) {
+				case fingerprintOutcomeFingerprinted:
+					fingerprinted.Add(1)
+				case fingerprintOutcomeSkipped:
+					skipped.Add(1)
+				case fingerprintOutcomeIneligible:
+					ineligible.Add(1)
+				case fingerprintOutcomeFailed:
+					failed.Add(1)
+				}
+			}(f)
 
-			// Heartbeat from inside the file loop so the registry watchdog
-			// (5-minute idle timeout) doesn't kill the op while we're
-			// grinding through a single book's 30–50 files. We don't bump
-			// progress_current here — that still tracks book index — but
-			// the message refresh keeps the op's last-updated wall clock
-			// fresh. Without this, a 40-file audiobook (4–6 min) can
-			// trigger the stuck-op watchdog.
-			if len(files) > 5 && (fi%5 == 4 || fi == len(files)-1) {
-				_ = reporter.UpdateProgress(i+1, total,
-					fmt.Sprintf("Books %d/%d file %d/%d (fp=%d skip=%d ineligible=%d fail=%d)",
-						i+1, total, fi+1, len(files),
-						fingerprinted, skipped, ineligible, failed))
+			// Drain the heartbeat ticker non-blocking so we don't miss ticks
+			// while goroutines are running.
+			select {
+			case <-heartbeat.C:
+				_ = reporter.UpdateProgress(i+1, total, progressMsg(i+1, total, filesDone, totalFiles))
+			default:
 			}
 		}
+		wg.Wait()
+		filesDone += len(files)
 
-		// After fingerprinting all files for this book, synthesize the book signature
 		if err := synthesizeBookSignatureForBook(p.store, b.ID); err != nil {
 			reporter.Logger().Warn("synthesize book signature", "book_id", b.ID, "error", err)
 		}
 
-		if i%25 == 0 || i == total-1 {
-			_ = reporter.UpdateProgress(i+1, total,
-				fmt.Sprintf("Books %d/%d (fp=%d skip=%d ineligible=%d fail=%d)",
-					i+1, total, fingerprinted, skipped, ineligible, failed))
+		// Progress after each book; also drain any pending ticker.
+		select {
+		case <-heartbeat.C:
+		default:
 		}
+		_ = reporter.UpdateProgress(i+1, total, progressMsg(i+1, total, filesDone, totalFiles))
 	}
 
 	_ = reporter.UpdateProgress(total, total,
-		fmt.Sprintf("Fingerprint rescan complete in %s — fp=%d skip=%d ineligible=%d fail=%d (of %d books)",
+		fmt.Sprintf("Fingerprint rescan complete in %s — fp=%d skip=%d ineligible=%d fail=%d (of %d books, %d files)",
 			time.Since(startedAt).Round(time.Second),
-			fingerprinted, skipped, ineligible, failed, total))
+			fingerprinted.Load(), skipped.Load(), ineligible.Load(), failed.Load(), total, filesDone))
 	return nil
+}
+
+// fpRescanWorkers returns the number of parallel fpcalc workers for rescan.
+// Tunable via FP_PARALLEL_WORKERS env var; defaults to 4.
+func fpRescanWorkers() int {
+	if v := os.Getenv("FP_PARALLEL_WORKERS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= 32 {
+			return n
+		}
+	}
+	return 4
 }
 
 // loadBooksForRescan fetches the set of books targeted by the requested scope.
@@ -189,41 +227,3 @@ func loadBooksForRescan(store database.Store, scope string, bookIDs []string) ([
 	}
 }
 
-// fingerprintBookFileWithForce is the same as fingerprintBookFile but accepts a force flag.
-// Used by the fingerprint-rescan operation to optionally recompute existing fingerprints.
-func fingerprintBookFileWithForce(store database.Store, f database.BookFile, force bool) fingerprintFileOutcome {
-	if f.AcoustIDSeg0 != "" && !force {
-		return fingerprintOutcomeSkipped
-	}
-	if f.FilePath == "" || f.Missing {
-		return fingerprintOutcomeIneligible
-	}
-	if _, ok := audioExtensions[strings.ToLower(filepath.Ext(f.FilePath))]; !ok {
-		return fingerprintOutcomeIneligible
-	}
-	if _, err := os.Stat(f.FilePath); err != nil {
-		return fingerprintOutcomeIneligible
-	}
-	if f.SkipScan {
-		slog.Debug("skipping file due to SkipScan flag", "file_id", f.ID, "file_path", f.FilePath)
-		return fingerprintOutcomeSkipped
-	}
-
-	segs, err := fingerprint.FileSegments(f.FilePath, f.Duration)
-	if err != nil {
-		return fingerprintOutcomeFailed
-	}
-
-	updated := f
-	updated.AcoustIDSeg0 = fingerprint.NormalizeForStorage(segs[0])
-	updated.AcoustIDSeg1 = fingerprint.NormalizeForStorage(segs[1])
-	updated.AcoustIDSeg2 = fingerprint.NormalizeForStorage(segs[2])
-	updated.AcoustIDSeg3 = fingerprint.NormalizeForStorage(segs[3])
-	updated.AcoustIDSeg4 = fingerprint.NormalizeForStorage(segs[4])
-	updated.AcoustIDSeg5 = fingerprint.NormalizeForStorage(segs[5])
-	updated.AcoustIDSeg6 = fingerprint.NormalizeForStorage(segs[6])
-	if err := store.UpdateBookFile(f.ID, &updated); err != nil {
-		return fingerprintOutcomeFailed
-	}
-	return fingerprintOutcomeFingerprinted
-}
