@@ -337,6 +337,15 @@ type Config struct {
 	MaintenanceWindowLibraryOrganize  bool `json:"maintenance_window_library_organize"`
 	MaintenanceWindowMetadataRefresh  bool `json:"maintenance_window_metadata_refresh"`
 	MaintenanceWindowLibrarySizeRefresh bool `json:"maintenance_window_library_size_refresh"`
+	// MaintenanceWindowAcoustIDOnlineLookup gates the nightly
+	// acoustid.lookup-online task. Off by default — the task hits a
+	// third-party API and uses quota, so requires explicit opt-in.
+	MaintenanceWindowAcoustIDOnlineLookup bool `json:"maintenance_window_acoustid_online_lookup"`
+	// AcoustIDOnlineLookupNightlyLimit caps the number of files processed
+	// per nightly run, so the maintenance window doesn't get monopolized
+	// by a slow third-party API. 0 = no cap (the op processes everything
+	// eligible). Default 5000 ≈ ~33 min at 400ms throttle.
+	AcoustIDOnlineLookupNightlyLimit int `json:"acoustid_online_lookup_nightly_limit"`
 
 	// Plugin system
 	Plugins map[string]PluginConfig `json:"plugins"`
@@ -626,7 +635,9 @@ func InitConfig() {
 		MaintenanceWindowLibraryScan:      viper.GetBool("maintenance_window_library_scan"),
 		MaintenanceWindowLibraryOrganize:  viper.GetBool("maintenance_window_library_organize"),
 		MaintenanceWindowMetadataRefresh:  viper.GetBool("maintenance_window_metadata_refresh"),
-		MaintenanceWindowLibrarySizeRefresh: viper.GetBool("maintenance_window_library_size_refresh"),
+		MaintenanceWindowLibrarySizeRefresh:   viper.GetBool("maintenance_window_library_size_refresh"),
+		MaintenanceWindowAcoustIDOnlineLookup: viper.GetBool("maintenance_window_acoustid_online_lookup"),
+		AcoustIDOnlineLookupNightlyLimit:      viper.GetInt("acoustid_online_lookup_nightly_limit"),
 
 		// iTunes sync
 		ITunesSyncEnabled:      viper.GetBool("itunes_sync_enabled"),
@@ -1047,6 +1058,11 @@ func ResetToDefaults() {
 		MaintenanceWindowLibraryScan:      false,
 		MaintenanceWindowLibraryOrganize:  false,
 		MaintenanceWindowMetadataRefresh:  false,
+		// AcoustID online lookup is OFF by default — uses third-party
+		// quota and only helps users who set ACOUSTID_API_KEY. Opt-in
+		// via setting + env key.
+		MaintenanceWindowAcoustIDOnlineLookup: false,
+		AcoustIDOnlineLookupNightlyLimit:      5000,
 
 		// iTunes sync
 		ITunesSyncEnabled:      true,
