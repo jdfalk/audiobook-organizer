@@ -1,7 +1,7 @@
 // file: internal/server/bootstrap.go
-// version: 1.5.1
+// version: 1.6.0
 // guid: 3e7c9a12-4f6b-4d8e-b5a1-2c8f0e3d9b47
-// last-edited: 2026-05-19
+// last-edited: 2026-05-31
 
 package server
 
@@ -42,6 +42,59 @@ type SettingsReadWriter interface {
 	GetSetting(key string) (*database.Setting, error)
 	SetSetting(key, value, typ string, isSecret bool) error
 	DeleteSetting(key string) error
+}
+
+const (
+	readonlyKeyNameSetting    = "startup_readonly_key_id"
+	readonlyKeyExpiresSetting = "startup_readonly_key_expires_at"
+	readonlyKeyTTL            = 24 * time.Hour
+)
+
+// InitStartupReadOnlyKey creates (or refreshes) a read-only API key on every
+// startup. The key is scoped to library.view only and expires after 24 hours.
+// Its raw value is printed to the log so local tooling can pick it up without
+// going through the bootstrap exchange dance.
+func InitStartupReadOnlyKey(store database.Store) error {
+	// Revoke any previously emitted startup read-only key so old tokens don't
+	// accumulate in the database.
+	if prev, err := store.GetSetting(readonlyKeyNameSetting); err == nil && prev != nil && prev.Value != "" {
+		_ = store.DeleteSetting(readonlyKeyNameSetting)
+		_ = store.DeleteSetting(readonlyKeyExpiresSetting)
+	}
+
+	adminUser, _, err := findOrCreateAdminUser(store)
+	if err != nil || adminUser == nil {
+		return fmt.Errorf("startup readonly key: find admin user: %w", err)
+	}
+
+	raw, hash, err := database.GenerateAPIKeyToken()
+	if err != nil {
+		return fmt.Errorf("startup readonly key: generate token: %w", err)
+	}
+
+	expiresAt := time.Now().Add(readonlyKeyTTL)
+	key := &database.APIKey{
+		ID:          ulid.Make().String(),
+		UserID:      adminUser.ID,
+		Name:        "Startup read-only key",
+		Description: "Auto-generated on startup. Read-only (library.view). Expires in 24 h.",
+		TokenHash:   hash,
+		Scopes:      []string{string(auth.PermLibraryView)},
+		Status:      "active",
+		CreatedAt:   time.Now(),
+		ExpiresAt:   &expiresAt,
+	}
+
+	created, err := store.CreateAPIKey(key)
+	if err != nil {
+		return fmt.Errorf("startup readonly key: create: %w", err)
+	}
+
+	_ = store.SetSetting(readonlyKeyNameSetting, created.ID, "string", false)
+	_ = store.SetSetting(readonlyKeyExpiresSetting, fmt.Sprintf("%d", expiresAt.Unix()), "string", false)
+
+	slog.Info("Read-only API key (library.view, expires 24 h)", "raw", raw)
+	return nil
 }
 
 // bootstrapMu prevents two concurrent exchange attempts from both succeeding.
