@@ -375,6 +375,11 @@ func (s *Server) Start(cfg ServerConfig) error {
 		}
 	}
 
+	// Emit a fresh read-only API key (library.view, 24 h TTL) for local tooling.
+	if err := InitStartupReadOnlyKey(s.Store()); err != nil {
+		slog.Info("Failed to init startup read-only key", "err", err)
+	}
+
 	// Resume any operations that were interrupted by a previous shutdown/crash
 	s.resumeInterruptedOperations()
 
