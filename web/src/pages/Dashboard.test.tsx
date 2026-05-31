@@ -66,7 +66,10 @@ function mockSuccessfulAPIs() {
     runtime: mockRuntime,
     operations: { recent: [] },
   });
-  mockGetSystemStorage.mockResolvedValue(null);
+  mockGetSystemStorage.mockResolvedValue({
+    path: '/', total_bytes: 0, used_bytes: 0, free_bytes: 0,
+    percent_used: 0, quota_enabled: false, quota_percent: 0, user_quotas_enabled: false,
+  });
   mockCountAuthors.mockResolvedValue(120);
   mockCountSeries.mockResolvedValue(80);
   mockCountBooksFiltered.mockResolvedValue(25);
@@ -190,7 +193,10 @@ describe('Dashboard', () => {
           ],
         },
       });
-      mockGetSystemStorage.mockResolvedValue(null);
+      mockGetSystemStorage.mockResolvedValue({
+    path: '/', total_bytes: 0, used_bytes: 0, free_bytes: 0,
+    percent_used: 0, quota_enabled: false, quota_percent: 0, user_quotas_enabled: false,
+  });
       mockCountAuthors.mockResolvedValue(5);
       mockCountSeries.mockResolvedValue(3);
       mockCountBooksFiltered.mockResolvedValue(0);
