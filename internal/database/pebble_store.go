@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"log/slog"
@@ -8409,12 +8410,19 @@ func writeBookFileSecondaryIndexes(batch *pebble.Batch, f *BookFile) error {
 			}
 		}
 	}
+
+	// LSH secondary index over the whole-file AcoustID fingerprint.
+	if err := writeFingerprintLSHIndexes(batch, f); err != nil {
+		return err
+	}
 	return nil
 }
 
 // deleteBookFileSecondaryIndexes removes PID, path, and acoustid secondary
-// index entries from the batch for the given BookFile.
-func deleteBookFileSecondaryIndexes(batch *pebble.Batch, f *BookFile) error {
+// index entries from the batch for the given BookFile. The store pointer
+// is used to read the LSH meta-row from the committed DB state — Pebble's
+// non-indexed batch can't satisfy that lookup itself.
+func (s *PebbleStore) deleteBookFileSecondaryIndexes(batch *pebble.Batch, f *BookFile) error {
 	if f.ITunesPersistentID != "" {
 		pidKey := []byte(fmt.Sprintf("book_file_pid:%s", f.ITunesPersistentID))
 		if err := batch.Delete(pidKey, nil); err != nil {
@@ -8453,7 +8461,236 @@ func deleteBookFileSecondaryIndexes(batch *pebble.Batch, f *BookFile) error {
 			}
 		}
 	}
+
+	// LSH index — best-effort delete via the fpidx_meta side-table.
+	if err := deleteFingerprintLSHIndexesByIDWithStore(s, batch, f.ID); err != nil {
+		return err
+	}
 	return nil
+}
+
+// ---------------------------------------------------------------------------
+// LSH (locality-sensitive hashing) secondary index over BookFile whole-file
+// fingerprints. See internal/fingerprint/lsh.go for the parameter choices
+// and PLAN-LSH.md for the design.
+//
+// Two key prefixes:
+//   fpidx:<band:1B><subprint:8B>:<bookFileID>        -> 1 byte LSHIndexVersion
+//   fpidx_meta:<bookFileID>                          -> 1B version + N×(1B band + 8B subprint)
+//
+// The meta row makes deletes O(1) — we don't have to re-derive subprints
+// from the (possibly stale) fp bytes when UpdateBookFile changes them.
+// ---------------------------------------------------------------------------
+
+const (
+	lshKeyPrefix     = "fpidx:"
+	lshMetaKeyPrefix = "fpidx_meta:"
+)
+
+// lshIndexKey builds an fpidx: row key for one (band, subprint, bookFileID).
+func lshIndexKey(band byte, sub fingerprint.Subprint, bookFileID string) []byte {
+	// 6 (prefix) + 1 (band) + 8 (subprint) + 1 (sep) + len(id)
+	out := make([]byte, 0, 6+1+8+1+len(bookFileID))
+	out = append(out, lshKeyPrefix...)
+	out = append(out, band)
+	out = append(out, sub[:]...)
+	out = append(out, ':')
+	out = append(out, bookFileID...)
+	return out
+}
+
+// lshMetaKey builds the per-BookFile meta row key.
+func lshMetaKey(bookFileID string) []byte {
+	out := make([]byte, 0, len(lshMetaKeyPrefix)+len(bookFileID))
+	out = append(out, lshMetaKeyPrefix...)
+	out = append(out, bookFileID...)
+	return out
+}
+
+// encodeLSHMeta packs version + (band,subprint) tuples for the meta row.
+func encodeLSHMeta(subs []fingerprint.Subprint, bands []byte) []byte {
+	out := make([]byte, 1+9*len(subs))
+	out[0] = fingerprint.LSHIndexVersion
+	for i := range subs {
+		off := 1 + 9*i
+		out[off] = bands[i]
+		copy(out[off+1:off+9], subs[i][:])
+	}
+	return out
+}
+
+// decodeLSHMeta unpacks a meta-row value. Returns nil, nil on empty or
+// version mismatch (caller treats as "no entries").
+func decodeLSHMeta(v []byte) ([]fingerprint.Subprint, []byte) {
+	if len(v) == 0 || v[0] != fingerprint.LSHIndexVersion {
+		return nil, nil
+	}
+	body := v[1:]
+	n := len(body) / 9
+	if n == 0 {
+		return nil, nil
+	}
+	subs := make([]fingerprint.Subprint, n)
+	bands := make([]byte, n)
+	for i := 0; i < n; i++ {
+		off := 9 * i
+		bands[i] = body[off]
+		copy(subs[i][:], body[off+1:off+9])
+	}
+	return subs, bands
+}
+
+// writeFingerprintLSHIndexes derives subprints from f.AcoustIDFingerprint and
+// writes the fpidx + fpidx_meta rows in the supplied batch. No-op when the
+// fingerprint is empty or too short to sample.
+func writeFingerprintLSHIndexes(batch *pebble.Batch, f *BookFile) error {
+	if len(f.AcoustIDFingerprint) == 0 {
+		return nil
+	}
+	subs, bands, err := fingerprint.Subprints(f.AcoustIDFingerprint)
+	if err != nil {
+		// Misaligned bytes — treat as no index. Don't poison the batch.
+		return nil
+	}
+	if len(subs) == 0 {
+		return nil
+	}
+	versionVal := []byte{fingerprint.LSHIndexVersion}
+	for i := range subs {
+		if err := batch.Set(lshIndexKey(bands[i], subs[i], f.ID), versionVal, nil); err != nil {
+			return err
+		}
+	}
+	return batch.Set(lshMetaKey(f.ID), encodeLSHMeta(subs, bands), nil)
+}
+
+// deleteFingerprintLSHIndexesByID looks up the meta row from the underlying
+// DB (not the batch — UpdateBookFile uses a non-indexed batch), deletes every
+// fpidx row it points at, then deletes the meta row itself. Safe to call on
+// a BookFile that never had an LSH entry. The reader must be a *PebbleStore
+// passed via package-level helper, but to keep the function batch-only we
+// instead route through the DB handle pinned at module level — see
+// deleteFingerprintLSHIndexesByIDWithDB.
+//
+// The hook-callers in this file have access to the *PebbleStore receiver via
+// the batch's parent, but Pebble doesn't expose that. Instead, the entry
+// points (UpdateBookFile, DeleteBookFile) wrap this in a closure that holds
+// the store.
+//
+// Callers should use deleteFingerprintLSHIndexesByIDWithStore below.
+func deleteFingerprintLSHIndexesByIDWithStore(s *PebbleStore, batch *pebble.Batch, bookFileID string) error {
+	metaKey := lshMetaKey(bookFileID)
+	v, closer, err := s.db.Get(metaKey)
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	val := append([]byte(nil), v...)
+	_ = closer.Close()
+
+	subs, bands := decodeLSHMeta(val)
+	for i := range subs {
+		if err := batch.Delete(lshIndexKey(bands[i], subs[i], bookFileID), nil); err != nil {
+			return err
+		}
+	}
+	return batch.Delete(metaKey, nil)
+}
+
+// deleteFingerprintLSHIndexesByID is a no-op placeholder kept for the
+// generic secondary-index-delete hook signature. The actual delete needs
+// access to the *PebbleStore handle (see deleteFingerprintLSHIndexesByIDWithStore)
+// because UpdateBookFile uses a non-indexed batch and we have to read the
+// meta row from the committed DB state.
+func deleteFingerprintLSHIndexesByID(_ *pebble.Batch, _ string) error {
+	return nil
+}
+
+// LookupAcoustIDCandidates returns BookFile IDs whose LSH subprints collide
+// with fp on ≥ fingerprint.LSHMinBandHits bands. Sorted by hit-count desc,
+// capped at maxCandidates. Empty fp ⇒ ([], nil).
+func (s *PebbleStore) LookupAcoustIDCandidates(fp []byte, maxCandidates int) ([]string, error) {
+	if len(fp) == 0 {
+		return nil, nil
+	}
+	subs, bands, err := fingerprint.Subprints(fp)
+	if err != nil {
+		return nil, err
+	}
+	if len(subs) == 0 {
+		return nil, nil
+	}
+	if maxCandidates <= 0 {
+		maxCandidates = 200
+	}
+
+	hits := make(map[string]int, 256)
+	for i := range subs {
+		// Iterate fpidx:<band><subprint>:* — the trailing ':' anchors us at
+		// the start of the per-(band,subprint) range; upper bound is the
+		// next subprint by lexicographic order.
+		lower := lshIndexKey(bands[i], subs[i], "")
+		upper := append([]byte{}, lower...)
+		// Bump the last byte (':') to ';' to form the exclusive upper bound.
+		upper[len(upper)-1] = ';'
+		iter, ierr := s.db.NewIter(&pebble.IterOptions{
+			LowerBound: lower,
+			UpperBound: upper,
+		})
+		if ierr != nil {
+			return nil, ierr
+		}
+		for iter.First(); iter.Valid(); iter.Next() {
+			key := iter.Key()
+			// key = fpidx:<band:1><subprint:8>:<bookFileID>
+			// id starts after prefix(6) + 1 + 8 + 1 = 16
+			if len(key) <= 16 {
+				continue
+			}
+			id := string(key[16:])
+			hits[id]++
+		}
+		_ = iter.Close()
+	}
+
+	type scoredID struct {
+		id  string
+		hit int
+	}
+	scored := make([]scoredID, 0, len(hits))
+	for id, n := range hits {
+		if n < fingerprint.LSHMinBandHits {
+			continue
+		}
+		scored = append(scored, scoredID{id, n})
+	}
+	sort.Slice(scored, func(i, j int) bool {
+		if scored[i].hit != scored[j].hit {
+			return scored[i].hit > scored[j].hit
+		}
+		return scored[i].id < scored[j].id
+	})
+	if len(scored) > maxCandidates {
+		scored = scored[:maxCandidates]
+	}
+	out := make([]string, len(scored))
+	for i, s := range scored {
+		out[i] = s.id
+	}
+	return out, nil
+}
+
+// HasLSHIndex reports whether a BookFile currently has an LSH meta entry.
+// Used by the lsh-backfill op to skip already-indexed rows.
+func (s *PebbleStore) HasLSHIndex(bookFileID string) bool {
+	_, closer, err := s.db.Get(lshMetaKey(bookFileID))
+	if err != nil {
+		return false
+	}
+	_ = closer.Close()
+	return true
 }
 
 // CreateBookFile stores a new BookFile, generating a ULID if the ID is empty.
@@ -8525,7 +8762,7 @@ func (s *PebbleStore) UpdateBookFile(id string, file *BookFile) error {
 	batch := s.db.NewBatch()
 
 	// Remove stale secondary indexes before writing new ones.
-	if err := deleteBookFileSecondaryIndexes(batch, old); err != nil {
+	if err := s.deleteBookFileSecondaryIndexes(batch, old); err != nil {
 		batch.Close()
 		return err
 	}
@@ -8892,7 +9129,7 @@ func (s *PebbleStore) DeleteBookFile(id string) error {
 	}
 
 	// Delete secondary indexes.
-	if err := deleteBookFileSecondaryIndexes(batch, found); err != nil {
+	if err := s.deleteBookFileSecondaryIndexes(batch, found); err != nil {
 		batch.Close()
 		return err
 	}
@@ -8926,7 +9163,7 @@ func (s *PebbleStore) DeleteBookFilesForBook(bookID string) error {
 			batch.Close()
 			return err
 		}
-		if err := deleteBookFileSecondaryIndexes(batch, f); err != nil {
+		if err := s.deleteBookFileSecondaryIndexes(batch, f); err != nil {
 			batch.Close()
 			return err
 		}
@@ -9013,7 +9250,7 @@ func (s *PebbleStore) BatchUpsertBookFiles(files []*BookFile) error {
 			file.CreatedAt = existing.CreatedAt
 			file.UpdatedAt = now
 
-			if err := deleteBookFileSecondaryIndexes(batch, existing); err != nil {
+			if err := s.deleteBookFileSecondaryIndexes(batch, existing); err != nil {
 				batch.Close()
 				return err
 			}
@@ -9086,7 +9323,7 @@ func (s *PebbleStore) MoveBookFilesToBook(fileIDs []string, sourceBookID, target
 		}
 
 		// Delete old secondary indexes
-		if err := deleteBookFileSecondaryIndexes(batch, f); err != nil {
+		if err := s.deleteBookFileSecondaryIndexes(batch, f); err != nil {
 			batch.Close()
 			return err
 		}
@@ -9694,7 +9931,7 @@ func (s *PebbleStore) ClearAllAcoustIDFingerprints(ctx context.Context, batchSiz
 
 		if f.AcoustIDSeg0 == "" && f.AcoustIDSeg1 == "" && f.AcoustIDSeg2 == "" &&
 			f.AcoustIDSeg3 == "" && f.AcoustIDSeg4 == "" && f.AcoustIDSeg5 == "" &&
-			f.AcoustIDSeg6 == "" {
+			f.AcoustIDSeg6 == "" && len(f.AcoustIDFingerprint) == 0 {
 			if progress != nil && processed%5000 == 0 {
 				progress(processed, cleared, total)
 			}
@@ -9715,6 +9952,11 @@ func (s *PebbleStore) ClearAllAcoustIDFingerprints(ctx context.Context, batchSiz
 
 		f.AcoustIDSeg0, f.AcoustIDSeg1, f.AcoustIDSeg2 = "", "", ""
 		f.AcoustIDSeg3, f.AcoustIDSeg4, f.AcoustIDSeg5, f.AcoustIDSeg6 = "", "", "", ""
+		// Whole-file fp + duration are part of "fingerprint state" — clearing
+		// segs without clearing these would leave reset-all in a broken
+		// half-cleared state and the LSH index orphaned.
+		f.AcoustIDFingerprint = nil
+		f.AcoustIDFingerprintDurationSec = 0
 		f.UpdatedAt = time.Now()
 
 		data, err := json.Marshal(&f)
@@ -9746,6 +9988,24 @@ func (s *PebbleStore) ClearAllAcoustIDFingerprints(ctx context.Context, batchSiz
 	if err := batch.Commit(pebble.Sync); err != nil {
 		return cleared, total, err
 	}
+
+	// Wipe the LSH index in one prefix-delete pass — every per-row meta
+	// entry is gone anyway since we just cleared every fingerprint, so we
+	// don't need to look up individual subprints. RangeDelete is much
+	// cheaper than 308K × 64 individual Deletes.
+	wipeBatch := s.db.NewBatch()
+	if err := wipeBatch.DeleteRange([]byte(lshKeyPrefix), []byte("fpidx;"), nil); err != nil {
+		_ = wipeBatch.Close()
+		return cleared, total, err
+	}
+	if err := wipeBatch.DeleteRange([]byte(lshMetaKeyPrefix), []byte("fpidx_meta;"), nil); err != nil {
+		_ = wipeBatch.Close()
+		return cleared, total, err
+	}
+	if err := wipeBatch.Commit(pebble.Sync); err != nil {
+		return cleared, total, err
+	}
+
 	if progress != nil {
 		progress(processed, cleared, total)
 	}

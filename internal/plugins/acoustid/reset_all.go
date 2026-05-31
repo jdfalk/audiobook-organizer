@@ -1,7 +1,7 @@
 // file: internal/plugins/acoustid/reset_all.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: f3b1e8c4-2d7a-4d62-aabb-1f1d6e2c4a01
-// last-edited: 2026-05-30
+// last-edited: 2026-05-31
 
 package acoustid
 
@@ -31,7 +31,7 @@ func (p *Plugin) resetAllDef() sdk.OperationDef {
 		ID:              "acoustid.reset-all",
 		Plugin:          "acoustid",
 		DisplayName:     "Reset all AcoustID fingerprints",
-		Description:     "Clears every stored AcoustID fingerprint segment, drops acoustid dedup candidates, and re-enqueues a forced rescan.",
+		Description:     "Clears every stored AcoustID fingerprint segment, drops acoustid dedup candidates, wipes the LSH index, and re-enqueues a forced rescan.",
 		ResumePolicy:    sdk.ResumeDrop,
 		DefaultPriority: sdk.PriorityHigh,
 		ConcurrencyKey:  "acoustid.fingerprint",
@@ -163,7 +163,7 @@ func (p *Plugin) runResetAll(ctx context.Context, _ json.RawMessage, reporter sd
 		"candidates_deleted", deleted,
 		"elapsed", time.Since(startedAt).Round(time.Second))
 
-	prog.Done(fmt.Sprintf("Reset complete: %d files cleared, %d candidates dropped (elapsed %s). Now enqueue acoustid.fingerprint-rescan with scope=all force=true.",
+	prog.Done(fmt.Sprintf("Reset complete: %d files cleared, %d candidates dropped, LSH index wiped (elapsed %s). Now enqueue acoustid.fingerprint-rescan with scope=all force=true.",
 		cleared, deleted, time.Since(startedAt).Round(time.Second)))
 	return nil
 }
