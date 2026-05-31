@@ -30,7 +30,7 @@ func TestFingerprintEligibility_SkipsWhenWholeFilePresent(t *testing.T) {
 	f := makeBookFile(func(bf *database.BookFile) {
 		bf.AcoustIDFingerprint = []byte("not really a fingerprint but non-empty")
 	})
-	got, stop := fingerprintEligibility(f, false)
+	got, _, stop := fingerprintEligibility(f, false)
 	if !stop {
 		t.Fatal("expected stop=true when whole-file fp already present")
 	}
@@ -43,7 +43,7 @@ func TestFingerprintEligibility_SkipsWhenSeg0Present(t *testing.T) {
 	f := makeBookFile(func(bf *database.BookFile) {
 		bf.AcoustIDSeg0 = "AQADtAcSRY"
 	})
-	got, stop := fingerprintEligibility(f, false)
+	got, _, stop := fingerprintEligibility(f, false)
 	if !stop {
 		t.Fatal("expected stop=true when seg0 already present")
 	}
@@ -63,7 +63,7 @@ func TestFingerprintEligibility_ForceOverridesPresentSeg0(t *testing.T) {
 		bf.FilePath = path
 		bf.AcoustIDSeg0 = "AQADtAcSRY"
 	})
-	got, stop := fingerprintEligibility(f, true) // force
+	got, _, stop := fingerprintEligibility(f, true) // force
 	if stop {
 		t.Fatalf("expected stop=false with force=true, got stop=true outcome=%v", got)
 	}
@@ -80,7 +80,7 @@ func TestFingerprintEligibility_ForceOverridesWholeFile(t *testing.T) {
 		bf.FilePath = path
 		bf.AcoustIDFingerprint = []byte("existing fp bytes")
 	})
-	got, stop := fingerprintEligibility(f, true)
+	got, _, stop := fingerprintEligibility(f, true)
 	if stop {
 		t.Fatalf("expected stop=false with force=true, got stop=true outcome=%v", got)
 	}
@@ -88,7 +88,7 @@ func TestFingerprintEligibility_ForceOverridesWholeFile(t *testing.T) {
 
 func TestFingerprintEligibility_IneligibleWhenMissing(t *testing.T) {
 	f := makeBookFile(func(bf *database.BookFile) { bf.Missing = true })
-	got, stop := fingerprintEligibility(f, false)
+	got, _, stop := fingerprintEligibility(f, false)
 	if !stop {
 		t.Fatal("expected stop=true when Missing=true")
 	}
@@ -99,7 +99,7 @@ func TestFingerprintEligibility_IneligibleWhenMissing(t *testing.T) {
 
 func TestFingerprintEligibility_IneligibleWhenEmptyPath(t *testing.T) {
 	f := makeBookFile(func(bf *database.BookFile) { bf.FilePath = "" })
-	got, stop := fingerprintEligibility(f, false)
+	got, _, stop := fingerprintEligibility(f, false)
 	if !stop {
 		t.Fatal("expected stop=true with empty file path")
 	}
@@ -116,7 +116,7 @@ func TestFingerprintEligibility_IneligibleWhenBadExtension(t *testing.T) {
 	}
 
 	f := makeBookFile(func(bf *database.BookFile) { bf.FilePath = path })
-	got, stop := fingerprintEligibility(f, false)
+	got, _, stop := fingerprintEligibility(f, false)
 	if !stop {
 		t.Fatal("expected stop=true for non-audio extension")
 	}
@@ -129,7 +129,7 @@ func TestFingerprintEligibility_IneligibleWhenFileDoesNotExist(t *testing.T) {
 	f := makeBookFile(func(bf *database.BookFile) {
 		bf.FilePath = "/this/path/definitely/does/not/exist.m4b"
 	})
-	got, stop := fingerprintEligibility(f, false)
+	got, _, stop := fingerprintEligibility(f, false)
 	if !stop {
 		t.Fatal("expected stop=true when file missing on disk")
 	}
@@ -148,7 +148,7 @@ func TestFingerprintEligibility_ProceedsWhenAllChecksPass(t *testing.T) {
 				t.Fatal(err)
 			}
 			f := makeBookFile(func(bf *database.BookFile) { bf.FilePath = path })
-			outcome, stop := fingerprintEligibility(f, false)
+			outcome, _, stop := fingerprintEligibility(f, false)
 			if stop {
 				t.Fatalf("expected stop=false for %s, got outcome=%v", ext, outcome)
 			}

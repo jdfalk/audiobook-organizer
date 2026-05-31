@@ -1,15 +1,18 @@
 // file: internal/plugins/acoustid/fingerprint_rescan.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: a7b8c9d0-e1f2-3456-def0-123456789abc
 // last-edited: 2026-05-31
 
 package acoustid
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -31,7 +34,17 @@ const (
 	scopeMissing = "missing"
 	scopeAll     = "all"
 	scopeBooks   = "books"
+
+	ineligibleReportDir = "/var/lib/audiobook-organizer/reports"
 )
+
+// ineligibleEntry is one line in the JSONL report written at end of rescan.
+type ineligibleEntry struct {
+	BookID    string `json:"book_id"`
+	BookTitle string `json:"book_title"`
+	FilePath  string `json:"file_path"`
+	Reason    string `json:"reason"`
+}
 
 func (p *Plugin) fingerprintRescanDef() sdk.OperationDef {
 	return sdk.OperationDef{
@@ -114,6 +127,10 @@ func (p *Plugin) runFingerprintRescan(ctx context.Context, params json.RawMessag
 	)
 	startedAt := time.Now()
 
+	// ineligibleMu guards ineligibleEntries, written by concurrent book goroutines.
+	var ineligibleMu sync.Mutex
+	var ineligibleEntries []ineligibleEntry
+
 	progressMsg := func() string {
 		return fmt.Sprintf("Books %d/%d files ~%d/%d (fp=%d skip=%d ineligible=%d fail=%d)",
 			completedBooks.Load(), int64(total), filesDone.Load(), totalFiles.Load(),
@@ -173,15 +190,30 @@ func (p *Plugin) runFingerprintRescan(ctx context.Context, params json.RawMessag
 				if ctx.Err() != nil {
 					break
 				}
-				switch fingerprintBookFile(p.store, f, req.Force) {
-				case fingerprintOutcomeFingerprinted:
-					fingerprinted.Add(1)
-				case fingerprintOutcomeSkipped:
-					skipped.Add(1)
-				case fingerprintOutcomeIneligible:
-					ineligible.Add(1)
-				case fingerprintOutcomeFailed:
-					failed.Add(1)
+
+				outcome, reason, stop := fingerprintEligibility(f, req.Force)
+				if stop {
+					switch outcome {
+					case fingerprintOutcomeSkipped:
+						skipped.Add(1)
+					case fingerprintOutcomeIneligible:
+						ineligible.Add(1)
+						ineligibleMu.Lock()
+						ineligibleEntries = append(ineligibleEntries, ineligibleEntry{
+							BookID:    book.ID,
+							BookTitle: book.Title,
+							FilePath:  f.FilePath,
+							Reason:    reason,
+						})
+						ineligibleMu.Unlock()
+					}
+				} else {
+					switch doFingerprintFile(p.store, f, req.Force) {
+					case fingerprintOutcomeFingerprinted:
+						fingerprinted.Add(1)
+					case fingerprintOutcomeFailed:
+						failed.Add(1)
+					}
 				}
 				filesDone.Add(1)
 			}
@@ -196,11 +228,67 @@ func (p *Plugin) runFingerprintRescan(ctx context.Context, params json.RawMessag
 	bookWg.Wait()
 	cancelHB()
 
+	reportPath, reportErr := writeIneligibleReport(time.Now().Format("20060102-150405"), ineligibleEntries)
+	if reportErr != nil {
+		reporter.Logger().Warn("failed to write ineligible report", "err", reportErr)
+	} else if len(ineligibleEntries) > 0 {
+		reporter.Logger().Info("ineligible file report written", "path", reportPath, "count", len(ineligibleEntries))
+	}
+
+	// Log reason breakdown so it's visible in journalctl without reading the file.
+	if len(ineligibleEntries) > 0 {
+		counts := make(map[string]int)
+		for _, e := range ineligibleEntries {
+			// Normalise non_audio_ext:.<ext> → non_audio_ext for the summary.
+			key := e.Reason
+			if len(key) > 14 && key[:14] == "non_audio_ext:" {
+				key = "non_audio_ext"
+			}
+			counts[key]++
+		}
+		reporter.Logger().Info("ineligible reason breakdown", "reasons", counts)
+	}
+
 	_ = reporter.UpdateProgress(total, total,
 		fmt.Sprintf("Fingerprint rescan complete in %s — fp=%d skip=%d ineligible=%d fail=%d (of %d books, %d files)",
 			time.Since(startedAt).Round(time.Second),
 			fingerprinted.Load(), skipped.Load(), ineligible.Load(), failed.Load(), total, filesDone.Load()))
 	return nil
+}
+
+// writeIneligibleReport writes ineligible entries as JSONL sorted by reason
+// then book title. Returns the path written.
+func writeIneligibleReport(opID string, entries []ineligibleEntry) (string, error) {
+	if len(entries) == 0 {
+		return "", nil
+	}
+	if err := os.MkdirAll(ineligibleReportDir, 0o755); err != nil {
+		return "", fmt.Errorf("mkdir reports: %w", err)
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Reason != entries[j].Reason {
+			return entries[i].Reason < entries[j].Reason
+		}
+		return entries[i].BookTitle < entries[j].BookTitle
+	})
+
+	name := fmt.Sprintf("fp-ineligible-%s.jsonl", opID)
+	path := filepath.Join(ineligibleReportDir, name)
+	f, err := os.Create(path)
+	if err != nil {
+		return "", fmt.Errorf("create report file: %w", err)
+	}
+	defer f.Close()
+
+	w := bufio.NewWriter(f)
+	enc := json.NewEncoder(w)
+	for _, e := range entries {
+		if err := enc.Encode(e); err != nil {
+			return "", fmt.Errorf("encode entry: %w", err)
+		}
+	}
+	return path, w.Flush()
 }
 
 // fpRescanWorkers returns the number of parallel fpcalc workers for rescan.
@@ -233,4 +321,3 @@ func loadBooksForRescan(store database.Store, scope string, bookIDs []string) ([
 		return nil, fmt.Errorf("unknown scope %q", scope)
 	}
 }
-
