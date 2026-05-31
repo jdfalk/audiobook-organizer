@@ -1,5 +1,5 @@
 // file: internal/plugins/acoustid/backfill.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: f6a7b8c9-d0e1-2345-def0-123456789abc
 // last-edited: 2026-05-31
 
@@ -196,24 +196,27 @@ var audioExtensions = map[string]bool{
 }
 
 // fingerprintEligibility classifies whether a BookFile is a candidate for
-// fingerprinting. Returns the terminal outcome and `true` when the file is
-// not eligible (skipped or ineligible); returns the zero value and `false`
-// when the caller should proceed with fpcalc. Pure function, no I/O except
-// os.Stat for existence check.
-func fingerprintEligibility(f database.BookFile, force bool) (fingerprintFileOutcome, bool) {
+// fingerprinting. Returns the terminal outcome, a human-readable reason (only
+// meaningful when outcome == fingerprintOutcomeIneligible), and `true` when
+// the caller should stop. Returns the zero value and `false` when the caller
+// should proceed with fpcalc. Pure function, no I/O except os.Stat.
+func fingerprintEligibility(f database.BookFile, force bool) (fingerprintFileOutcome, string, bool) {
 	if (len(f.AcoustIDFingerprint) > 0 || f.AcoustIDSeg0 != "") && !force {
-		return fingerprintOutcomeSkipped, true
+		return fingerprintOutcomeSkipped, "", true
 	}
-	if f.FilePath == "" || f.Missing {
-		return fingerprintOutcomeIneligible, true
+	if f.FilePath == "" {
+		return fingerprintOutcomeIneligible, "empty_path", true
+	}
+	if f.Missing {
+		return fingerprintOutcomeIneligible, "marked_missing", true
 	}
 	if _, ok := audioExtensions[strings.ToLower(filepath.Ext(f.FilePath))]; !ok {
-		return fingerprintOutcomeIneligible, true
+		return fingerprintOutcomeIneligible, "non_audio_ext:" + strings.ToLower(filepath.Ext(f.FilePath)), true
 	}
 	if _, err := os.Stat(f.FilePath); err != nil {
-		return fingerprintOutcomeIneligible, true
+		return fingerprintOutcomeIneligible, "file_not_found", true
 	}
-	return 0, false
+	return 0, "", false
 }
 
 // fingerprintBookFile generates and persists a chromaprint for a single
@@ -222,10 +225,16 @@ func fingerprintEligibility(f database.BookFile, force bool) (fingerprintFileOut
 // Seg0-Seg6 are written; AcoustIDFingerprint stays empty until fpcalc is
 // installed and a force-rescan is run.
 func fingerprintBookFile(store database.Store, f database.BookFile, force bool) fingerprintFileOutcome {
-	if outcome, stop := fingerprintEligibility(f, force); stop {
+	if outcome, _, stop := fingerprintEligibility(f, force); stop {
 		return outcome
 	}
+	return doFingerprintFile(store, f, force)
+}
 
+// doFingerprintFile runs fpcalc/ffmpeg and persists the result. Callers must
+// have already confirmed eligibility via fingerprintEligibility. force=true
+// additionally clears legacy Seg1..6 fields.
+func doFingerprintFile(store database.Store, f database.BookFile, force bool) fingerprintFileOutcome {
 	wf, err := fingerprint.FileWholeFingerprint(f.FilePath)
 	if err != nil && !errors.Is(err, fingerprint.ErrNotAvailable) {
 		slog.Warn("fingerprint", "path", f.FilePath, "err", err)
