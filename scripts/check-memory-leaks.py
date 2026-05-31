@@ -12,11 +12,12 @@ import sys
 from pathlib import Path
 from typing import List, Tuple, Optional
 
+
 class MemoryLeakDetector:
     # Directories that contain non-React code (services, stores, utilities).
     # setTimeout/setInterval in these files does NOT cause React unmount leaks;
     # they run in module or class scope where lifecycle is managed differently.
-    COMPONENT_ONLY_DIRS = {'components', 'pages', 'hooks'}
+    COMPONENT_ONLY_DIRS = {"components", "pages", "hooks"}
 
     def __init__(self, web_src_dir: Optional[str] = None):
         if web_src_dir is None:
@@ -51,7 +52,7 @@ class MemoryLeakDetector:
         """Check if line should be ignored"""
         # Ignore empty lines and comments
         stripped = line.strip()
-        if not stripped or stripped.startswith('//'):
+        if not stripped or stripped.startswith("//"):
             return True
 
         for pattern in self.ignore_patterns:
@@ -69,21 +70,24 @@ class MemoryLeakDetector:
         if not self._is_component_file(filepath):
             return
 
-        lines = content.split('\n')
+        lines = content.split("\n")
 
         for i, line in enumerate(lines, 1):
             if self.should_ignore(line):
                 continue
 
             # Look for setTimeout/setInterval
-            match = re.search(r'(setTimeout|setInterval)\s*\(', line)
+            match = re.search(r"(setTimeout|setInterval)\s*\(", line)
             if not match:
                 continue
 
             timer_type = match.group(1)
 
             # Check if it's being assigned to a ref or variable
-            if re.search(r'(Ref\.current\s*=|\.current\s*=|const\s+\w*[Rr]ef\s*=|let\s+\w*[Ii]d\s*=|const\s+\w*interval\s*=|const\s+\w*timeout\s*=|\w+[Tt]imer\s*=|\w+[Tt]imeout\s*=)', line):
+            if re.search(
+                r"(Ref\.current\s*=|\.current\s*=|const\s+\w*[Rr]ef\s*=|let\s+\w*[Ii]d\s*=|const\s+\w*interval\s*=|const\s+\w*timeout\s*=|\w+[Tt]imer\s*=|\w+[Tt]imeout\s*=)",
+                line,
+            ):
                 continue  # Already tracked in variable
 
             # Check if we're in a useEffect with cleanup
@@ -92,14 +96,17 @@ class MemoryLeakDetector:
             use_effect_start = -1
 
             # Look backwards for useEffect
-            for j in range(i-1, max(0, i-50), -1):
-                if 'useEffect' in lines[j]:
+            for j in range(i - 1, max(0, i - 50), -1):
+                if "useEffect" in lines[j]:
                     in_use_effect = True
                     use_effect_start = j
                     # Check if there's a return statement (cleanup) within this useEffect
                     # Look forward from useEffect for return statement
-                    for k in range(j, min(i+20, len(lines))):
-                        if re.search(r'return\s*\(\s*\)\s*=>|return\s*function|clearTimeout|clearInterval', lines[k]):
+                    for k in range(j, min(i + 20, len(lines))):
+                        if re.search(
+                            r"return\s*\(\s*\)\s*=>|return\s*function|clearTimeout|clearInterval",
+                            lines[k],
+                        ):
                             has_cleanup = True
                             break
                     break
@@ -108,7 +115,9 @@ class MemoryLeakDetector:
                 continue  # Cleanup exists
 
             # This is an untracked timer
-            self.issues.append((filepath, i, f"Untracked {timer_type} (may fire after unmount)"))
+            self.issues.append(
+                (filepath, i, f"Untracked {timer_type} (may fire after unmount)")
+            )
 
     def check_untracked_listeners(self, filepath: str, content: str) -> None:
         """Find addEventListener without removeEventListener.
@@ -119,10 +128,10 @@ class MemoryLeakDetector:
         false positives when add and remove are in sibling blocks (e.g. an
         XHR onload handler following the addEventListener call).
         """
-        lines = content.split('\n')
+        lines = content.split("\n")
 
         for i, line in enumerate(lines, 1):
-            if 'addEventListener' not in line or self.should_ignore(line):
+            if "addEventListener" not in line or self.should_ignore(line):
                 continue
 
             # Get the listener name for matching
@@ -140,9 +149,12 @@ class MemoryLeakDetector:
                 line_j = lines[j]
 
                 # Track scope to avoid false positives
-                scope_depth += line_j.count('{') - line_j.count('}')
+                scope_depth += line_j.count("{") - line_j.count("}")
 
-                if f"removeEventListener('{event_name}'" in line_j or f'removeEventListener("{event_name}"' in line_j:
+                if (
+                    f"removeEventListener('{event_name}'" in line_j
+                    or f'removeEventListener("{event_name}"' in line_j
+                ):
                     found_remove = True
                     break
 
@@ -154,16 +166,22 @@ class MemoryLeakDetector:
                     break
 
             if not found_remove:
-                self.issues.append((filepath, i, f"addEventListener('{event_name}') without removeEventListener"))
+                self.issues.append(
+                    (
+                        filepath,
+                        i,
+                        f"addEventListener('{event_name}') without removeEventListener",
+                    )
+                )
 
     def check_poll_without_cleanup(self, filepath: str, content: str) -> None:
         """Find polling functions created in handlers without cleanup tracking."""
-        lines = content.split('\n')
+        lines = content.split("\n")
 
         # Patterns that indicate the polling is properly guarded against leaks.
         # Includes both explicit cancellation flags and ref-based unmount guards.
         _CANCELLATION_PATTERNS = re.compile(
-            r'cancelled|AbortController|Ref\.current|isMounted|isUnmounted|isCleanedUp'
+            r"cancelled|AbortController|Ref\.current|isMounted|isUnmounted|isCleanedUp"
         )
 
         for i, line in enumerate(lines, 1):
@@ -171,15 +189,21 @@ class MemoryLeakDetector:
                 continue
 
             # Look for patterns like: const poll = async () => { ... setTimeout(poll, ...)
-            if re.search(r'const\s+\w*[Pp]oll\s*=\s*async', line):
+            if re.search(r"const\s+\w*[Pp]oll\s*=\s*async", line):
                 # Collect a 50-line window around the polling function
-                window = ''.join(lines[max(0, i-1):min(i+50, len(lines))])
+                window = "".join(lines[max(0, i - 1) : min(i + 50, len(lines))])
                 # If any cancellation/cleanup pattern is present, skip
                 if _CANCELLATION_PATTERNS.search(window):
                     continue
                 for j in range(i, min(i + 50, len(lines))):
-                    if re.search(r'setTimeout\(\w*[Pp]oll', lines[j]):
-                        self.issues.append((filepath, j+1, "Recursive polling without cancellation flag"))
+                    if re.search(r"setTimeout\(\w*[Pp]oll", lines[j]):
+                        self.issues.append(
+                            (
+                                filepath,
+                                j + 1,
+                                "Recursive polling without cancellation flag",
+                            )
+                        )
                         break
 
     def scan(self) -> bool:
@@ -188,15 +212,19 @@ class MemoryLeakDetector:
             print(f"Warning: {self.web_src} not found, skipping memory leak scan")
             return True
 
-        tsx_files = sorted(list(self.web_src.rglob("*.tsx")) + list(self.web_src.rglob("*.ts")))
+        tsx_files = sorted(
+            list(self.web_src.rglob("*.tsx")) + list(self.web_src.rglob("*.ts"))
+        )
         # Exclude test files
-        tsx_files = [f for f in tsx_files if '.test.' not in f.name and 'setup.ts' not in f.name]
+        tsx_files = [
+            f for f in tsx_files if ".test." not in f.name and "setup.ts" not in f.name
+        ]
 
         print(f"🔍 Scanning {len(tsx_files)} files for memory leaks...")
 
         for filepath in tsx_files:
             try:
-                content = filepath.read_text(encoding='utf-8')
+                content = filepath.read_text(encoding="utf-8")
                 rel_path = filepath.relative_to(self.web_src.parent)
 
                 self.check_untracked_timers(str(rel_path), content)
