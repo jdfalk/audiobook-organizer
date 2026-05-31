@@ -1,5 +1,5 @@
 # file: deploy/audiobook-organizer.service
-# version: 4.3.0
+# version: 4.4.0
 # guid: f1e2d3c4-b5a6-9870-8765-4321fedcba98
 #
 # systemd service unit for audiobook-organizer on Linux
@@ -74,9 +74,10 @@ Environment="GOMEMLIMIT=9GiB"
 # GC at 200% heap growth instead of 100% -- halves GC frequency at the cost
 # of more memory. GOMEMLIMIT acts as the safety net.
 Environment="GOGC=200"
-# Number of parallel fpcalc workers during fingerprint rescan. 4 is conservative
-# on a shared server; bump to 8-16 on a dedicated machine.
-Environment="FP_PARALLEL_WORKERS=4"
+# Parallel books processed concurrently during fingerprint rescan. Each book
+# runs its files sequentially, so this = concurrent fpcalc calls. 16 suits a
+# dedicated 48-core machine; drop to 4 on a shared server.
+Environment="FP_PARALLEL_WORKERS=16"
 
 # Restart policy: restart on failure with 5-second delay
 Restart=on-failure

@@ -1,5 +1,5 @@
 // file: internal/plugins/acoustid/fingerprint_rescan.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: a7b8c9d0-e1f2-3456-def0-123456789abc
 // last-edited: 2026-05-31
 
@@ -104,57 +104,76 @@ func (p *Plugin) runFingerprintRescan(ctx context.Context, params json.RawMessag
 	workers := fpRescanWorkers()
 
 	var (
-		fingerprinted atomic.Int64
-		skipped       atomic.Int64
-		ineligible    atomic.Int64
-		failed        atomic.Int64
+		fingerprinted  atomic.Int64
+		skipped        atomic.Int64
+		ineligible     atomic.Int64
+		failed         atomic.Int64
+		completedBooks atomic.Int64
+		totalFiles     atomic.Int64
+		filesDone      atomic.Int64
 	)
 	startedAt := time.Now()
 
-	// heartbeatTicker fires every 15 seconds so the registry watchdog never
-	// sees the op as idle, regardless of how long individual fpcalc calls take.
-	heartbeat := time.NewTicker(15 * time.Second)
-	defer heartbeat.Stop()
-
-	// progressMsg returns the current counter snapshot as a log string.
-	progressMsg := func(bookIdx, bookTotal, filesDone, filesTotal int) string {
+	progressMsg := func() string {
 		return fmt.Sprintf("Books %d/%d files ~%d/%d (fp=%d skip=%d ineligible=%d fail=%d)",
-			bookIdx, bookTotal, filesDone, filesTotal,
+			completedBooks.Load(), int64(total), filesDone.Load(), totalFiles.Load(),
 			fingerprinted.Load(), skipped.Load(), ineligible.Load(), failed.Load())
 	}
 
-	totalFiles := 0 // rough estimate, updated per book
-	filesDone := 0
+	// Heartbeat goroutine keeps the registry watchdog satisfied independent of
+	// how long individual books take.
+	hbCtx, cancelHB := context.WithCancel(ctx)
+	defer cancelHB()
+	go func() {
+		t := time.NewTicker(15 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-t.C:
+				_ = reporter.UpdateProgress(int(completedBooks.Load()), total, progressMsg())
+			case <-hbCtx.Done():
+				return
+			}
+		}
+	}()
 
-	for i, b := range books {
+	// bookSem limits concurrent book processing to `workers`. Files within each
+	// book are processed sequentially — with N books running simultaneously
+	// there are already N concurrent fpcalc calls, which is enough to saturate
+	// the CPU without nested goroutine overhead.
+	bookSem := make(chan struct{}, workers)
+	var bookWg sync.WaitGroup
+
+	for _, b := range books {
 		select {
 		case <-ctx.Done():
+			bookWg.Wait()
 			return ctx.Err()
 		default:
 		}
 
-		files, ferr := p.store.GetBookFiles(b.ID)
-		if ferr != nil {
-			continue
-		}
-		totalFiles += len(files)
+		bookSem <- struct{}{}
+		bookWg.Add(1)
+		go func(book database.Book) {
+			defer func() { <-bookSem; bookWg.Done() }()
 
-		// Fan out file fingerprinting across `workers` goroutines.
-		sem := make(chan struct{}, workers)
-		var wg sync.WaitGroup
-		for _, f := range files {
-			select {
-			case <-ctx.Done():
-				wg.Wait()
-				return ctx.Err()
-			default:
+			if ctx.Err() != nil {
+				completedBooks.Add(1)
+				return
 			}
 
-			sem <- struct{}{} // acquire slot
-			wg.Add(1)
-			go func(bf database.BookFile) {
-				defer func() { <-sem; wg.Done() }()
-				switch fingerprintBookFile(p.store, bf, req.Force) {
+			files, ferr := p.store.GetBookFiles(book.ID)
+			if ferr != nil {
+				completedBooks.Add(1)
+				return
+			}
+			totalFiles.Add(int64(len(files)))
+
+			for _, f := range files {
+				if ctx.Err() != nil {
+					break
+				}
+				switch fingerprintBookFile(p.store, f, req.Force) {
 				case fingerprintOutcomeFingerprinted:
 					fingerprinted.Add(1)
 				case fingerprintOutcomeSkipped:
@@ -164,35 +183,23 @@ func (p *Plugin) runFingerprintRescan(ctx context.Context, params json.RawMessag
 				case fingerprintOutcomeFailed:
 					failed.Add(1)
 				}
-			}(f)
-
-			// Drain the heartbeat ticker non-blocking so we don't miss ticks
-			// while goroutines are running.
-			select {
-			case <-heartbeat.C:
-				_ = reporter.UpdateProgress(i+1, total, progressMsg(i+1, total, filesDone, totalFiles))
-			default:
+				filesDone.Add(1)
 			}
-		}
-		wg.Wait()
-		filesDone += len(files)
 
-		if err := synthesizeBookSignatureForBook(p.store, b.ID); err != nil {
-			reporter.Logger().Warn("synthesize book signature", "book_id", b.ID, "error", err)
-		}
-
-		// Progress after each book; also drain any pending ticker.
-		select {
-		case <-heartbeat.C:
-		default:
-		}
-		_ = reporter.UpdateProgress(i+1, total, progressMsg(i+1, total, filesDone, totalFiles))
+			if err := synthesizeBookSignatureForBook(p.store, book.ID); err != nil {
+				reporter.Logger().Warn("synthesize book signature", "book_id", book.ID, "error", err)
+			}
+			completedBooks.Add(1)
+		}(b)
 	}
+
+	bookWg.Wait()
+	cancelHB()
 
 	_ = reporter.UpdateProgress(total, total,
 		fmt.Sprintf("Fingerprint rescan complete in %s — fp=%d skip=%d ineligible=%d fail=%d (of %d books, %d files)",
 			time.Since(startedAt).Round(time.Second),
-			fingerprinted.Load(), skipped.Load(), ineligible.Load(), failed.Load(), total, filesDone))
+			fingerprinted.Load(), skipped.Load(), ineligible.Load(), failed.Load(), total, filesDone.Load()))
 	return nil
 }
 
