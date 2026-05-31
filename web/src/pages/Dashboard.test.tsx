@@ -9,6 +9,7 @@ import { Dashboard } from './Dashboard';
 // Mock the API module
 vi.mock('../services/api', () => ({
   getSystemStatus: vi.fn(),
+  getSystemStorage: vi.fn(),
   countAuthors: vi.fn(),
   countSeries: vi.fn(),
   countBooksFiltered: vi.fn(),
@@ -30,12 +31,14 @@ vi.mock('../components/AnnouncementBanner', () => ({
 
 import {
   getSystemStatus,
+  getSystemStorage,
   countAuthors,
   countSeries,
   countBooksFiltered,
 } from '../services/api';
 
 const mockGetSystemStatus = vi.mocked(getSystemStatus);
+const mockGetSystemStorage = vi.mocked(getSystemStorage);
 const mockCountAuthors = vi.mocked(countAuthors);
 const mockCountSeries = vi.mocked(countSeries);
 const mockCountBooksFiltered = vi.mocked(countBooksFiltered);
@@ -63,6 +66,7 @@ function mockSuccessfulAPIs() {
     runtime: mockRuntime,
     operations: { recent: [] },
   });
+  mockGetSystemStorage.mockResolvedValue(null);
   mockCountAuthors.mockResolvedValue(120);
   mockCountSeries.mockResolvedValue(80);
   mockCountBooksFiltered.mockResolvedValue(25);
@@ -186,6 +190,7 @@ describe('Dashboard', () => {
           ],
         },
       });
+      mockGetSystemStorage.mockResolvedValue(null);
       mockCountAuthors.mockResolvedValue(5);
       mockCountSeries.mockResolvedValue(3);
       mockCountBooksFiltered.mockResolvedValue(0);

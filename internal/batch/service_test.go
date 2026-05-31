@@ -167,6 +167,8 @@ func (m *MockBookStore) GetBooksWithUserTag(tag string) ([]string, error)       
 func (m *MockBookStore) GetAllBookUserTags() ([]string, error)                         { return nil, nil }
 func (m *MockBookStore) AdjustRating(id string, delta int) (*database.Book, error)     { return nil, nil }
 func (m *MockBookStore) FlagMetadataHashDuplicate(primaryID, duplicateID string) error { return nil }
+func (m *MockBookStore) ListBookIDs() ([]string, error)                                        { return nil, nil }
+func (m *MockBookStore) ListBooksByITunesPID(limit, offset int) ([]database.Book, error)       { return nil, nil }
 
 // Helper to create a test book
 func testBook(id, title string) *database.Book {
