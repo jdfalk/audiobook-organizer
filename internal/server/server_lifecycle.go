@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.24.0
+// version: 1.25.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-06-01
 
@@ -912,37 +912,7 @@ func (s *Server) setupRoutes() {
 	api := s.router.Group("/api/v1")
 	api.Use(apiRateLimiter, bodyLimitMiddleware)
 	{
-		authGroup := api.Group("/auth")
-		{
-			authGroup.GET("/status", s.getAuthStatus)
-			authGroup.POST("/setup", s.setupInitialAdmin)
-			authGroup.POST("/login", s.login)
-			authGroup.POST("/accept-invite", s.handleAcceptInvite)
-			authGroup.POST("/bootstrap", s.handleBootstrap)
-		}
-
-		authProtected := authGroup.Group("")
-		authProtected.Use(authMiddleware)
-		{
-			authProtected.GET("/me", s.me)
-			authProtected.PATCH("/me", s.updateMe)
-			authProtected.POST("/logout", s.logout)
-			authProtected.GET("/sessions", s.listMySessions)
-			authProtected.DELETE("/sessions/:id", s.revokeMySession)
-			authProtected.PUT("/me/password", s.changePassword)
-			// Admin mints a single-use 15-min URL that exchanges for a
-			// 24h session cookie when clicked. Lets the admin sign
-			// themselves (or a user) in on a new device without
-			// re-entering credentials.
-			authProtected.POST("/temp-tokens", s.perm(permTempLoginMint()), s.createTempLoginToken)
-
-			// API key management
-			authProtected.POST("/api-keys", s.createAPIKey)
-			authProtected.GET("/api-keys", s.listAPIKeys)
-			authProtected.GET("/api-keys/:id", s.getAPIKey)
-			authProtected.PATCH("/api-keys/:id", s.updateAPIKeyStatus)
-			authProtected.DELETE("/api-keys/:id", s.revokeAPIKey)
-		}
+		s.wireHandlers(api, authMiddleware)
 
 		// Public cache stats endpoint (no auth required)
 		api.GET("/cache/stats", s.handleCacheStats)
