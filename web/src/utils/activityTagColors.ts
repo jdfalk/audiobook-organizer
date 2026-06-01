@@ -1,5 +1,5 @@
 // file: web/src/utils/activityTagColors.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: c1d2e3f4-a5b6-7c8d-9e0f-1a2b3c4d5e6f
 
 /**
@@ -11,7 +11,7 @@
  *   action:*     → primary (blue)
  *   source:*     → secondary (purple)
  *   outcome:ok   → success (green)
- *   outcome:warn → warning (amber)
+ *   outcome:warn → yellow
  *   outcome:error→ error (red)
  *   outcome:skip → default (gray)
  *   op:*         → info (teal)
@@ -45,13 +45,17 @@ export function tagChipProps(tag: string): TagChipProps {
     case 'action':
       return { color: 'primary', label: val };
     case 'source':
-      return { color: 'secondary', label: val };
+      return { color: 'default', sx: { borderColor: '#78909c', color: '#cfd8dc' }, label: val };
     case 'outcome':
       switch (val) {
         case 'ok':
           return { color: 'success', label: val };
         case 'warn':
-          return { color: 'warning', label: val };
+          return {
+            color: 'default',
+            sx: { borderColor: '#fdd835', color: '#fff176', bgcolor: 'rgba(253, 216, 53, 0.08)' },
+            label: 'warning',
+          };
         case 'error':
           return { color: 'error', label: val };
         case 'skip':
@@ -73,6 +77,36 @@ export function tagChipProps(tag: string): TagChipProps {
         sx: { bgcolor: '#7986cb', color: '#fff' },
         label: val,
       };
+    case 'plugin':
+      return { color: 'secondary', label: val };
+    case 'def':
+      return {
+        color: 'default',
+        sx: { borderColor: '#64b5f6', color: '#90caf9' },
+        label: val,
+      };
+    case 'phase':
+      return {
+        color: 'default',
+        sx: { borderColor: '#4db6ac', color: '#80cbc4' },
+        label: val,
+      };
+    case 'http':
+      return {
+        color: 'default',
+        sx: { borderColor: '#90a4ae', color: '#cfd8dc' },
+        label: val,
+      };
+    case 'domain':
+      return { color: 'primary', label: val };
+    case 'network':
+      return {
+        color: 'default',
+        sx: { borderColor: '#81d4fa', color: '#b3e5fc' },
+        label: val,
+      };
+    case 'error':
+      return { color: 'error', label: val };
     case 'scope':
     case 'lifecycle':
       return { color: 'default', label: val };

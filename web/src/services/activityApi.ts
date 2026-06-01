@@ -1,5 +1,5 @@
 // file: web/src/services/activityApi.ts
-// version: 2.2.0
+// version: 2.3.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
@@ -108,6 +108,7 @@ export interface OperationActivityEntry {
   operation_type: string;
   message: string;
   details?: string;
+  tags?: string[];
 }
 
 export interface OperationActivityResponse {

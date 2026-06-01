@@ -1,5 +1,5 @@
 // file: web/src/stores/useOperationsStore.ts
-// version: 3.5.0
+// version: 3.6.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
 
 import { create } from 'zustand';
@@ -39,12 +39,21 @@ export interface ActiveOperation {
   notify_level?: number;
 }
 
+export interface OperationLogEvent {
+  op_id: string;
+  level: string;
+  message: string;
+  created_at: string;
+  sequence: number;
+}
+
 interface OperationsState {
   operations: Record<string, ActiveOperation>; // Keyed by id
   activeOperations: ActiveOperation[]; // All ops regardless of notify_level
   /** alertOperations contains only ops with notify_level === 0 (NotifyAlert).
    *  Use this for the bell badge count. */
   alertOperations: ActiveOperation[];
+  latestLogEvent: OperationLogEvent | null;
   polling: boolean;
   // SSE EventSource instance — kept here so it can be closed on unmount.
   _sseSource: EventSource | null;
@@ -107,6 +116,7 @@ function fromV2(op: api.OperationV2): ActiveOperation {
 // one loadFromServer per event until the first reload returns. We coalesce
 // to a single reload per 500ms window.
 let unknownOpReloadPending = false;
+let logEventSequence = 0;
 
 function formatOpLabel(type: string): string {
   const labels: Record<string, string> = {
@@ -151,6 +161,7 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
   operations: {},
   activeOperations: [],
   alertOperations: [],
+  latestLogEvent: null,
   polling: false,
   _sseSource: null,
 
@@ -350,8 +361,20 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
             const operations = { ...state.operations, [opId]: updated };
             return { operations, ...deriveOperationArrays(operations) };
           });
+        } else if (name === 'op.log' && opId) {
+          const message = (p.message as string | undefined) ?? '';
+          if (message) {
+            set({
+              latestLogEvent: {
+                op_id: opId,
+                level: (p.level as string | undefined) ?? 'info',
+                message,
+                created_at: (p.created_at as string | undefined) ?? new Date().toISOString(),
+                sequence: ++logEventSequence,
+              },
+            });
+          }
         }
-        // op.log is informational; no store update needed (logs are fetched on-demand).
       },
       onError: () => {
         // On error, clear the source so the next openSSE() call reconnects.

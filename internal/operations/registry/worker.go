@@ -1,7 +1,7 @@
 // file: internal/operations/registry/worker.go
-// version: 2.2.1
+// version: 2.3.0
 // guid: b8c9d0e1-f2a3-4b5c-6d7e-8f9a0b1c2d3e
-// last-edited: 2026-05-18
+// last-edited: 2026-06-01
 
 package registry
 
@@ -14,10 +14,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"github.com/jdfalk/audiobook-organizer/internal/logger"
 )
 
 var operationTracer = otel.Tracer("audiobook-organizer/operations")
@@ -152,7 +152,7 @@ func (r *Registry) executeRun(parentCtx context.Context, qr *queuedRun) (wasAban
 	setItemFn := func(label string) { h.setCurrentItem(label) }
 	reporter := newDBReporter(runCtx, qr.opID, qr.defID, def.DisplayName, qr.plugin,
 		"", "", // traceID / spanID loaded from DB row in future; empty for now
-		r.store, r.bus, r.logger, setItemFn)
+		r.store, r.bus, r.activityRecorder, r.logger, setItemFn)
 
 	// Canonical "operation started" log line, with all the tags downstream
 	// readers (op_log feed, activity-log enricher, digest aggregator) need

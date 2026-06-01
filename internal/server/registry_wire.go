@@ -1,5 +1,5 @@
 // file: internal/server/registry_wire.go
-// version: 1.7.3
+// version: 1.8.0
 
 package server
 
@@ -299,6 +299,9 @@ func wireServerFromContainer(s *Server, c *serviceregistry.Container) {
 	// callers use the embedded *opsregistry.Registry. Always present.
 	if wrapper, ok := serviceregistry.TryGet[*opsregistry.RegistryWrapper](c, "opregistry"); ok && wrapper != nil {
 		s.opRegistry = wrapper.Registry
+		if s.activityService != nil {
+			s.opRegistry.SetActivityRecorder(s.activityService)
+		}
 	}
 	if hub, ok := serviceregistry.TryGet[*opsregistry.EventHub](c, "ophub"); ok {
 		s.opHub = hub
