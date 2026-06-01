@@ -1,7 +1,7 @@
 // file: web/src/services/api.ts
-// version: 2.34.0
+// version: 2.35.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
-// last-edited: 2026-05-29
+// last-edited: 2026-05-31
 
 // API service layer for audiobook-organizer backend
 // Provides typed functions for all backend endpoints
@@ -4518,6 +4518,9 @@ export async function mergeDedupCandidate(id: number, keepId?: string): Promise<
     init.body = JSON.stringify({ keep_id: keepId });
   }
   const response = await fetch(`${API_BASE}/dedup/candidates/${id}/merge`, init);
+  // 409 = candidate was already merged/stale — the backend already marked it
+  // merged and fired the event. Treat as success so the UI drops the row.
+  if (response.status === 409) return;
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to merge dedup candidate');
   }
