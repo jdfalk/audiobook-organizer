@@ -1,5 +1,5 @@
 // file: web/src/stores/useOperationsStore.test.ts
-// version: 2.2.0
+// version: 2.3.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-05-08
 
@@ -148,5 +148,52 @@ describe('useOperationsStore', () => {
     expect(ops[0].id).toBe('op-99');
     expect(ops[0].status).toBe('queued');
     expect(ops[0].type).toBe('scan');
+  });
+
+  it('op.log SSE event updates latestLogEvent', () => {
+    useOperationsStore.setState({ latestLogEvent: null, _sseSource: null } as Parameters<typeof useOperationsStore.setState>[0]);
+
+    let capturedOnEvent: ((name: api.OperationSSEEventName, payload: unknown) => void) | null = null;
+    vi.mocked(api.openOperationsSSE).mockImplementation(({ onEvent }) => {
+      capturedOnEvent = onEvent;
+      return {} as EventSource;
+    });
+
+    useOperationsStore.getState().openSSE();
+    expect(capturedOnEvent).not.toBeNull();
+
+    capturedOnEvent!('op.log', {
+      op_id: 'test-op-log',
+      message: 'Processing file 1',
+      level: 'info',
+      created_at: '2026-06-01T12:00:00Z',
+    });
+
+    const { latestLogEvent } = useOperationsStore.getState();
+    expect(latestLogEvent).not.toBeNull();
+    expect(latestLogEvent?.op_id).toBe('test-op-log');
+    expect(latestLogEvent?.message).toBe('Processing file 1');
+    expect(latestLogEvent?.level).toBe('info');
+  });
+
+  it('op.log SSE event with empty message is ignored', () => {
+    useOperationsStore.setState({ latestLogEvent: null, _sseSource: null } as Parameters<typeof useOperationsStore.setState>[0]);
+
+    let capturedOnEvent: ((name: api.OperationSSEEventName, payload: unknown) => void) | null = null;
+    vi.mocked(api.openOperationsSSE).mockImplementation(({ onEvent }) => {
+      capturedOnEvent = onEvent;
+      return {} as EventSource;
+    });
+
+    useOperationsStore.getState().openSSE();
+
+    capturedOnEvent!('op.log', {
+      op_id: 'test-op-log',
+      message: '',
+      level: 'info',
+      created_at: '2026-06-01T12:00:00Z',
+    });
+
+    expect(useOperationsStore.getState().latestLogEvent).toBeNull();
   });
 });

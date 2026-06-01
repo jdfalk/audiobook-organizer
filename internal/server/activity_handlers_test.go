@@ -1,5 +1,5 @@
 // file: internal/server/activity_handlers_test.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: d4e5f6a7-b8c9-0123-defa-234567890123
 
 package server
@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -237,4 +238,65 @@ func TestListActivitySources(t *testing.T) {
 	assert.Equal(t, 2, resp.Data.Sources[0].Count)
 	assert.Equal(t, "scanner", resp.Data.Sources[1].Source)
 	assert.Equal(t, 1, resp.Data.Sources[1].Count)
+}
+
+// TestListOperationActivity_FallbackToOpLogs verifies that when the activity
+// store has no rows for an operation, the handler falls back to op_logs_v2 and
+// returns those entries with the correct shape and tags.
+func TestListOperationActivity_FallbackToOpLogs(t *testing.T) {
+	dir := t.TempDir()
+
+	// Main store: SQLiteStore implements OpsV2Store (has op_logs_v2 table).
+	sqlStore, err := database.NewSQLiteStore(filepath.Join(dir, "main.db"))
+	require.NoError(t, err)
+	require.NoError(t, database.RunMigrations(sqlStore))
+	defer sqlStore.Close()
+
+	// Activity service backed by a fresh empty store — no entries for the op.
+	actStore, err := database.NewActivityStore(filepath.Join(dir, "activity.db"))
+	require.NoError(t, err)
+	defer actStore.Close()
+	actSvc := activity.NewService(actStore)
+
+	opID := "test-fallback-op-001"
+	now := time.Now().UTC().Truncate(time.Second)
+	require.NoError(t, sqlStore.AppendOpLogsV2([]database.OpLogV2Row{
+		{OperationID: opID, Level: "info", Message: "started processing", CreatedAt: now},
+		{OperationID: opID, Level: "debug", Message: "processing item 1", CreatedAt: now.Add(time.Second)},
+	}))
+
+	gin.SetMode(gin.TestMode)
+	srv := &Server{store: sqlStore, activityService: actSvc}
+	r := gin.New()
+	r.GET("/api/v1/operations/:id/activity", srv.listOperationActivity)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/operations/"+opID+"/activity", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp struct {
+		Data struct {
+			OperationID string                   `json:"operation_id"`
+			Entries     []operationActivityEntry `json:"entries"`
+			Total       int                      `json:"total"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+
+	assert.Equal(t, opID, resp.Data.OperationID)
+	require.Len(t, resp.Data.Entries, 2)
+	assert.Equal(t, "started processing", resp.Data.Entries[0].Message)
+	assert.Equal(t, "info", resp.Data.Entries[0].Level)
+
+	// Tags should include an op: tag for the operation ID.
+	hasOpTag := false
+	for _, tag := range resp.Data.Entries[0].Tags {
+		if strings.HasPrefix(tag, "op:") {
+			hasOpTag = true
+		}
+	}
+	assert.True(t, hasOpTag, "expected op: tag in fallback entry tags")
+	assert.Equal(t, 2, resp.Data.Total)
 }
