@@ -1,5 +1,5 @@
 // file: internal/server/indexed_store_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 6e3f5a2b-8c5a-4a70-b8c5-3d7e0f1b9a89
 
 package server
@@ -7,6 +7,7 @@ package server
 import (
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,16 +17,16 @@ import (
 
 // drainQueue blocks until the worker has processed every in-flight
 // request or the timeout fires. Test-only helper.
+//
+// Correctness: enqueueIndex increments indexWorkerBusy before adding
+// to the channel; the worker decrements it after completing each item.
+// Checking busy == 0 is therefore race-free regardless of where the
+// worker is in its dequeue-process cycle.
 func drainQueue(t *testing.T, srv *Server) {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		srv.indexQueueMu.RLock()
-		n := len(srv.indexQueue)
-		srv.indexQueueMu.RUnlock()
-		if n == 0 {
-			// Let the worker finish the in-flight item.
-			time.Sleep(50 * time.Millisecond)
+		if atomic.LoadInt32(&srv.indexWorkerBusy) == 0 {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)

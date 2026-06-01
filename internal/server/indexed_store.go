@@ -1,5 +1,5 @@
 // file: internal/server/indexed_store.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 5d2e4f3a-7b5a-4a70-b8c5-3d7e0f1b9a79
 //
 // indexedStore decorates a database.Store so that every successful
@@ -17,6 +17,7 @@ package server
 
 import (
 	"log/slog"
+	"sync/atomic"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
@@ -77,6 +78,10 @@ type indexRequest struct {
 // silently — a startup reindex will heal any gaps. Safe to call
 // concurrently with Shutdown: the mutex + closed flag prevents
 // sending on a closed channel during teardown.
+//
+// indexWorkerBusy is incremented before enqueueing so drainQueue can
+// reliably wait for completion: the window between dequeue and the
+// worker starting work is covered by the pre-increment.
 func (s *Server) enqueueIndex(bookID string, del bool) {
 	if bookID == "" {
 		return
@@ -86,9 +91,11 @@ func (s *Server) enqueueIndex(bookID string, del bool) {
 	if s.indexQueueClosed || s.indexQueue == nil {
 		return
 	}
+	atomic.AddInt32(&s.indexWorkerBusy, 1)
 	select {
 	case s.indexQueue <- indexRequest{bookID: bookID, delete: del}:
 	default:
+		atomic.AddInt32(&s.indexWorkerBusy, -1)
 		slog.Warn("search index queue full, dropped (delete)", "bookID", bookID, "del", del)
 	}
 }
@@ -119,10 +126,11 @@ func (s *Server) runIndexWorker() {
 			if err := s.DeleteIndexedBook(req.bookID); err != nil {
 				slog.Warn("delete index", "req", req.bookID, "err", err)
 			}
-			continue
+		} else {
+			if err := s.IndexBookByID(req.bookID); err != nil {
+				slog.Warn("index", "req", req.bookID, "err", err)
+			}
 		}
-		if err := s.IndexBookByID(req.bookID); err != nil {
-			slog.Warn("index", "req", req.bookID, "err", err)
-		}
+		atomic.AddInt32(&s.indexWorkerBusy, -1)
 	}
 }
