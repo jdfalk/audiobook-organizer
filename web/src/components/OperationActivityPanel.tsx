@@ -1,5 +1,5 @@
 // file: web/src/components/OperationActivityPanel.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: f7a1e2c3-9b4d-4e5a-8c6f-1d3b5a7e9c0f
 
 import { useCallback, useEffect, useState, useRef, useMemo } from 'react';
@@ -31,14 +31,6 @@ interface OperationActivityPanelProps {
   /** Optional cap on entries returned by the server (default 1000 server-side). */
   limit?: number;
 }
-
-const TERMINAL_STATUSES = new Set([
-  'completed',
-  'failed',
-  'canceled',
-  'interrupted_dropped',
-  'interrupted_restart',
-]);
 
 function levelChip(level: string) {
   const colorMap: Record<string, 'error' | 'warning' | 'info' | 'default'> = {
@@ -179,24 +171,17 @@ export function OperationActivityPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
-  // Pause auto-refresh while the user's mouse is over the log body so they can
-  // select/copy text without being kicked out of their selection. We use the
-  // hover approach because it's the simplest given the existing setInterval +
-  // useState data flow; selection-aware pause would require tracking
-  // selectionchange globally and resolving Range containers, which is brittle.
-  const [paused, setPaused] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isUnmountedRef = useRef(false);
   const { toast } = useToast();
 
   const op = useOperationsStore((state) =>
     state.activeOperations.find((o) => o.id === operationId),
   );
+  const latestLogEvent = useOperationsStore((state) => state.latestLogEvent);
 
   useEffect(() => {
     return () => {
       isUnmountedRef.current = true;
-      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);
 
@@ -227,18 +212,22 @@ export function OperationActivityPanel({
     load();
   }, [load]);
 
-  // Poll for non-terminal ops every 3s — terminal ops do not need refresh.
-  // Paused while the user is hovering the log body (so text selection is not
-  // wiped out by re-renders).
+  // Live log lines are appended from SSE. The refresh button is the explicit
+  // full reload path; no timer should repaint the log while a user is reading.
   useEffect(() => {
-    if (op && TERMINAL_STATUSES.has(op.status)) return;
-    if (paused) return;
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(load, 3000);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [load, op, paused]);
+    if (!latestLogEvent || latestLogEvent.op_id !== operationId) return;
+    setEntries((prev) => [
+      ...prev,
+      {
+        timestamp: latestLogEvent.created_at,
+        level: latestLogEvent.level,
+        operation_id: latestLogEvent.op_id,
+        operation_type: op?.def_id ?? op?.type ?? '',
+        message: latestLogEvent.message,
+      },
+    ]);
+    setTotal((prev) => prev + 1);
+  }, [latestLogEvent, operationId, op]);
 
   // Plain-text representation of the log for clipboard copy.
   const logsAsText = useMemo(() => {
@@ -317,12 +306,9 @@ export function OperationActivityPanel({
               </IconButton>
             </span>
           </Tooltip>
-          <Tooltip title={paused ? 'Auto-refresh paused (hovering)' : 'Refresh activity'}>
+          <Tooltip title="Refresh activity">
             <IconButton size="small" onClick={load} aria-label="Refresh activity">
-              <RefreshIcon
-                fontSize="small"
-                sx={paused ? { color: 'warning.main' } : undefined}
-              />
+              <RefreshIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         </Stack>
@@ -350,8 +336,6 @@ export function OperationActivityPanel({
       ) : (
         <Box
           sx={{ maxHeight: 480, overflowY: 'auto' }}
-          onMouseEnter={() => setPaused(true)}
-          onMouseLeave={() => setPaused(false)}
         >
           {entries.map((entry, idx) => (
             <EntryRow key={`${entry.timestamp}-${idx}`} entry={entry} />

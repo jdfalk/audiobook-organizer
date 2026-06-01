@@ -1,5 +1,5 @@
 // file: web/src/pages/ActivityLog.tsx
-// version: 2.15.2
+// version: 2.16.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -122,6 +122,9 @@ const formatItemTime = (ts?: string): string => {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 };
 
+const displayTags = (tags?: string[]): string[] =>
+  (tags ?? []).filter((tag) => tag !== 'source:server' && tag !== 'action:system');
+
 export default function ActivityLog() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -159,6 +162,7 @@ export default function ActivityLog() {
   // Active ops from unified store
   const activeOps = useOperationsStore((state) => state.activeOperations);
   const loadActiveOpsFromServer = useOperationsStore((state) => state.loadFromServer);
+  const latestLogEvent = useOperationsStore((state) => state.latestLogEvent);
   const [pinned, setPinned] = useState(() => localStorage.getItem(STORAGE_KEYS.ACTIVITY_OPS_PINNED) !== 'false');
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
   const [expandedOpId, setExpandedOpId] = useState<string | null>(searchParams.get('op'));
@@ -239,9 +243,15 @@ export default function ActivityLog() {
     }
   }, [activeOps]);
 
-  // Load logs for expanded operation. Polls every 3s for ops that are
-  // still running; for terminal ops (completed/failed/canceled/
-  // interrupted_*) a single fetch is enough.
+  const loadOperationLogs = useCallback(async (opId: string) => {
+    const logs = await api.getOperationLogs(opId);
+    setOpLogs(logs.map((l: { message?: string }) => l.message || String(l)));
+    setOpLogsLoaded(true);
+    window.setTimeout(() => opLogsRef.current?.scrollTo({ top: opLogsRef.current.scrollHeight }), 50);
+  }, []);
+
+  // Load logs once when an operation is expanded. Live lines append via SSE
+  // below; the per-op refresh button is the explicit full reload path.
   useEffect(() => {
     if (!expandedOpId) {
       setOpLogs([]);
@@ -250,14 +260,10 @@ export default function ActivityLog() {
     }
     setOpLogsLoaded(false);
     let cancelled = false;
-    let scrollTimeoutId: ReturnType<typeof setTimeout> | null = null;
     const fetchLogs = async () => {
       try {
-        const logs = await api.getOperationLogs(expandedOpId);
         if (!cancelled) {
-          setOpLogs(logs.map((l: { message?: string }) => l.message || String(l)));
-          setOpLogsLoaded(true);
-          scrollTimeoutId = setTimeout(() => opLogsRef.current?.scrollTo({ top: opLogsRef.current.scrollHeight }), 50);
+          await loadOperationLogs(expandedOpId);
         }
       } catch {
         if (!cancelled) {
@@ -267,23 +273,17 @@ export default function ActivityLog() {
       }
     };
     fetchLogs();
-    // Only poll if the op is still active. For terminal ops, the
-    // log list won't change.
-    const op = activeOps.find((o) => o.id === expandedOpId);
-    const terminal = op && ['completed', 'failed', 'canceled', 'interrupted_dropped', 'interrupted_restart'].includes(op.status);
-    if (terminal) {
-      return () => {
-        cancelled = true;
-        if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
-      };
-    }
-    const interval = setInterval(fetchLogs, 3000);
     return () => {
       cancelled = true;
-      clearInterval(interval);
-      if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
     };
-  }, [expandedOpId, activeOps]);
+  }, [expandedOpId, loadOperationLogs]);
+
+  useEffect(() => {
+    if (!latestLogEvent || latestLogEvent.op_id !== expandedOpId) return;
+    setOpLogsLoaded(true);
+    setOpLogs((prev) => [...prev, latestLogEvent.message]);
+    window.setTimeout(() => opLogsRef.current?.scrollTo({ top: opLogsRef.current.scrollHeight }), 50);
+  }, [latestLogEvent, expandedOpId]);
 
   // Load sources
   const loadSources = useCallback(async () => {
@@ -437,6 +437,9 @@ export default function ActivityLog() {
   const handleRefreshOp = async (_opId: string) => {
     try {
       await loadActiveOpsFromServer();
+      if (expandedOpId === _opId) {
+        await loadOperationLogs(_opId);
+      }
     } catch (err) {
       console.error('Failed to refresh op', err);
     }
@@ -1154,7 +1157,7 @@ export default function ActivityLog() {
                     Action
                   </Typography>
                   <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                    {['action:metadata-apply', 'action:tag-write', 'action:import', 'action:scan', 'action:dedup', 'action:organizer', 'action:purge'].map((tag) => {
+                    {['action:metadata-apply', 'action:tag-write', 'action:import', 'action:scan', 'action:dedup', 'action:fingerprint', 'action:fingerprint-scan', 'action:organizer', 'action:purge'].map((tag) => {
                       const { color, sx, label } = tagChipProps(tag);
                       return (
                         <Chip
@@ -1576,9 +1579,9 @@ export default function ActivityLog() {
                                       {item.details}
                                     </Typography>
                                   )}
-                                  {item.tags && item.tags.length > 0 && (
+                                  {displayTags(item.tags).length > 0 && (
                                     <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                                      {item.tags.map((tag) => {
+                                      {displayTags(item.tags).map((tag) => {
                                         const { color, sx: tagSx, label } = tagChipProps(tag);
                                         return (
                                           <Chip
@@ -1662,9 +1665,9 @@ export default function ActivityLog() {
                     )}
                     {!isMobile && (
                       <TableCell>
-                        {entry.tags && entry.tags.length > 0 ? (
+                        {displayTags(entry.tags).length > 0 ? (
                           <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                            {entry.tags.map((tag) => {
+                            {displayTags(entry.tags).map((tag) => {
                               const { color, sx, label } = tagChipProps(tag);
                               return (
                                 <Chip

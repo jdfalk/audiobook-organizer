@@ -1,11 +1,12 @@
 // file: internal/server/activity_handlers.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: c3d4e5f6-a7b8-9012-cdef-123456789012
-// last-edited: 2026-05-20
+// last-edited: 2026-06-01
 
 package server
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
@@ -24,6 +25,16 @@ type activityHandlerDeps interface {
 }
 
 var _ activityHandlerDeps = (*Server)(nil)
+
+type operationActivityEntry struct {
+	Timestamp     time.Time `json:"timestamp"`
+	Level         string    `json:"level"`
+	OperationID   string    `json:"operation_id"`
+	OperationType string    `json:"operation_type"`
+	Message       string    `json:"message"`
+	Details       string    `json:"details,omitempty"`
+	Tags          []string  `json:"tags,omitempty"`
+}
 
 // listActivity handles GET /api/v1/activity.
 //
@@ -212,11 +223,108 @@ func (s *Server) listOperationActivity(c *gin.Context) {
 	if entries == nil {
 		entries = []database.ActivityEntry{}
 	}
+	if len(entries) == 0 {
+		opLogEntries, opLogErr := s.operationActivityFromOpLogs(opID, limit)
+		if opLogErr != nil {
+			httputil.InternalError(c, "failed to query operation logs", opLogErr)
+			return
+		}
+		if opLogEntries != nil {
+			httputil.RespondWithOK(c, struct {
+				OperationID string                   `json:"operation_id"`
+				Entries     []operationActivityEntry `json:"entries"`
+				Total       int                      `json:"total"`
+			}{OperationID: opID, Entries: opLogEntries, Total: len(opLogEntries)})
+			return
+		}
+	}
+	responseEntries := make([]operationActivityEntry, 0, len(entries))
+	for _, e := range entries {
+		responseEntries = append(responseEntries, activityEntryToOperationEntry(e))
+	}
 	httputil.RespondWithOK(c, struct {
 		OperationID string                   `json:"operation_id"`
-		Entries     []database.ActivityEntry `json:"entries"`
+		Entries     []operationActivityEntry `json:"entries"`
 		Total       int                      `json:"total"`
-	}{OperationID: opID, Entries: entries, Total: total})
+	}{OperationID: opID, Entries: responseEntries, Total: total})
+}
+
+func (s *Server) operationActivityFromOpLogs(opID string, limit int) ([]operationActivityEntry, error) {
+	v2, ok := s.Store().(database.OpsV2Store)
+	if !ok {
+		return nil, nil
+	}
+	logs, err := v2.GetOpLogsV2(opID, limit)
+	if err != nil {
+		return nil, err
+	}
+	if len(logs) == 0 {
+		return []operationActivityEntry{}, nil
+	}
+	out := make([]operationActivityEntry, 0, len(logs))
+	for _, l := range logs {
+		attrs := opLogAttrs(l.Attrs)
+		opType, _ := attrs["def_id"].(string)
+		out = append(out, operationActivityEntry{
+			Timestamp:     l.CreatedAt,
+			Level:         l.Level,
+			OperationID:   l.OperationID,
+			OperationType: opType,
+			Message:       l.Message,
+			Details:       l.Attrs,
+			Tags:          operationLogTags(l.OperationID, l.Level, opType, attrs),
+		})
+	}
+	return out, nil
+}
+
+func activityEntryToOperationEntry(e database.ActivityEntry) operationActivityEntry {
+	details := ""
+	if len(e.Details) > 0 {
+		if b, err := json.Marshal(e.Details); err == nil {
+			details = string(b)
+		}
+	}
+	return operationActivityEntry{
+		Timestamp:     e.Timestamp,
+		Level:         e.Level,
+		OperationID:   e.OperationID,
+		OperationType: e.Type,
+		Message:       e.Summary,
+		Details:       details,
+		Tags:          e.Tags,
+	}
+}
+
+func opLogAttrs(raw string) map[string]any {
+	if raw == "" || raw == "{}" {
+		return map[string]any{}
+	}
+	var attrs map[string]any
+	if err := json.Unmarshal([]byte(raw), &attrs); err != nil {
+		return map[string]any{}
+	}
+	return attrs
+}
+
+func operationLogTags(opID, level, opType string, attrs map[string]any) []string {
+	entry := database.ActivityEntry{
+		Tier:        "info",
+		Type:        opType,
+		Level:       level,
+		OperationID: opID,
+		Details:     attrs,
+		Tags:        []string{"operation"},
+	}
+	if plugin, ok := attrs["plugin"].(string); ok {
+		entry.Source = plugin
+		entry.Tags = append(entry.Tags, "plugin:"+plugin)
+	}
+	if opType != "" {
+		entry.Tags = append(entry.Tags, "def:"+opType)
+	}
+	activity.EnrichTags(&entry)
+	return entry.Tags
 }
 
 // recompactDigests handles POST /api/v1/admin/recompact-digests.

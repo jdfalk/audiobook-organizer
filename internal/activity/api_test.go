@@ -157,8 +157,8 @@ func TestFlushOperation_OnlyFlushesMatchingOp(t *testing.T) {
 // TestEnrichTags verifies that EnrichTags correctly derives and appends tags.
 func TestEnrichTags(t *testing.T) {
 	tests := []struct {
-		name    string
-		entry   database.ActivityEntry
+		name     string
+		entry    database.ActivityEntry
 		wantTags []string
 	}{
 		{
@@ -238,7 +238,7 @@ func TestEnrichTags(t *testing.T) {
 				Type:    "system",
 				Summary: "Activity log service initialized and recording",
 			},
-			wantTags: []string{"outcome:ok", "source:server", "action:system", "lifecycle:startup"},
+			wantTags: []string{"outcome:ok", "lifecycle:startup"},
 		},
 		{
 			name: "system type with shutdown lifecycle keyword",
@@ -248,7 +248,7 @@ func TestEnrichTags(t *testing.T) {
 				Type:    "system",
 				Summary: "HTTP server forced shutdown",
 			},
-			wantTags: []string{"outcome:warn", "source:server", "action:system", "lifecycle:shutdown"},
+			wantTags: []string{"outcome:warn", "lifecycle:shutdown"},
 		},
 		{
 			name: "system type with connection keyword",
@@ -260,7 +260,7 @@ func TestEnrichTags(t *testing.T) {
 			},
 			// "closed" wins over "connection" since shutdown is checked first
 			// — both interpretations are valid for this message.
-			wantTags: []string{"outcome:ok", "source:server", "action:system", "lifecycle:shutdown"},
+			wantTags: []string{"outcome:ok", "lifecycle:shutdown"},
 		},
 		{
 			name: "system type with no lifecycle keyword",
@@ -270,7 +270,7 @@ func TestEnrichTags(t *testing.T) {
 				Type:    "system",
 				Summary: "Embedding backfill already complete (), skipping",
 			},
-			wantTags: []string{"outcome:ok", "source:server", "action:system"},
+			wantTags: []string{"outcome:ok"},
 		},
 	}
 
@@ -356,9 +356,9 @@ func TestEnrichTags_ComponentFromSourceMapping(t *testing.T) {
 // mapping does not produce a component: tag.
 func TestEnrichTags_NoComponentForGenericSource(t *testing.T) {
 	e := database.ActivityEntry{
-		Level:  "info",
-		Source: "server",
-		Type:   "system",
+		Level:   "info",
+		Source:  "server",
+		Type:    "system",
 		Summary: "generic message",
 	}
 	EnrichTags(&e)

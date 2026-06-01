@@ -1,5 +1,5 @@
 // file: internal/activity/api.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: 9a4f2e1b-3c7d-4b8e-a6f0-5d2c8e1b7a3f
 
 package activity
@@ -115,6 +115,7 @@ func WithTags(base []string, extra ...string) []string {
 
 // typeToAction maps Type values to action verb tags.
 func typeToAction(typeStr string) string {
+	typeStr = strings.TrimSpace(typeStr)
 	switch typeStr {
 	case "metadata_apply", "metadata-apply":
 		return "metadata-apply"
@@ -140,13 +141,46 @@ func typeToAction(typeStr string) string {
 		return "fingerprint"
 	case "dedup":
 		return "dedup"
+	case "acoustid.scan":
+		return "fingerprint-scan"
+	case "acoustid.backfill", "acoustid.fingerprint-rescan":
+		return "fingerprint"
+	case "acoustid.lookup-online":
+		return "acoustid-lookup"
+	case "acoustid.reset-all":
+		return "fingerprint-reset"
+	case "dedup.full-scan", "dedup.llm-review", "dedup.split-book-scan", "dedup.book-signature-scan":
+		return "dedup"
+	case "library.scan":
+		return "scan"
+	case "library.bulk-metadata-fetch", "metadata_fetch", "metadata_candidate_fetch":
+		return "metadata-apply"
+	case "library.bulk-write-back", "bulk_write_back":
+		return "tag-write"
+	case "library.organize", "organize":
+		return "organizer"
+	case "itunes.import", "itunes.sync", "itunes.path-repair":
+		return "import"
 	case "reconcile":
 		return "reconcile"
 	case "merge":
 		return "merge"
-	case "system":
-		return "system"
 	default:
+		if strings.HasPrefix(typeStr, "acoustid.") {
+			return "fingerprint"
+		}
+		if strings.HasPrefix(typeStr, "dedup.") {
+			return "dedup"
+		}
+		if strings.Contains(typeStr, "metadata") {
+			return "metadata-apply"
+		}
+		if strings.Contains(typeStr, "fingerprint") {
+			return "fingerprint"
+		}
+		if strings.Contains(typeStr, "reconcile") {
+			return "reconcile"
+		}
 		return ""
 	}
 }
@@ -157,7 +191,7 @@ func typeToAction(typeStr string) string {
 // contract. Phases:
 //   - startup:    initialized / wired / listening / started / ready / recording
 //   - shutdown:   shutting down / stopping / stopped / closed / canceling /
-//                 flushing / waiting for / forced shutdown
+//     flushing / waiting for / forced shutdown
 //   - connection: client connect / disconnect / register events
 func systemLifecycle(msg string) string {
 	if msg == "" {
@@ -221,7 +255,7 @@ func EnrichTags(e *database.ActivityEntry) {
 	// outcome: tag from Level
 	outcome := "outcome:ok"
 	switch e.Level {
-	case "warning":
+	case "warn", "warning":
 		outcome = "outcome:warn"
 	case "error":
 		outcome = "outcome:error"
@@ -233,7 +267,7 @@ func EnrichTags(e *database.ActivityEntry) {
 	}
 
 	// source: tag from Source
-	if e.Source != "" {
+	if e.Source != "" && !(e.Source == "server" && e.Type == "system") {
 		src := "source:" + e.Source
 		if !seen[src] {
 			derived = append(derived, src)
@@ -251,6 +285,20 @@ func EnrichTags(e *database.ActivityEntry) {
 	// scope: tag (simple heuristic — book if BookID present)
 	if e.BookID != "" && !seen["scope:book"] {
 		derived = append(derived, "scope:book")
+	}
+
+	for _, tag := range detailsTags(e) {
+		if !seen[tag] {
+			derived = append(derived, tag)
+			seen[tag] = true
+		}
+	}
+
+	for _, tag := range summaryTags(e.Summary) {
+		if !seen[tag] {
+			derived = append(derived, tag)
+			seen[tag] = true
+		}
 	}
 
 	// lifecycle: tag for system entries (startup/shutdown/connection).
@@ -290,6 +338,56 @@ var sourceToComponent = map[string]string{
 	"isbn":        "isbn_enrich",
 	"scheduler":   "scheduler",
 	"maintenance": "maintenance",
+}
+
+func detailsTags(e *database.ActivityEntry) []string {
+	if e.Details == nil {
+		return nil
+	}
+	var tags []string
+	for key, prefix := range map[string]string{
+		"def_id":  "def",
+		"plugin":  "plugin",
+		"phase":   "phase",
+		"status":  "status",
+		"outcome": "status",
+	} {
+		if v, ok := e.Details[key]; ok {
+			if s, ok := v.(string); ok && s != "" {
+				tags = append(tags, prefix+":"+s)
+			}
+		}
+	}
+	if method, ok := e.Details["method"].(string); ok && method != "" {
+		tags = append(tags, "http:"+strings.ToLower(method))
+	}
+	return tags
+}
+
+func summaryTags(summary string) []string {
+	lower := strings.ToLower(summary)
+	var tags []string
+	switch {
+	case strings.Contains(lower, "http request"):
+		tags = append(tags, "http:request")
+	case strings.Contains(lower, "tls handshake"):
+		tags = append(tags, "network:tls")
+	case strings.Contains(lower, "cache"):
+		tags = append(tags, "cache")
+	case strings.Contains(lower, "dedup"):
+		tags = append(tags, "domain:dedup")
+	case strings.Contains(lower, "metadata"):
+		tags = append(tags, "domain:metadata")
+	case strings.Contains(lower, "fingerprint"), strings.Contains(lower, "acoustid"):
+		tags = append(tags, "domain:fingerprint")
+	}
+	if strings.Contains(lower, "not found") {
+		tags = append(tags, "error:not-found")
+	}
+	if strings.Contains(lower, "rate limit") || strings.Contains(lower, "429") {
+		tags = append(tags, "error:rate-limit")
+	}
+	return tags
 }
 
 // componentFromEntry derives the component name for an ActivityEntry.

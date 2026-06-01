@@ -1,7 +1,7 @@
 // file: internal/operations/registry/registry.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c
-// last-edited: 2026-05-08
+// last-edited: 2026-06-01
 
 package registry
 
@@ -22,19 +22,20 @@ import (
 // Registry is the central in-memory and DB-backed object that owns every
 // OperationDef, dispatches runs, enforces policies, and routes events.
 type Registry struct {
-	mu              sync.RWMutex
-	defs            map[string]OperationDef
-	running         map[string]*runHandle // opID → handle
-	pluginRunning   map[string]int        // plugin → count of running ops
-	pluginMax       map[string]int        // plugin → max_concurrent (0 = unlimited)
-	concurrencyKeys map[string]string     // key → opID of holder
-	nextRun         chan *queuedRun
-	dispatch        chan struct{}
-	store           database.OpsV2Store
-	bus             Bus // may be nil; wired in UOS-06
-	logger          *slog.Logger
-	workers         int
-	abandoned       *abandonedTracker
+	mu               sync.RWMutex
+	defs             map[string]OperationDef
+	running          map[string]*runHandle // opID → handle
+	pluginRunning    map[string]int        // plugin → count of running ops
+	pluginMax        map[string]int        // plugin → max_concurrent (0 = unlimited)
+	concurrencyKeys  map[string]string     // key → opID of holder
+	nextRun          chan *queuedRun
+	dispatch         chan struct{}
+	store            database.OpsV2Store
+	bus              Bus // may be nil; wired in UOS-06
+	activityRecorder ActivityRecorder
+	logger           *slog.Logger
+	workers          int
+	abandoned        *abandonedTracker
 
 	// shuttingDown is flipped at the top of Shutdown so the abandoned-run
 	// watchdog in executeRun stops spawning replacement workers. Without
@@ -94,6 +95,14 @@ func NewWithOptions(store database.OpsV2Store, logger *slog.Logger, workers int,
 func (r *Registry) SetBus(bus Bus) {
 	r.mu.Lock()
 	r.bus = bus
+	r.mu.Unlock()
+}
+
+// SetActivityRecorder mirrors operation log lines into the unified Activity
+// Log. Safe to call with nil.
+func (r *Registry) SetActivityRecorder(recorder ActivityRecorder) {
+	r.mu.Lock()
+	r.activityRecorder = recorder
 	r.mu.Unlock()
 }
 

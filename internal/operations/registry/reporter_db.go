@@ -1,7 +1,7 @@
 // file: internal/operations/registry/reporter_db.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 1a2b3c4d-5e6f-7890-abcd-ef0123456789
-// last-edited: 2026-05-08
+// last-edited: 2026-06-01
 
 package registry
 
@@ -27,6 +27,12 @@ type Bus interface {
 	Publish(ctx context.Context, eventName string, payload any) error
 }
 
+// ActivityRecorder is the narrow activity-log surface used by dbReporter.
+// *activity.Service satisfies this without creating an import cycle.
+type ActivityRecorder interface {
+	Record(database.ActivityEntry) error
+}
+
 // logEntry is a buffered log line held in memory until flush.
 type logEntry struct {
 	level     slog.Level
@@ -44,9 +50,10 @@ type dbReporter struct {
 	traceID     string
 	spanID      string
 
-	store  database.OpsV2Store
-	bus    Bus // may be nil until UOS-06
-	logger *slog.Logger
+	store            database.OpsV2Store
+	bus              Bus // may be nil until UOS-06
+	activityRecorder ActivityRecorder
+	logger           *slog.Logger
 
 	logMu   sync.Mutex
 	logBuf  []logEntry
@@ -110,7 +117,7 @@ func NewDBReporterForTest(
 	bus Bus,
 	logger *slog.Logger,
 ) Reporter {
-	return newDBReporter(runCtx, opID, defID, "", plugin, traceID, spanID, store, bus, logger, nil)
+	return newDBReporter(runCtx, opID, defID, "", plugin, traceID, spanID, store, bus, nil, logger, nil)
 }
 
 // newDBReporter creates a DB-backed Reporter.
@@ -123,6 +130,7 @@ func newDBReporter(
 	opID, defID, displayName, plugin, traceID, spanID string,
 	store database.OpsV2Store,
 	bus Bus,
+	activityRecorder ActivityRecorder,
 	logger *slog.Logger,
 	setCurrentItemFn func(string),
 ) Reporter {
@@ -138,6 +146,7 @@ func newDBReporter(
 		spanID:           spanID,
 		store:            store,
 		bus:              bus,
+		activityRecorder: activityRecorder,
 		flushCh:          make(chan struct{}, 1),
 		runCtx:           runCtx,
 		setCurrentItemFn: setCurrentItemFn,
@@ -284,11 +293,13 @@ func (r *dbReporter) Log(level slog.Level, message string, attrs ...slog.Attr) e
 
 	if r.bus != nil {
 		_ = r.bus.Publish(r.runCtx, "op.log", map[string]any{
-			"op_id":   r.opID,
-			"level":   level.String(),
-			"message": message,
+			"op_id":      r.opID,
+			"level":      levelString(level),
+			"message":    message,
+			"created_at": entry.createdAt.Format(time.RFC3339Nano),
 		})
 	}
+	r.recordActivity(entry)
 	return nil
 }
 
@@ -411,6 +422,55 @@ func levelString(l slog.Level) string {
 	default:
 		return "debug"
 	}
+}
+
+func tierForLevel(level string) string {
+	if level == "debug" {
+		return "debug"
+	}
+	if level == "info" {
+		return "info"
+	}
+	return "change"
+}
+
+func (r *dbReporter) recordActivity(entry logEntry) {
+	if r.activityRecorder == nil {
+		return
+	}
+	level := levelString(entry.level)
+	details := attrsToMap(entry.attrs)
+	details["def_id"] = r.defID
+	details["op_name"] = r.displayName
+	details["plugin"] = r.plugin
+	details["component"] = r.plugin
+	tags := []string{
+		"operation",
+		"plugin:" + r.plugin,
+		"def:" + r.defID,
+	}
+	if phase, ok := details["phase"].(string); ok && phase != "" {
+		tags = append(tags, "phase:"+phase)
+	}
+	_ = r.activityRecorder.Record(database.ActivityEntry{
+		Timestamp:   entry.createdAt,
+		Tier:        tierForLevel(level),
+		Type:        r.defID,
+		Level:       level,
+		Source:      r.plugin,
+		OperationID: r.opID,
+		Summary:     entry.message,
+		Details:     details,
+		Tags:        tags,
+	})
+}
+
+func attrsToMap(attrs []slog.Attr) map[string]any {
+	m := make(map[string]any, len(attrs))
+	for _, a := range attrs {
+		m[a.Key] = a.Value.Any()
+	}
+	return m
 }
 
 func attrsToJSON(attrs []slog.Attr) string {
