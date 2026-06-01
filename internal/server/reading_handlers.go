@@ -1,6 +1,6 @@
 // file: internal/server/reading_handlers.go
-// version: 1.2.1
-// last-edited: 2026-05-10
+// version: 1.3.0
+// last-edited: 2026-06-01
 // guid: 7f2c4a1d-5b8e-4f70-a9d6-2e8c0f1b9a57
 //
 // HTTP endpoints for the per-user read/unread tracking system
@@ -20,6 +20,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	svrmw "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
 )
 
@@ -45,11 +46,6 @@ func callingUserID(c *gin.Context) string {
 	return "_local"
 }
 
-type setPositionRequest struct {
-	SegmentID       string  `json:"segment_id" binding:"required"`
-	PositionSeconds float64 `json:"position_seconds"`
-}
-
 // handleSetPosition records one position heartbeat and recomputes
 // derived UserBookState. POST /api/v1/books/:id/position
 func (s *Server) handleSetPosition(c *gin.Context) {
@@ -58,7 +54,7 @@ func (s *Server) handleSetPosition(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, "book id required")
 		return
 	}
-	var req setPositionRequest
+	var req handlers.SetPositionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
@@ -109,10 +105,6 @@ func (s *Server) handleGetBookState(c *gin.Context) {
 	httputil.RespondWithOK(c, state)
 }
 
-type patchStatusRequest struct {
-	Status string `json:"status" binding:"required"`
-}
-
 // handleSetBookStatus sets a manual status override. User-forced
 // status takes precedence over auto-derived in future recomputes.
 // PATCH /api/v1/books/:id/status
@@ -122,7 +114,7 @@ func (s *Server) handleSetBookStatus(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, "book id required")
 		return
 	}
-	var req patchStatusRequest
+	var req handlers.PatchStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
