@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.17.0
+// version: 2.18.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 // last-edited: 2026-05-20
 //
@@ -1738,9 +1738,14 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 		s.writeBackBatcher.Enqueue(id)
 	}
 
-	// Invalidate caches since book-author and book-series relationships may have changed
+	// Invalidate caches since book-author and book-series relationships may have changed.
+	// Also clear the shared audiobookService bookCache — the update service owns a
+	// separate instance, so its InvalidateBookCaches() above didn't flush the GET path.
 	s.authorsCache.InvalidateAll()
 	s.seriesCache.InvalidateAll()
+	if s.audiobookService != nil {
+		s.audiobookService.InvalidateBookCaches()
+	}
 
 	httputil.RespondWithOK(c, s.enrichBookForResponseSingle(updatedBook))
 }
