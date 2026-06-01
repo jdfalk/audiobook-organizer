@@ -1,5 +1,5 @@
 // file: internal/server/handlers_unit_test.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: f8a2d1c3-4b5e-6789-abcd-ef0123456789
 //
 // Unit tests for HTTP handlers using MockStore + httptest.
@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	audiobookspkg "github.com/jdfalk/audiobook-organizer/internal/audiobooks"
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -39,8 +40,8 @@ func setupHandlerTest(t *testing.T) (*Server, *mocks.MockStore, *gin.Engine) {
 		store:        mockStore,
 		dedupCache:   cache.New[gin.H]("dedup", 5*time.Minute),
 		listCache:    cache.New[gin.H]("list", 30*time.Second),
-		authorsCache: cache.New[gin.H]("authors", 30*time.Second),
-		seriesCache:  cache.New[gin.H]("series", 30*time.Second),
+		authorsCache: cache.New[*audiobookspkg.AuthorWithCountListResponse]("authors", 30*time.Second),
+		seriesCache:  cache.New[*audiobookspkg.SeriesWithCountsResponse]("series", 30*time.Second),
 	}
 	router := gin.New()
 	return srv, mockStore, router
