@@ -1,43 +1,139 @@
 // file: internal/server/auth_lockout_test.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: 8c4e5f3a-9b5a-4a70-b8c5-3d7e0f1b9a99
+// last-edited: 2026-06-01
 
-package server
+package server_test
 
-import "testing"
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
+	"golang.org/x/crypto/bcrypt"
+)
+
+// stubAuthStore is a minimal in-memory AuthStore for lockout tests.
+type stubAuthStore struct {
+	user *database.User
+	err  error
+}
+
+func (s *stubAuthStore) CountUsers() (int, error) { return 1, nil }
+func (s *stubAuthStore) CreateSession(userID, ip, userAgent string, ttl time.Duration) (*database.Session, error) {
+	return &database.Session{ID: "sess-1", UserID: userID, ExpiresAt: time.Now().Add(ttl)}, nil
+}
+func (s *stubAuthStore) CreateUser(username, email, algo, hash string, roles []string, status string) (*database.User, error) {
+	return nil, nil
+}
+func (s *stubAuthStore) GetRoleByID(id string) (*database.Role, error)     { return nil, nil }
+func (s *stubAuthStore) GetRoleByName(name string) (*database.Role, error)  { return nil, nil }
+func (s *stubAuthStore) GetSession(id string) (*database.Session, error)    { return nil, nil }
+func (s *stubAuthStore) GetUserByID(id string) (*database.User, error)      { return s.user, s.err }
+func (s *stubAuthStore) GetUserByUsername(username string) (*database.User, error) {
+	return s.user, s.err
+}
+func (s *stubAuthStore) ListUserSessions(userID string) ([]database.Session, error) {
+	return nil, nil
+}
+func (s *stubAuthStore) RevokeSession(id string) error          { return nil }
+func (s *stubAuthStore) UpdateUser(user *database.User) error   { return nil }
+
+func newTestUser(t *testing.T) *database.User {
+	t.Helper()
+	hash, err := bcrypt.GenerateFromPassword([]byte("correctpassword"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("bcrypt: %v", err)
+	}
+	return &database.User{
+		ID:               "test-lockout-user",
+		Username:         "testuser",
+		Email:            "test@local",
+		PasswordHashAlgo: "bcrypt",
+		PasswordHash:     string(hash),
+		Roles:            []string{"user"},
+		Status:           "active",
+	}
+}
+
+func loginRequest(t *testing.T, h *handlers.AuthHandler, password string) int {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	body, _ := json.Marshal(map[string]string{
+		"username": "testuser",
+		"password": password,
+	})
+	c.Request = httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	h.Login(c)
+	return w.Code
+}
 
 func TestLockout_TriggersAfterMaxFailures(t *testing.T) {
-	uid := "test-lockout-user"
-	clearFailedLogins(uid)
-	defer clearFailedLogins(uid)
+	store := &stubAuthStore{user: newTestUser(t)}
+	h := handlers.NewAuthHandler(store, true)
+
+	const maxFailedLogins = 10
 
 	for i := 0; i < maxFailedLogins; i++ {
-		if isLockedOut(uid) {
+		code := loginRequest(t, h, "wrongpassword")
+		if code == http.StatusTooManyRequests {
 			t.Fatalf("locked out after only %d attempts, want %d", i, maxFailedLogins)
 		}
-		recordFailedLogin(uid)
+		if code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: got %d, want 401", i+1, code)
+		}
 	}
-	if !isLockedOut(uid) {
-		t.Errorf("should be locked out after %d failures", maxFailedLogins)
+
+	code := loginRequest(t, h, "wrongpassword")
+	if code != http.StatusTooManyRequests {
+		t.Errorf("after %d failures: got %d, want 429", maxFailedLogins, code)
 	}
 }
 
 func TestLockout_ClearedOnSuccess(t *testing.T) {
-	uid := "test-clear-user"
-	clearFailedLogins(uid)
-	defer clearFailedLogins(uid)
+	store := &stubAuthStore{user: newTestUser(t)}
+	h := handlers.NewAuthHandler(store, true)
+
+	const maxFailedLogins = 10
 
 	for i := 0; i < maxFailedLogins-1; i++ {
-		recordFailedLogin(uid)
+		loginRequest(t, h, "wrongpassword")
 	}
-	clearFailedLogins(uid)
-	if isLockedOut(uid) {
-		t.Error("should not be locked out after clear")
+
+	// Successful login should clear the counter.
+	code := loginRequest(t, h, "correctpassword")
+	if code != http.StatusOK {
+		t.Fatalf("successful login: got %d, want 200", code)
+	}
+
+	// After clearing, wrong password should not immediately lock out.
+	code = loginRequest(t, h, "wrongpassword")
+	if code == http.StatusTooManyRequests {
+		t.Error("should not be locked out after a successful login cleared the counter")
 	}
 }
 
 func TestLockout_NoLockoutForUnknownUser(t *testing.T) {
-	if isLockedOut("never-seen-user-123") {
+	// Unknown user: store returns nil user, no lockout entry exists.
+	store := &stubAuthStore{user: nil}
+	h := handlers.NewAuthHandler(store, true)
+
+	code := loginRequest(t, h, "anything")
+	if code == http.StatusTooManyRequests {
 		t.Error("unknown user should not be locked out")
+	}
+	if code != http.StatusUnauthorized {
+		t.Errorf("unknown user: got %d, want 401", code)
 	}
 }
