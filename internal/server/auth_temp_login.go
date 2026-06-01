@@ -1,5 +1,5 @@
 // file: internal/server/auth_temp_login.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 5b6c7d8e-9f0a-1b2c-3d4e-5f6a7b8c9d0e
 
 // Temp-login token: admin mints a short-lived single-use URL for a user.
@@ -22,6 +22,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 )
 
 // tempLoginEntry tracks one minted token. Tokens are kept in memory
@@ -96,7 +97,7 @@ func (s *Server) createTempLoginToken(c *gin.Context) {
 		httputil.RespondWithInternalError(c, "failed to generate token")
 		return
 	}
-	expires := time.Now().Add(tempLoginTokenTTL)
+	expires := time.Now().Add(handlers.TempLoginTokenTTL)
 
 	tempLoginMu.Lock()
 	purgeExpiredTempTokens()
@@ -107,7 +108,7 @@ func (s *Server) createTempLoginToken(c *gin.Context) {
 	// relative path if the Host header is unset (shouldn't happen in
 	// production but defensive).
 	scheme := "https"
-	if c.Request.TLS == nil && !isHTTPSRequest(c) {
+	if c.Request.TLS == nil && !handlers.IsHTTPSRequest(c) {
 		scheme = "http"
 	}
 	host := strings.TrimSpace(c.Request.Host)
@@ -124,7 +125,7 @@ func (s *Server) createTempLoginToken(c *gin.Context) {
 			"id":       user.ID,
 			"username": user.Username,
 		},
-		"session_ttl_hours": int(defaultSessionTTL.Hours()),
+		"session_ttl_hours": int(handlers.DefaultSessionTTL.Hours()),
 	})
 }
 
@@ -176,13 +177,13 @@ func (s *Server) consumeTempLoginToken(c *gin.Context) {
 		user.ID,
 		strings.TrimSpace(c.ClientIP()),
 		strings.TrimSpace(c.Request.UserAgent()),
-		defaultSessionTTL,
+		handlers.DefaultSessionTTL,
 	)
 	if err != nil {
 		c.Redirect(http.StatusSeeOther, "/login?error=session_failed")
 		return
 	}
-	setSessionCookie(c, session.ID, session.ExpiresAt)
+	handlers.SetSessionCookie(c, session.ID, session.ExpiresAt)
 	c.Redirect(http.StatusSeeOther, "/")
 }
 

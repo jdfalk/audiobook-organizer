@@ -48,8 +48,16 @@ const (
 	maxFailedLogins      = 10
 	lockoutWindowMinutes = 15
 
-	defaultSessionTTL    = 24 * time.Hour
-	rememberMeSessionTTL = 7 * 24 * time.Hour
+	// DefaultSessionTTL is the session lifetime for a normal login.
+	DefaultSessionTTL = 24 * time.Hour
+	// RememberMeSessionTTL is the session lifetime when "remember me" is checked.
+	RememberMeSessionTTL = 7 * 24 * time.Hour
+	// TempLoginTokenTTL is the lifetime of a single-use temp-login token.
+	TempLoginTokenTTL = 15 * time.Minute
+
+	// Keep unexported aliases so internal handler code needs no changes.
+	defaultSessionTTL    = DefaultSessionTTL
+	rememberMeSessionTTL = RememberMeSessionTTL
 )
 
 type failedAttempt struct {
@@ -118,11 +126,21 @@ func buildAuthUserResponse(user *database.User) AuthUserResponse {
 	}
 }
 
-func isHTTPSRequest(c *gin.Context) bool {
+// IsHTTPSRequest returns true when the inbound request is HTTPS (direct TLS
+// or behind a reverse proxy that sets X-Forwarded-Proto).
+func IsHTTPSRequest(c *gin.Context) bool {
 	if c.Request.TLS != nil {
 		return true
 	}
 	return strings.EqualFold(strings.TrimSpace(c.GetHeader("X-Forwarded-Proto")), "https")
+}
+
+// isHTTPSRequest is the unexported alias used internally.
+func isHTTPSRequest(c *gin.Context) bool { return IsHTTPSRequest(c) }
+
+// SetSessionCookie writes a session cookie to the response.
+func SetSessionCookie(c *gin.Context, token string, expiresAt time.Time) {
+	setSessionCookie(c, token, expiresAt)
 }
 
 // setSessionCookie writes a session cookie to the response.
