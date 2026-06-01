@@ -9580,19 +9580,16 @@ func (s *PebbleStore) SetBookFileHash(id, hash string) error {
 }
 
 // AddMetadataRejection is not supported on PebbleStore.
-func (p *PebbleStore) AddMetadataRejection(_ MetadataRejection) error {
-	return fmt.Errorf("RejectedMetadataStore.AddMetadataRejection: not supported by PebbleStore")
-}
+// AddMetadataRejection is a no-op on PebbleStore (rejections not persisted).
+func (p *PebbleStore) AddMetadataRejection(_ MetadataRejection) error { return nil }
 
-// GetMetadataRejections is not supported on PebbleStore.
+// GetMetadataRejections returns empty on PebbleStore (rejections not persisted).
 func (p *PebbleStore) GetMetadataRejections(_ string) ([]MetadataRejection, error) {
-	return nil, fmt.Errorf("RejectedMetadataStore.GetMetadataRejections: not supported by PebbleStore")
+	return []MetadataRejection{}, nil
 }
 
-// DeleteMetadataRejections is not supported on PebbleStore.
-func (p *PebbleStore) DeleteMetadataRejections(_ string) error {
-	return fmt.Errorf("RejectedMetadataStore.DeleteMetadataRejections: not supported by PebbleStore")
-}
+// DeleteMetadataRejections is a no-op on PebbleStore (rejections not persisted).
+func (p *PebbleStore) DeleteMetadataRejections(_ string) error { return nil }
 
 // GetDuplicateFilesByHash is not supported on PebbleStore.
 func (p *PebbleStore) GetDuplicateFilesByHash(_ int) ([]DuplicateFileGroup, error) {
