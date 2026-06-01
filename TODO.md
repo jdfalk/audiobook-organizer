@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.56.0 -->
+<!-- version: 8.58.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-30 -->
+<!-- last-edited: 2026-05-31 -->
 
 # Project TODO
 
@@ -23,7 +23,7 @@ future agent) can scan the entire workspace in one page.
 
 **Library:** ~50K books (~10,891 organized + ~39K iTunes-imported) / 8,837 authors / 21,668 series
 **Production:** PebbleDB primary + ChaiDB SQL (write-through sync active); Linux, HTTPS at `172.16.2.30:8484`
-**Latest activity:** Chai SQL migration (Phases 1–4 complete, Tasks 3.2–3.4 landed); N+1 query elimination; cache warm-up memory fix; authors/series caching
+**Latest activity:** Security workflow repaired (CodeQL JS via ghcommon `build-mode: none`; Go dependency submission with `GOEXPERIMENT=jsonv2`); whole-file fingerprint rescan completed; Chai SQL migration (Phases 1–4 complete, Tasks 3.2–3.4 landed); N+1 query elimination; cache warm-up memory fix; authors/series caching
 **In flight:** Chai SQL Phase 5+ (remaining read migrations), SEC-AUDIT-11 (CodeQL bulk dismiss), FE-10 (Vitest coverage thresholds)
 
 ---
@@ -38,10 +38,26 @@ PR `feat/fingerprint-wholefile` (Step 1 + 2) ships:
 - Memdb strip of the new fingerprint bytes (RSS protection)
 
 **Post-deploy actions for this PR:**
-- [ ] Run `acoustid.reset-all` on prod (retires AQAAAA-poisoned segs)
-- [ ] Run `fingerprint-rescan` on prod (populates new whole-file fp + clean seg0)
+- [x] Run `acoustid.reset-all` on prod (retires AQAAAA-poisoned segs) — done 2026-05-31, 28,538 fps cleared
+- [x] Book-level parallelism (PR #1217, FP_PARALLEL_WORKERS=16) — merged + deployed 2026-05-31
+- [x] Run `fingerprint-rescan` on prod — **COMPLETE** 2026-05-31 15:50 UTC-4; 2h45m3s; fp=275,318 skip=0 ineligible=23,826 fail=4,882 (98.3% eligible-file coverage; failures are corrupt/too-short files, unrecoverable)
 - [ ] Verify dedup stops showing 14K false-positive 100% matches
 - [ ] Verify book-sig coverage % shows up for partial books
+
+---
+
+## ✅ Security workflow repair (completed May 31, 2026)
+
+- [x] Fix Go dependency submission for Go JSON v2 imports by setting
+  `GOEXPERIMENT=jsonv2` in `.github/workflows/security.yml`.
+- [x] Remove invalid `go-version-input` from
+  `actions/go-dependency-submission`.
+- [x] Fix `jdfalk/ghcommon` reusable Security workflow so JavaScript CodeQL uses
+  `build-mode: none` instead of unsupported `autobuild`.
+- [x] Restore this repo's reusable CodeQL language matrix to
+  `["go", "javascript", "actions"]` and remove the local JavaScript CodeQL
+  workaround.
+- [x] Verified fixed by Security run `26727789014`.
 
 **Follow-up PRs (not in this PR):**
 - [ ] **Step 3 — LSH index for whole-file similarity.** Add

@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.06.0 -->
+<!-- version: 3.08.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-31 -->
 
@@ -8,6 +8,33 @@
 ## [Unreleased]
 
 ### Changes
+
+#### May 31, 2026 — Security workflow CodeQL + Go dependency submission fix
+
+Fixed the Security workflow regression from run `26717751934`.
+Go dependency submission now runs with `GOEXPERIMENT=jsonv2` so
+`encoding/json/v2` and `encoding/json/jsontext` resolve correctly on the
+GitHub runner, and the invalid `go-version-input` argument was removed from
+`actions/go-dependency-submission`.
+
+JavaScript CodeQL remains in the shared `ghcommon` reusable workflow matrix
+(`["go", "javascript", "actions"]`). The upstream `ghcommon` reusable workflow
+was corrected to use CodeQL `build-mode: none` for JavaScript instead of
+`autobuild`, so this repo no longer needs a local JavaScript CodeQL workaround.
+Verified by green Security run `26727789014`.
+
+#### May 31, 2026 — PR #1217: book-level fingerprint parallelism
+
+Inverts the concurrency model from file-level (N goroutines across all books)
+to book-level (N books processed concurrently, each book sequentially).
+This prevents fpcalc from racing on segments of the same book and avoids
+partial-state LSH inserts. Worker count exposed via `FP_PARALLEL_WORKERS`
+env var (default 16 for prod, 4 for dev).
+
+- `internal/plugins/acoustid/backfill.go` — refactored worker pool to
+  dispatch whole books; semaphore guards book-level concurrency.
+- `FP_PARALLEL_WORKERS=16` set in prod systemd drop-in (`deploy/local.conf`).
+- Observed throughput: ~37 files/sec (16 concurrent fpcalc processes).
 
 #### May 31, 2026 — G5b: title backfill for poisoned iTunes-import rows
 
