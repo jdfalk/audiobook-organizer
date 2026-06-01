@@ -312,3 +312,17 @@ copilot-session-*.md
 Thumbs.db
 # <<< jdfalk managed ignore block (sync-gitignore.py) <<<
 .claude/projects/
+
+# Coverage artifacts (may be generated with wildcard names)
+coverage*.html
+coverage*.out
+
+# Stale planning docs at root — real plans go to docs/plans/
+PLAN*.md
+
+# Ad-hoc scripts (moved to scripts/ — ignore if regenerated at root)
+analyze-*.py
+delete-*.py
+
+# Backup tarballs
+backups/
