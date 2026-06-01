@@ -1,7 +1,7 @@
 // file: internal/httputil/respond.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-05-01
+// last-edited: 2026-06-01
 
 // Package httputil provides shared HTTP response helpers for all packages
 // that handle gin HTTP requests (server, middleware, itunes/service, etc).
@@ -98,6 +98,7 @@ func RespondWithCreated(c *gin.Context, data any) {
 // RespondWithNoContent sends a 204 No Content response.
 func RespondWithNoContent(c *gin.Context) {
 	c.Status(http.StatusNoContent)
+	c.Writer.WriteHeaderNow()
 }
 
 // RespondWithList sends a 200 OK paginated list response.
