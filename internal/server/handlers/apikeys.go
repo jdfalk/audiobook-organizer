@@ -18,6 +18,7 @@ import (
 
 // ---- Request / response types -----------------------------------------------
 
+// CreateAPIKeyRequest is the JSON body for POST /api/v1/auth/api-keys.
 type CreateAPIKeyRequest struct {
 	Name          string   `json:"name" binding:"required"`
 	Description   string   `json:"description"`
@@ -26,6 +27,7 @@ type CreateAPIKeyRequest struct {
 	UserID        string   `json:"user_id"`
 }
 
+// CreateAPIKeyResponse is returned after successfully creating an API key.
 type CreateAPIKeyResponse struct {
 	ID        string     `json:"id"`
 	Name      string     `json:"name"`
@@ -35,6 +37,7 @@ type CreateAPIKeyResponse struct {
 	CreatedAt time.Time  `json:"created_at"`
 }
 
+// APIKeyResponse is the JSON shape for a single API key (list and detail endpoints).
 type APIKeyResponse struct {
 	ID               string     `json:"id"`
 	UserID           string     `json:"user_id"`
