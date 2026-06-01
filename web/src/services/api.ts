@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.35.0
+// version: 2.36.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-05-31
 
@@ -1002,7 +1002,8 @@ export async function updateBook(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to update audiobook');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // RatingPatchBody is the partial-update payload for PATCH /api/v1/audiobooks/:id/rating.
