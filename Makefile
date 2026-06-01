@@ -1,7 +1,7 @@
 # file: Makefile
-# version: 2.11.0
+# version: 2.12.0
 # guid: c1d2e3f4-g5h6-7890-ijkl-m1234567890n
-# last-edited: 2026-05-08
+# last-edited: 2026-06-01
 
 BINARY := audiobook-organizer
 ROOT_DIR := $(shell git rev-parse --show-toplevel 2>/dev/null || pwd)
@@ -9,6 +9,10 @@ WEB_DIR := $(ROOT_DIR)/web
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo 'dev')
 LDFLAGS := -X main.version=$(VERSION)
 export GOEXPERIMENT := jsonv2
+
+# Overridable deployment variables (set in Makefile.local or via environment)
+DEPLOY_HOST ?=
+BACKUP_DIR  ?= $(CURDIR)/backups
 
 # Include local overrides (not committed — see Makefile.local.example)
 -include Makefile.local
@@ -337,6 +341,20 @@ release-snapshot: web-build
 	@echo "Building snapshot release..."
 	@goreleaser release --snapshot --clean
 	@echo "Snapshot built. Artifacts in dist/"
+
+## backup: Create timestamped backup of all prod data directories (requires DEPLOY_HOST)
+.PHONY: backup
+backup:
+	@[ -n "$(DEPLOY_HOST)" ] || (echo "ERROR: DEPLOY_HOST is not set. Add it to Makefile.local or export it."; exit 1)
+	@mkdir -p $(BACKUP_DIR)
+	@echo "→ Creating backup on $(DEPLOY_HOST)..."
+	@STAMP=$$(date +%Y%m%d-%H%M%S); \
+		ssh $(DEPLOY_HOST) "tar -czf /tmp/aobackup-$$STAMP.tar.gz \
+			-C /var/lib/audiobook-organizer \
+			audiobooks.pebble activity.nutsdb embeddings.db 2>/dev/null || true"; \
+		scp $(DEPLOY_HOST):/tmp/aobackup-$$STAMP.tar.gz $(BACKUP_DIR)/; \
+		ssh $(DEPLOY_HOST) "rm -f /tmp/aobackup-$$STAMP.tar.gz"; \
+		echo "✅ Backup saved to $(BACKUP_DIR)/aobackup-$$STAMP.tar.gz"
 
 # Quick aliases
 .PHONY: t c b v
