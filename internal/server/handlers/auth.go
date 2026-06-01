@@ -50,14 +50,11 @@ const (
 
 	// DefaultSessionTTL is the session lifetime for a normal login.
 	DefaultSessionTTL = 24 * time.Hour
-	// RememberMeSessionTTL is the session lifetime when "remember me" is checked.
-	RememberMeSessionTTL = 7 * 24 * time.Hour
 	// TempLoginTokenTTL is the lifetime of a single-use temp-login token.
 	TempLoginTokenTTL = 15 * time.Minute
 
-	// Keep unexported aliases so internal handler code needs no changes.
+	rememberMeSessionTTL = 7 * 24 * time.Hour // unexported; only used within this package
 	defaultSessionTTL    = DefaultSessionTTL
-	rememberMeSessionTTL = RememberMeSessionTTL
 )
 
 type failedAttempt struct {
@@ -126,17 +123,16 @@ func buildAuthUserResponse(user *database.User) AuthUserResponse {
 	}
 }
 
-// IsHTTPSRequest returns true when the inbound request is HTTPS (direct TLS
-// or behind a reverse proxy that sets X-Forwarded-Proto).
-func IsHTTPSRequest(c *gin.Context) bool {
+func isHTTPSRequest(c *gin.Context) bool {
 	if c.Request.TLS != nil {
 		return true
 	}
 	return strings.EqualFold(strings.TrimSpace(c.GetHeader("X-Forwarded-Proto")), "https")
 }
 
-// isHTTPSRequest is the unexported alias used internally.
-func isHTTPSRequest(c *gin.Context) bool { return IsHTTPSRequest(c) }
+// IsHTTPSRequest reports whether the inbound request is HTTPS.
+// Exported for callers in sibling packages (e.g. auth_temp_login.go).
+func IsHTTPSRequest(c *gin.Context) bool { return isHTTPSRequest(c) }
 
 // SetSessionCookie writes a session cookie to the response.
 func SetSessionCookie(c *gin.Context, token string, expiresAt time.Time) {
