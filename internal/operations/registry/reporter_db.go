@@ -1,5 +1,5 @@
 // file: internal/operations/registry/reporter_db.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 1a2b3c4d-5e6f-7890-abcd-ef0123456789
 // last-edited: 2026-06-01
 
@@ -427,9 +427,6 @@ func levelString(l slog.Level) string {
 func tierForLevel(level string) string {
 	if level == "debug" {
 		return "debug"
-	}
-	if level == "info" {
-		return "info"
 	}
 	return "change"
 }

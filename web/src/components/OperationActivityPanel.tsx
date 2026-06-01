@@ -1,5 +1,5 @@
 // file: web/src/components/OperationActivityPanel.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: f7a1e2c3-9b4d-4e5a-8c6f-1d3b5a7e9c0f
 
 import { useCallback, useEffect, useState, useRef, useMemo } from 'react';
@@ -216,16 +216,20 @@ export function OperationActivityPanel({
   // full reload path; no timer should repaint the log while a user is reading.
   useEffect(() => {
     if (!latestLogEvent || latestLogEvent.op_id !== operationId) return;
-    setEntries((prev) => [
-      ...prev,
-      {
-        timestamp: latestLogEvent.created_at,
-        level: latestLogEvent.level,
-        operation_id: latestLogEvent.op_id,
-        operation_type: op?.def_id ?? op?.type ?? '',
-        message: latestLogEvent.message,
-      },
-    ]);
+    const cap = limit ?? 1000;
+    setEntries((prev) => {
+      const next = [
+        ...prev,
+        {
+          timestamp: latestLogEvent.created_at,
+          level: latestLogEvent.level,
+          operation_id: latestLogEvent.op_id,
+          operation_type: op?.def_id ?? op?.type ?? '',
+          message: latestLogEvent.message,
+        },
+      ];
+      return next.length > cap ? next.slice(next.length - cap) : next;
+    });
     setTotal((prev) => prev + 1);
   }, [latestLogEvent, operationId, op]);
 

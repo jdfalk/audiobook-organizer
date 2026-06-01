@@ -1,5 +1,5 @@
 // file: internal/activity/api.go
-// version: 1.9.0
+// version: 1.10.0
 // guid: 9a4f2e1b-3c7d-4b8e-a6f0-5d2c8e1b7a3f
 
 package activity
@@ -345,16 +345,16 @@ func detailsTags(e *database.ActivityEntry) []string {
 		return nil
 	}
 	var tags []string
-	for key, prefix := range map[string]string{
-		"def_id":  "def",
-		"plugin":  "plugin",
-		"phase":   "phase",
-		"status":  "status",
-		"outcome": "status",
+	for _, kp := range []struct{ key, prefix string }{
+		{"def_id", "def"},
+		{"plugin", "plugin"},
+		{"phase", "phase"},
+		{"status", "status"},
+		{"outcome", "status"},
 	} {
-		if v, ok := e.Details[key]; ok {
+		if v, ok := e.Details[kp.key]; ok {
 			if s, ok := v.(string); ok && s != "" {
-				tags = append(tags, prefix+":"+s)
+				tags = append(tags, kp.prefix+":"+s)
 			}
 		}
 	}
