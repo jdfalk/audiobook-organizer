@@ -1,5 +1,5 @@
 // file: internal/operations/registry/registry.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c
 // last-edited: 2026-06-01
 
@@ -375,6 +375,14 @@ func (r *Registry) ActiveDefs() []OperationDef {
 		out = append(out, d)
 	}
 	return out
+}
+
+// Def returns the registered OperationDef for the given ID, if any.
+func (r *Registry) Def(id string) (OperationDef, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	def, ok := r.defs[id]
+	return def, ok
 }
 
 // Shutdown drains the worker pool. On timeout it marks remaining running ops

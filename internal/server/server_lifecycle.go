@@ -1,7 +1,7 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.23.0
+// version: 1.24.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
-// last-edited: 2026-05-20
+// last-edited: 2026-06-01
 
 package server
 
@@ -30,6 +30,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/jdfalk/audiobook-organizer/internal/scheduler"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
@@ -55,7 +56,6 @@ func (s *Server) resumeInterruptedOperations() {
 	}
 
 	for _, op := range interrupted {
-		// Mark as interrupted in DB
 		_ = store.UpdateOperationStatus(op.ID, "interrupted", op.Progress, op.Total, "server restarted")
 
 		checkpoint, _ := operations.LoadCheckpoint(store, op.ID)
@@ -63,115 +63,147 @@ func (s *Server) resumeInterruptedOperations() {
 		if checkpoint != nil {
 			phaseInfo = fmt.Sprintf(" from %s at %d/%d", checkpoint.Phase, checkpoint.PhaseIndex, checkpoint.PhaseTotal)
 		}
-		slog.Info("Resuming interrupted operation ()", "op", op.ID, "op", op.Type, "phaseInfo", phaseInfo)
+		slog.Info("Resuming interrupted operation", "op", op.ID, "type", op.Type, "phase", phaseInfo)
 
-		opID := op.ID
-		opType := op.Type
-
-		switch opType {
-		case "itunes_import":
-			// Migrated to UOS (itunes.import); re-enqueue via registry on resume.
-			if s.opRegistry != nil {
-				_, _ = s.opRegistry.EnqueueOp(context.Background(), "itunes.import", nil)
-			} else {
-				_ = store.UpdateOperationError(opID, "operation registry not available")
-			}
-			continue
-		case "scan", "organize":
-			// Pre-migration v1 op types. library.scan and library.organize have
-			// ResumePolicy=Drop; restarting them via the v1 queue would race with
-			// v2 workers. Mark failed so the user can re-trigger manually.
-			_ = store.UpdateOperationError(opID, fmt.Sprintf("interrupted during %s, please retry", opType))
-			_ = operations.ClearState(store, opID)
-			continue
-		case "bulk_write_back":
-			// Migrated to UOS (library.bulk-write-back); re-enqueue via registry on resume.
-			params, _ := operations.LoadParams[operations.BulkWriteBackParams](store, opID)
-			if params == nil {
-				slog.Warn("No params for interrupted bulk_write_back , marking failed", "opID", opID)
-				_ = store.UpdateOperationError(opID, "no saved params, cannot resume")
+		// v2 path: look up the op definition in the registry and use its declared ResumePolicy.
+		if s.opRegistry != nil {
+			if def, ok := s.opRegistry.Def(op.Type); ok {
+				s.resumeV2Op(op.ID, op.Type, def.ResumePolicy)
 				continue
 			}
+		}
+
+		// v1 legacy shim: handle pre-UOS op type names that aren't registered under their old name.
+		s.resumeLegacyOp(op.ID, op.Type)
+	}
+}
+
+// resumeV2Op handles resume for operations registered in the v2 registry,
+// dispatching based on their declared ResumePolicy.
+func (s *Server) resumeV2Op(opID, opType string, policy opsregistry.ResumePolicy) {
+	switch policy {
+	case opsregistry.ResumeRestart:
+		// Reset existing row to "queued"; checkpoint saved under the original op ID remains accessible.
+		_ = s.Store().UpdateOperationV2Status(opID, "queued", nil, nil, nil)
+	case opsregistry.ResumeRequeue:
+		// Re-enqueue from zero (idempotent op).
+		if _, err := s.opRegistry.EnqueueOp(context.Background(), opType, nil); err != nil {
+			slog.Warn("Failed to re-enqueue v2 op on resume", "opID", opID, "opType", opType, "err", err)
+			_ = s.Store().UpdateOperationError(opID, "failed to resume: "+err.Error())
+		}
+	case opsregistry.ResumeDrop:
+		_ = s.Store().UpdateOperationError(opID, fmt.Sprintf("interrupted during %s (dropped on restart)", opType))
+		_ = operations.ClearState(s.Store(), opID)
+	case opsregistry.ResumeAsk:
+		// Surface in UI — mark as interrupted_ask so the frontend can prompt the user.
+		slog.Info("Op requires user decision to resume or drop", "opID", opID, "opType", opType)
+		now := time.Now()
+		reason := "interrupted — waiting for user to choose resume or drop"
+		_ = s.Store().UpdateOperationV2Status(opID, "interrupted_ask", nil, &now, &reason)
+	default:
+		_ = s.Store().UpdateOperationError(opID, fmt.Sprintf("interrupted during %s (unknown resume policy)", opType))
+		_ = operations.ClearState(s.Store(), opID)
+	}
+}
+
+// resumeLegacyOp handles resume for pre-UOS v1 op type names that are not
+// registered in the v2 registry under their original names.
+func (s *Server) resumeLegacyOp(opID, opType string) {
+	store := s.Store()
+	switch opType {
+	case "itunes_import":
+		// Migrated to UOS (itunes.import); re-enqueue via registry on resume.
+		if s.opRegistry != nil {
+			_, _ = s.opRegistry.EnqueueOp(context.Background(), "itunes.import", nil)
+		} else {
+			_ = store.UpdateOperationError(opID, "operation registry not available")
+		}
+	case "scan", "organize":
+		// Pre-migration v1 op types. library.scan and library.organize have
+		// ResumePolicy=Drop; restarting them via the v1 queue would race with
+		// v2 workers. Mark failed so the user can re-trigger manually.
+		_ = store.UpdateOperationError(opID, fmt.Sprintf("interrupted during %s, please retry", opType))
+		_ = operations.ClearState(store, opID)
+	case "bulk_write_back":
+		// Migrated to UOS (library.bulk-write-back); re-enqueue via registry on resume.
+		params, _ := operations.LoadParams[operations.BulkWriteBackParams](store, opID)
+		if params == nil {
+			slog.Warn("No params for interrupted bulk_write_back , marking failed", "opID", opID)
+			_ = store.UpdateOperationError(opID, "no saved params, cannot resume")
+			return
+		}
+		if s.opRegistry != nil {
+			enqParams := bulkWriteBackOpParams{BookIDs: params.BookIDs, Rename: params.Rename}
+			if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "library.bulk-write-back", enqParams); enqErr != nil {
+				slog.Warn("Failed to re-enqueue bulk_write_back via v2", "opID", opID, "enqErr", enqErr)
+				_ = store.UpdateOperationError(opID, "failed to resume: "+enqErr.Error())
+			}
+		} else {
+			_ = store.UpdateOperationError(opID, "operation registry not available")
+		}
+	case "isbn-enrichment":
+		// Migrated to UOS (scheduler.isbn-enrichment); re-enqueue via registry on resume.
+		if s.opRegistry != nil {
+			enqParams := schedulerExtraOpParams{LegacyOpID: opID}
+			if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "scheduler.isbn-enrichment", enqParams); enqErr != nil {
+				slog.Warn("Failed to re-enqueue isbn-enrichment via v2", "opID", opID, "enqErr", enqErr)
+				_ = store.UpdateOperationError(opID, "failed to resume: "+enqErr.Error())
+			}
+		} else {
+			_ = store.UpdateOperationError(opID, "operation registry not available")
+		}
+	case "metadata-refresh":
+		// Migrated to UOS (scheduler.metadata-refresh); re-enqueue via registry on resume.
+		if s.opRegistry != nil {
+			enqParams := schedulerExtraOpParams{LegacyOpID: opID}
+			if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "scheduler.metadata-refresh", enqParams); enqErr != nil {
+				slog.Warn("Failed to re-enqueue metadata-refresh via v2", "opID", opID, "enqErr", enqErr)
+				_ = store.UpdateOperationError(opID, "failed to resume: "+enqErr.Error())
+			}
+		} else {
+			_ = store.UpdateOperationError(opID, "operation registry not available")
+		}
+	case "itunes_path_reconcile":
+		// Migrated to UOS (itunes.path-reconcile); re-enqueue via registry on resume.
+		if s.opRegistry != nil {
+			_, _ = s.opRegistry.EnqueueOp(context.Background(), "itunes.path-reconcile", nil)
+		} else {
+			_ = store.UpdateOperationError(opID, "operation registry not available")
+		}
+	case "itunes_path_repair":
+		// Migrated to UOS (itunes.path-repair); re-enqueue via registry on resume.
+		if s.opRegistry != nil {
+			_, _ = s.opRegistry.EnqueueOp(context.Background(), "itunes.path-repair", nil)
+		} else {
+			_ = store.UpdateOperationError(opID, "operation registry not available")
+		}
+	case "transcode", "diagnostics_export", "diagnostics_ai", "itunes_sync",
+		// reconcile_scan: a 271K-file hash sweep that ignores ctx, runs
+		// nightly via the scheduler, and pins both queue workers for ~45min
+		// when auto-resumed. Repeated quick deploys produced a queue jam
+		// where new ops (AcoustID, embed, etc.) sat queued behind two
+		// stuck reconcile_scans that the cancel API couldn't actually
+		// kill. Letting the scheduler re-run it tomorrow is fine.
+		"reconcile_scan":
+		// These are not resumable — mark as failed silently.
+		_ = store.UpdateOperationError(opID, fmt.Sprintf("interrupted during %s, please retry", opType))
+		_ = operations.ClearState(store, opID)
+	default:
+		// Try to resume as a maintenance job via v2 registry (maintenance.job).
+		jobID := strings.TrimPrefix(opType, "maintenance:")
+		if j, jobErr := maintenance.Get(jobID); jobErr == nil && j.CanResume() {
 			if s.opRegistry != nil {
-				enqParams := bulkWriteBackOpParams{BookIDs: params.BookIDs, Rename: params.Rename}
-				if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "library.bulk-write-back", enqParams); enqErr != nil {
-					slog.Warn("Failed to re-enqueue bulk_write_back via v2", "opID", opID, "enqErr", enqErr)
+				enqParams := maintenanceJobOpParams{LegacyOpID: opID, JobID: jobID}
+				if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "maintenance.job", enqParams); enqErr != nil {
+					slog.Warn("Failed to re-enqueue maintenance job () via v2", "opID", opID, "jobID", jobID, "enqErr", enqErr)
 					_ = store.UpdateOperationError(opID, "failed to resume: "+enqErr.Error())
 				}
 			} else {
 				_ = store.UpdateOperationError(opID, "operation registry not available")
 			}
-			continue
-		case "isbn-enrichment":
-			// Migrated to UOS (scheduler.isbn-enrichment); re-enqueue via registry on resume.
-			if s.opRegistry != nil {
-				enqParams := schedulerExtraOpParams{LegacyOpID: opID}
-				if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "scheduler.isbn-enrichment", enqParams); enqErr != nil {
-					slog.Warn("Failed to re-enqueue isbn-enrichment via v2", "opID", opID, "enqErr", enqErr)
-					_ = store.UpdateOperationError(opID, "failed to resume: "+enqErr.Error())
-				}
-			} else {
-				_ = store.UpdateOperationError(opID, "operation registry not available")
-			}
-			continue
-		case "metadata-refresh":
-			// Migrated to UOS (scheduler.metadata-refresh); re-enqueue via registry on resume.
-			if s.opRegistry != nil {
-				enqParams := schedulerExtraOpParams{LegacyOpID: opID}
-				if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "scheduler.metadata-refresh", enqParams); enqErr != nil {
-					slog.Warn("Failed to re-enqueue metadata-refresh via v2", "opID", opID, "enqErr", enqErr)
-					_ = store.UpdateOperationError(opID, "failed to resume: "+enqErr.Error())
-				}
-			} else {
-				_ = store.UpdateOperationError(opID, "operation registry not available")
-			}
-			continue
-		case "itunes_path_reconcile":
-			// Migrated to UOS (itunes.path-reconcile); re-enqueue via registry on resume.
-			if s.opRegistry != nil {
-				_, _ = s.opRegistry.EnqueueOp(context.Background(), "itunes.path-reconcile", nil)
-			} else {
-				_ = store.UpdateOperationError(opID, "operation registry not available")
-			}
-			continue
-		case "itunes_path_repair":
-			// Migrated to UOS (itunes.path-repair); re-enqueue via registry on resume.
-			if s.opRegistry != nil {
-				_, _ = s.opRegistry.EnqueueOp(context.Background(), "itunes.path-repair", nil)
-			} else {
-				_ = store.UpdateOperationError(opID, "operation registry not available")
-			}
-			continue
-		case "transcode", "diagnostics_export", "diagnostics_ai", "itunes_sync",
-			// reconcile_scan: a 271K-file hash sweep that ignores ctx, runs
-			// nightly via the scheduler, and pins both queue workers for ~45min
-			// when auto-resumed. Repeated quick deploys produced a queue jam
-			// where new ops (AcoustID, embed, etc.) sat queued behind two
-			// stuck reconcile_scans that the cancel API couldn't actually
-			// kill. Letting the scheduler re-run it tomorrow is fine.
-			"reconcile_scan":
-			// These are not resumable — mark as failed silently.
-			_ = store.UpdateOperationError(opID, fmt.Sprintf("interrupted during %s, please retry", opType))
+		} else {
+			_ = store.UpdateOperationError(opID, "interrupted, cannot resume")
 			_ = operations.ClearState(store, opID)
-			continue
-		default:
-			// Try to resume as a maintenance job via v2 registry (maintenance.job).
-			jobID := strings.TrimPrefix(opType, "maintenance:")
-			if j, jobErr := maintenance.Get(jobID); jobErr == nil && j.CanResume() {
-				if s.opRegistry != nil {
-					enqParams := maintenanceJobOpParams{LegacyOpID: opID, JobID: jobID}
-					if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "maintenance.job", enqParams); enqErr != nil {
-						slog.Warn("Failed to re-enqueue maintenance job () via v2", "opID", opID, "jobID", jobID, "enqErr", enqErr)
-						_ = store.UpdateOperationError(opID, "failed to resume: "+enqErr.Error())
-					}
-				} else {
-					_ = store.UpdateOperationError(opID, "operation registry not available")
-				}
-			} else {
-				_ = store.UpdateOperationError(opID, "interrupted, cannot resume")
-				_ = operations.ClearState(store, opID)
-			}
-			continue
 		}
 	}
 }
