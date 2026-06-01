@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	"github.com/jdfalk/audiobook-organizer/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,7 +44,7 @@ func TestITunesImport_CorruptXML(t *testing.T) {
 
 	// Wait for operation to complete (should fail)
 	var respBody struct {
-		Data ITunesImportResponse `json:"data"`
+		Data handlers.ITunesImportResponse `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	resp := respBody.Data
@@ -89,7 +90,7 @@ func TestITunesImport_EmptyXML(t *testing.T) {
 	assert.Equal(t, http.StatusAccepted, w.Code)
 
 	var respBody struct {
-		Data ITunesImportResponse `json:"data"`
+		Data handlers.ITunesImportResponse `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	resp := respBody.Data
@@ -134,7 +135,7 @@ func TestITunesImport_MissingFilesPartial(t *testing.T) {
 	assert.Equal(t, http.StatusAccepted, w.Code)
 
 	var respBody struct {
-		Data ITunesImportResponse `json:"data"`
+		Data handlers.ITunesImportResponse `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	resp := respBody.Data
@@ -285,7 +286,7 @@ func TestITunesImport_RealTestLibrary(t *testing.T) {
 	assert.Equal(t, http.StatusAccepted, w.Code)
 
 	var respBody struct {
-		Data ITunesImportResponse `json:"data"`
+		Data handlers.ITunesImportResponse `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	resp := respBody.Data

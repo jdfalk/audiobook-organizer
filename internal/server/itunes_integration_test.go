@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	"github.com/jdfalk/audiobook-organizer/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -177,7 +178,7 @@ func TestITunesImport_SkipDuplicates(t *testing.T) {
 		w := httptest.NewRecorder()
 		server.router.ServeHTTP(w, req)
 		var wrapper struct {
-			Data ITunesImportResponse `json:"data"`
+			Data handlers.ITunesImportResponse `json:"data"`
 		}
 		json.Unmarshal(w.Body.Bytes(), &wrapper)
 		testutil.WaitForOp(t, env.Store, wrapper.Data.OperationID, 15*time.Second)
@@ -260,7 +261,7 @@ func TestITunesValidate_Endpoint(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var wrapper struct {
-		Data ITunesValidateResponse `json:"data"`
+		Data handlers.ITunesValidateResponse `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
 	resp := wrapper.Data
