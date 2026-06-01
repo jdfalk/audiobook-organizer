@@ -129,3 +129,11 @@ packages:
       RetentionStore:
         config:
           filename: mock_retention_store.go
+  github.com/jdfalk/audiobook-organizer/internal/server/handlers:
+    config:
+      dir: internal/server/handlers/mocks
+      filename: "mock_{{.InterfaceName | snakecase}}.go"
+      pkgname: handlersmocks
+    interfaces:
+      AuthStore:
+      APIKeyHandlerStore:
