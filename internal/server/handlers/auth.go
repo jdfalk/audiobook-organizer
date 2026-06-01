@@ -106,8 +106,8 @@ func (h *AuthHandler) clearFailedLogins(userID string) {
 	delete(h.lockout, userID)
 }
 
-// BuildAuthUserResponse converts a database User to the API response shape.
-func BuildAuthUserResponse(user *database.User) AuthUserResponse {
+// buildAuthUserResponse converts a database User to the API response shape.
+func buildAuthUserResponse(user *database.User) AuthUserResponse {
 	return AuthUserResponse{
 		ID:        user.ID,
 		Username:  user.Username,
@@ -125,8 +125,8 @@ func isHTTPSRequest(c *gin.Context) bool {
 	return strings.EqualFold(strings.TrimSpace(c.GetHeader("X-Forwarded-Proto")), "https")
 }
 
-// SetSessionCookie writes a session cookie to the response.
-func SetSessionCookie(c *gin.Context, token string, expiresAt time.Time) {
+// setSessionCookie writes a session cookie to the response.
+func setSessionCookie(c *gin.Context, token string, expiresAt time.Time) {
 	if c == nil {
 		return
 	}
@@ -145,8 +145,8 @@ func SetSessionCookie(c *gin.Context, token string, expiresAt time.Time) {
 	})
 }
 
-// ClearSessionCookie clears the session cookie.
-func ClearSessionCookie(c *gin.Context) {
+// clearSessionCookie clears the session cookie.
+func clearSessionCookie(c *gin.Context) {
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     servermiddleware.SessionCookieName,
 		Value:    "",
@@ -215,7 +215,7 @@ func (h *AuthHandler) SetupInitialAdmin(c *gin.Context) {
 	}
 	httputil.RespondWithCreated(c, gin.H{
 		"message": "admin user created",
-		"user":    BuildAuthUserResponse(created),
+		"user":    buildAuthUserResponse(created),
 	})
 }
 
@@ -264,9 +264,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		httputil.RespondWithInternalError(c, "failed to create session")
 		return
 	}
-	SetSessionCookie(c, session.ID, session.ExpiresAt)
+	setSessionCookie(c, session.ID, session.ExpiresAt)
 	httputil.RespondWithOK(c, gin.H{
-		"user":    BuildAuthUserResponse(user),
+		"user":    buildAuthUserResponse(user),
 		"session": session,
 	})
 }
@@ -278,7 +278,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		httputil.RespondWithUnauthorized(c, "not authenticated")
 		return
 	}
-	httputil.RespondWithOK(c, gin.H{"user": BuildAuthUserResponse(user)})
+	httputil.RespondWithOK(c, gin.H{"user": buildAuthUserResponse(user)})
 }
 
 // UpdateMe handles PATCH /auth/me.
@@ -305,7 +305,7 @@ func (h *AuthHandler) UpdateMe(c *gin.Context) {
 		httputil.RespondWithInternalError(c, "failed to update profile")
 		return
 	}
-	httputil.RespondWithOK(c, gin.H{"user": BuildAuthUserResponse(user)})
+	httputil.RespondWithOK(c, gin.H{"user": buildAuthUserResponse(user)})
 }
 
 // Logout handles POST /auth/logout.
@@ -314,7 +314,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	if ok && session != nil {
 		_ = h.store.RevokeSession(session.ID)
 	}
-	ClearSessionCookie(c)
+	clearSessionCookie(c)
 	httputil.RespondWithOK(c, gin.H{"message": "logged out"})
 }
 
@@ -372,7 +372,7 @@ func (h *AuthHandler) RevokeMySession(c *gin.Context) {
 		return
 	}
 	if currentSession != nil && currentSession.ID == sessionID {
-		ClearSessionCookie(c)
+		clearSessionCookie(c)
 	}
 	httputil.RespondWithNoContent(c)
 }
