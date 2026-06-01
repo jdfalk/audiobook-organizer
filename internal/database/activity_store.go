@@ -1,5 +1,5 @@
 // file: internal/database/activity_store.go
-// version: 1.12.0
+// version: 1.13.0
 // guid: e2d3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package database
@@ -685,24 +685,22 @@ func nullableJSON(v map[string]any) (any, error) {
 	return string(b), nil
 }
 
-// CompactByDay collapses old change, debug, and audit entries into one
-// daily_digest row per UTC day. Audit entries are folded into the digest
-// (preserving their type, summary, and operation_id in DigestItem) so the
-// audit record survives compaction in summarized form. Existing 'digest'
-// rows are never re-compacted. Each day is processed in its own transaction
-// for atomicity.
+// CompactByDay collapses all activity entries (except existing 'digest' rows)
+// into one daily_digest row per UTC day. Every tier is eligible — the denylist
+// approach means newly-introduced tiers are automatically compacted without
+// requiring an allowlist update. Existing 'digest' rows are never re-compacted.
+// Each day is processed in its own transaction for atomicity.
 func (s *ActivityStore) CompactByDay(ctx context.Context, olderThan time.Time) (CompactResult, error) {
 	var result CompactResult
 
 	// 1. Fetch all compactable entries.
-	// Include 'system' tier so legacy migrated rows (which used to be hardcoded
-	// to tier='system') are also compacted into daily digests and produce
-	// breakdown chips via TagCounts.
+	// Denylist: exclude only 'digest' (already-compacted rows must not be
+	// re-compacted). Every other tier — including any future ones — is eligible.
 	rows, err := s.db.Query(`
 		SELECT id, timestamp, tier, type, level, source, operation_id,
 		       book_id, summary, details, tags
 		FROM   activity_log
-		WHERE  tier IN ('change', 'debug', 'audit', 'system')
+		WHERE  tier != 'digest'
 		  AND  compacted = 0
 		  AND  timestamp < ?
 		ORDER BY timestamp ASC`,

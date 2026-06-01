@@ -1,5 +1,5 @@
 // file: internal/database/nuts_activity_store.go
-// version: 1.2.3
+// version: 1.3.0
 // guid: c3d4e5f6-a7b8-0003-cdef-000000000003
 
 package database
@@ -66,7 +66,14 @@ func actBucket(tier string) string       { return "act:" + tier }
 func actOpBucket(opID string) string     { return "act:op:" + opID }
 func actBookBucket(bookID string) string { return "act:bk:" + bookID }
 
-var actTiers = []string{"change", "debug", "audit", "digest"}
+// actTiers is the full list of tier buckets used for queries, sources, wipe,
+// and compaction. digest must be last (it is excluded from compaction but
+// included in queries). Add new tiers here when introducing them.
+var actTiers = []string{"change", "debug", "audit", "info", "batch", "system", "digest"}
+
+// actCompactableTiers returns all tiers eligible for compaction (everything
+// except digest, which is the compaction output and must not be re-compacted).
+func actCompactableTiers() []string { return actTiers[:len(actTiers)-1] }
 
 func actTimeKey(t time.Time, id string) []byte {
 	return []byte(fmt.Sprintf("%020d:%s", t.UnixNano(), id))
@@ -402,24 +409,21 @@ func (s *NutsActivityStore) WipeAllActivity() (int64, error) {
 	return total, nil
 }
 
-// CompactByDay collapses old change/debug/audit entries into daily digest rows.
-// Existing digest entries are merged (not re-compacted). Each day is processed
-// atomically.
+// CompactByDay collapses all compactable tier entries into daily digest rows.
+// Every tier except "digest" is eligible — the denylist approach means newly-
+// introduced tiers are automatically compacted without an allowlist update.
+// Each day is processed atomically.
 func (s *NutsActivityStore) CompactByDay(ctx context.Context, olderThan time.Time) (CompactResult, error) {
 	var result CompactResult
 
-	// Load all compactable entries.
+	// Load all compactable entries (all tiers except "digest").
 	var all []ActivityEntry
-	for _, tier := range []string{"change", "debug", "audit"} {
+	for _, tier := range actCompactableTiers() {
 		entries, err := s.scanTier(tier, nil, &olderThan)
 		if err != nil {
 			return result, err
 		}
-		for _, e := range entries {
-			if e.Tier != "digest" {
-				all = append(all, e)
-			}
-		}
+		all = append(all, entries...)
 	}
 	if len(all) == 0 {
 		return result, nil
@@ -443,7 +447,7 @@ func (s *NutsActivityStore) CompactByDay(ctx context.Context, olderThan time.Tim
 
 	// Build key lookup for bulk deletes.
 	keyLookup := make(map[int64]entryKV)
-	for _, tier := range []string{"change", "debug", "audit"} {
+	for _, tier := range actCompactableTiers() {
 		kvs, err := s.scanTierKeysAndValues(tier, nil, &olderThan)
 		if err != nil {
 			return result, err
