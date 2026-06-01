@@ -1,7 +1,7 @@
 // file: internal/server/metadata_handlers.go
-// version: 3.7.4
+// version: 3.8.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
-// last-edited: 2026-05-19
+// last-edited: 2026-06-01
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
 // search/apply/revert/no-match, bulk fetch and bulk writeback, the
@@ -38,6 +38,7 @@ import (
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/policy"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -1100,6 +1101,10 @@ func (s *Server) runBulkMetadataFetchAll(
 
 // registryProgressAdapter bridges registry.Reporter → operations.ProgressReporter
 // so runBulkMetadataFetchAll can be called from a v2 op Run function without changes.
+//
+// TODO(ADR-003 Phase 2): registryProgressAdapter cannot move to internal/server/handlers
+// because it has methods and is used across 20+ *_ops.go files in internal/server.
+// Extract it to internal/operations/registry or a dedicated adapter package in Phase 2.
 type registryProgressAdapter struct{ r opsregistry.Reporter }
 
 func (a registryProgressAdapter) UpdateProgress(current, total int, message string) error {
@@ -1123,16 +1128,8 @@ func (a registryProgressAdapter) Log(level, message string, details *string) err
 }
 func (a registryProgressAdapter) IsCanceled() bool { return a.r.IsCanceled() }
 
-// bulkMetadataFetchV2Params is the JSON params for the v2 bulk_metadata_fetch op.
-// Selection replaces the old BookIDs field: the client sends either
-//   - book_ids: an explicit list of IDs (page-level selection), or
-//   - filter: a FilterSpec that the server resolves to IDs at run time
-//     with IsPrimaryVersion=true always applied.
-type bulkMetadataFetchV2Params struct {
-	Selection     operations.SelectionSpec `json:"selection"`
-	PreferAudible bool                     `json:"prefer_audible"`
-	SkipCached    bool                     `json:"skip_cached"`
-}
+// bulkMetadataFetchV2Params aliases the canonical type from internal/server/handlers.
+type bulkMetadataFetchV2Params = handlers.BulkMetadataFetchV2Params
 
 // resolveFilterToBookIDs translates a FilterSpec into a concrete list of primary-
 // version book IDs.  IsPrimaryVersion=true and quarantine exclusion are always
@@ -1843,15 +1840,8 @@ func (s *Server) getMetadataFields(c *gin.Context) {
 	})
 }
 
-// ratingPatchRequest is the JSON body for PATCH /api/v1/audiobooks/:id/rating.
-// Each field is a json.RawMessage so the handler can distinguish null (clear)
-// from absent (don't touch) from a numeric value.
-type ratingPatchRequest struct {
-	Overall     json.RawMessage `json:"overall"`
-	Story       json.RawMessage `json:"story"`
-	Performance json.RawMessage `json:"performance"`
-	Notes       json.RawMessage `json:"notes"`
-}
+// ratingPatchRequest aliases the canonical type from internal/server/handlers.
+type ratingPatchRequest = handlers.RatingPatchRequest
 
 // parseOptionalRating decodes a json.RawMessage into a *float64 and a clear flag.
 // Returns (nil, false, nil) if raw is empty (field omitted).

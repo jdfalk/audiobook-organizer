@@ -1,12 +1,11 @@
 // file: internal/server/cache_handlers.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
-// last-edited: 2026-05-01
+// last-edited: 2026-06-01
 
 package server
 
 import (
-	"encoding/json"
 	"log/slog"
 	"strconv"
 	"time"
@@ -15,34 +14,10 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_model/go"
+	io_prometheus_client "github.com/prometheus/client_model/go"
 )
-
-// CacheStatsResponse represents the JSON response for GET /api/v1/cache/stats
-type CacheStatsResponse struct {
-	Caches      []CacheStat `json:"caches"`
-	GeneratedAt string      `json:"generated_at"`
-}
-
-// CacheStat represents metrics for a single cache
-type CacheStat struct {
-	Name              string            `json:"name"`
-	Hits              int64             `json:"hits"`
-	Misses            map[string]int64  `json:"misses"`
-	Sets              int64             `json:"sets"`
-	Invalidations     map[string]int64  `json:"invalidations"`
-	Evictions         map[string]int64  `json:"evictions"`
-	Size              int64             `json:"size"`
-	HitRate           *float64          `json:"hit_rate,omitempty"`
-	GetDurationMetric GetDurationMetric `json:"get_duration_seconds"`
-}
-
-// GetDurationMetric represents count and sum of cache get durations
-type GetDurationMetric struct {
-	Count int64   `json:"count"`
-	Sum   float64 `json:"sum"`
-}
 
 // handleCacheStats returns aggregated cache metrics from Prometheus default registry
 // GET /api/v1/cache/stats (public, no auth)
@@ -66,7 +41,7 @@ func (s *Server) handleCacheStats(c *gin.Context) {
 		}
 	}
 
-	resp := CacheStatsResponse{
+	resp := handlers.CacheStatsResponse{
 		Caches:      stats,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 	}
@@ -105,10 +80,10 @@ func (s *Server) handleCacheKeysIntrospection(c *gin.Context) {
 }
 
 // aggregateCacheMetrics extracts all audiobook_organizer_cache_* metrics from Prometheus
-// and builds a CacheStat for each unique cache name.
-func aggregateCacheMetrics(mfs []*io_prometheus_client.MetricFamily) []CacheStat {
+// and builds a handlers.CacheStat for each unique cache name.
+func aggregateCacheMetrics(mfs []*io_prometheus_client.MetricFamily) []handlers.CacheStat {
 	// Map from cache name to its aggregated stats
-	statMap := make(map[string]*CacheStat)
+	statMap := make(map[string]*handlers.CacheStat)
 
 	for _, mf := range mfs {
 		// Only process cache metrics
@@ -119,12 +94,12 @@ func aggregateCacheMetrics(mfs []*io_prometheus_client.MetricFamily) []CacheStat
 
 		switch metricName {
 		case "audiobook_organizer_cache_hits_total":
-			processCounterMetric(mf, statMap, func(stat *CacheStat, value int64) {
+			processCounterMetric(mf, statMap, func(stat *handlers.CacheStat, value int64) {
 				stat.Hits = value
 			})
 
 		case "audiobook_organizer_cache_misses_total":
-			processCounterMetricWithReason(mf, statMap, func(stat *CacheStat, reason string, value int64) {
+			processCounterMetricWithReason(mf, statMap, func(stat *handlers.CacheStat, reason string, value int64) {
 				if stat.Misses == nil {
 					stat.Misses = make(map[string]int64)
 				}
@@ -132,12 +107,12 @@ func aggregateCacheMetrics(mfs []*io_prometheus_client.MetricFamily) []CacheStat
 			})
 
 		case "audiobook_organizer_cache_sets_total":
-			processCounterMetric(mf, statMap, func(stat *CacheStat, value int64) {
+			processCounterMetric(mf, statMap, func(stat *handlers.CacheStat, value int64) {
 				stat.Sets = value
 			})
 
 		case "audiobook_organizer_cache_invalidations_total":
-			processCounterMetricWithReason(mf, statMap, func(stat *CacheStat, scope string, value int64) {
+			processCounterMetricWithReason(mf, statMap, func(stat *handlers.CacheStat, scope string, value int64) {
 				if stat.Invalidations == nil {
 					stat.Invalidations = make(map[string]int64)
 				}
@@ -145,7 +120,7 @@ func aggregateCacheMetrics(mfs []*io_prometheus_client.MetricFamily) []CacheStat
 			})
 
 		case "audiobook_organizer_cache_evictions_total":
-			processCounterMetricWithReason(mf, statMap, func(stat *CacheStat, reason string, value int64) {
+			processCounterMetricWithReason(mf, statMap, func(stat *handlers.CacheStat, reason string, value int64) {
 				if stat.Evictions == nil {
 					stat.Evictions = make(map[string]int64)
 				}
@@ -153,19 +128,19 @@ func aggregateCacheMetrics(mfs []*io_prometheus_client.MetricFamily) []CacheStat
 			})
 
 		case "audiobook_organizer_cache_size":
-			processGaugeMetric(mf, statMap, func(stat *CacheStat, value float64) {
+			processGaugeMetric(mf, statMap, func(stat *handlers.CacheStat, value float64) {
 				stat.Size = int64(value)
 			})
 
 		case "audiobook_organizer_cache_get_duration_seconds":
-			processHistogramMetric(mf, statMap, func(stat *CacheStat, count int64, sum float64) {
-				stat.GetDurationMetric = GetDurationMetric{Count: count, Sum: sum}
+			processHistogramMetric(mf, statMap, func(stat *handlers.CacheStat, count int64, sum float64) {
+				stat.GetDurationMetric = handlers.GetDurationMetric{Count: count, Sum: sum}
 			})
 		}
 	}
 
 	// Convert to sorted slice and compute hit rates
-	result := make([]CacheStat, 0, len(statMap))
+	result := make([]handlers.CacheStat, 0, len(statMap))
 	for _, stat := range statMap {
 		// Compute hit_rate = hits / (hits + sum(misses))
 		totalMisses := int64(0)
@@ -197,8 +172,8 @@ func aggregateCacheMetrics(mfs []*io_prometheus_client.MetricFamily) []CacheStat
 
 // processCounterMetric extracts counter metrics with a single {cache} label
 func processCounterMetric(mf *io_prometheus_client.MetricFamily,
-	statMap map[string]*CacheStat,
-	fn func(*CacheStat, int64)) {
+	statMap map[string]*handlers.CacheStat,
+	fn func(*handlers.CacheStat, int64)) {
 	if mf.Metric == nil {
 		return
 	}
@@ -208,7 +183,7 @@ func processCounterMetric(mf *io_prometheus_client.MetricFamily,
 			continue
 		}
 		if _, ok := statMap[cacheName]; !ok {
-			statMap[cacheName] = &CacheStat{Name: cacheName}
+			statMap[cacheName] = &handlers.CacheStat{Name: cacheName}
 		}
 		if m.Counter != nil && m.Counter.Value != nil {
 			fn(statMap[cacheName], int64(*m.Counter.Value))
@@ -218,8 +193,8 @@ func processCounterMetric(mf *io_prometheus_client.MetricFamily,
 
 // processCounterMetricWithReason extracts counter metrics with {cache} and {reason/scope} labels
 func processCounterMetricWithReason(mf *io_prometheus_client.MetricFamily,
-	statMap map[string]*CacheStat,
-	fn func(*CacheStat, string, int64)) {
+	statMap map[string]*handlers.CacheStat,
+	fn func(*handlers.CacheStat, string, int64)) {
 	if mf.Metric == nil {
 		return
 	}
@@ -237,7 +212,7 @@ func processCounterMetricWithReason(mf *io_prometheus_client.MetricFamily,
 			continue
 		}
 		if _, ok := statMap[cacheName]; !ok {
-			statMap[cacheName] = &CacheStat{Name: cacheName}
+			statMap[cacheName] = &handlers.CacheStat{Name: cacheName}
 		}
 		if m.Counter != nil && m.Counter.Value != nil {
 			fn(statMap[cacheName], reason, int64(*m.Counter.Value))
@@ -247,8 +222,8 @@ func processCounterMetricWithReason(mf *io_prometheus_client.MetricFamily,
 
 // processGaugeMetric extracts gauge metrics with a single {cache} label
 func processGaugeMetric(mf *io_prometheus_client.MetricFamily,
-	statMap map[string]*CacheStat,
-	fn func(*CacheStat, float64)) {
+	statMap map[string]*handlers.CacheStat,
+	fn func(*handlers.CacheStat, float64)) {
 	if mf.Metric == nil {
 		return
 	}
@@ -258,7 +233,7 @@ func processGaugeMetric(mf *io_prometheus_client.MetricFamily,
 			continue
 		}
 		if _, ok := statMap[cacheName]; !ok {
-			statMap[cacheName] = &CacheStat{Name: cacheName}
+			statMap[cacheName] = &handlers.CacheStat{Name: cacheName}
 		}
 		if m.Gauge != nil && m.Gauge.Value != nil {
 			fn(statMap[cacheName], *m.Gauge.Value)
@@ -268,8 +243,8 @@ func processGaugeMetric(mf *io_prometheus_client.MetricFamily,
 
 // processHistogramMetric extracts histogram bucket data, returning count and sum
 func processHistogramMetric(mf *io_prometheus_client.MetricFamily,
-	statMap map[string]*CacheStat,
-	fn func(*CacheStat, int64, float64)) {
+	statMap map[string]*handlers.CacheStat,
+	fn func(*handlers.CacheStat, int64, float64)) {
 	if mf.Metric == nil {
 		return
 	}
@@ -279,7 +254,7 @@ func processHistogramMetric(mf *io_prometheus_client.MetricFamily,
 			continue
 		}
 		if _, ok := statMap[cacheName]; !ok {
-			statMap[cacheName] = &CacheStat{Name: cacheName}
+			statMap[cacheName] = &handlers.CacheStat{Name: cacheName}
 		}
 		if m.Histogram != nil {
 			var count int64
@@ -314,17 +289,6 @@ func isNonIntrospectableCache(name string) bool {
 		// Add other DB-backed or external caches here
 	}
 	return nonIntrospectable[name]
-}
-
-// MarshalJSON ensures proper JSON marshaling of CacheStatsResponse
-func (resp CacheStatsResponse) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Caches      []CacheStat `json:"caches"`
-		GeneratedAt string      `json:"generated_at"`
-	}{
-		Caches:      resp.Caches,
-		GeneratedAt: resp.GeneratedAt,
-	})
 }
 
 // gatherCacheSnapshots reads the current Prometheus default registry and

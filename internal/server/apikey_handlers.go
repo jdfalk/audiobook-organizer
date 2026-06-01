@@ -1,6 +1,6 @@
 // file: internal/server/apikey_handlers.go
-// version: 2.1.0
-// last-edited: 2026-05-01
+// version: 2.2.0
+// last-edited: 2026-06-01
 // guid: a1b2c3d4-e5f6-7890-abcd-ef0123456789
 
 package server
@@ -13,47 +13,11 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
 )
 
-type createAPIKeyRequest struct {
-	Name          string   `json:"name" binding:"required"`
-	Description   string   `json:"description"`
-	Scopes        []string `json:"scopes"`
-	ExpiresInDays int      `json:"expires_in_days"`
-	UserID        string   `json:"user_id"`
-}
-
-type createAPIKeyResponse struct {
-	ID        string     `json:"id"`
-	Name      string     `json:"name"`
-	Token     string     `json:"token"`
-	Scopes    []string   `json:"scopes"`
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
-	CreatedAt time.Time  `json:"created_at"`
-}
-
-type apiKeyResponse struct {
-	ID               string     `json:"id"`
-	UserID           string     `json:"user_id"`
-	Name             string     `json:"name"`
-	Description      string     `json:"description"`
-	Scopes           []string   `json:"scopes"`
-	Status           string     `json:"status"`
-	CreatedAt        time.Time  `json:"created_at"`
-	LastUsedAt       *time.Time `json:"last_used_at,omitempty"`
-	LastUsedIP       string     `json:"last_used_ip,omitempty"`
-	UseCount         int64      `json:"use_count"`
-	ExpiresAt        *time.Time `json:"expires_at,omitempty"`
-	DeactivatedAt    *time.Time `json:"deactivated_at,omitempty"`
-	RevokedAt        *time.Time `json:"revoked_at,omitempty"`
-	Identifier       string     `json:"identifier"`
-	DaysSinceLastUse *int       `json:"days_since_last_use"`
-	NeverUsed        bool       `json:"never_used"`
-	Username         string     `json:"username,omitempty"`
-}
-
-func buildAPIKeyResponse(key database.APIKey, username string) apiKeyResponse {
+func buildAPIKeyResponse(key database.APIKey, username string) handlers.APIKeyResponse {
 	var daysSince *int
 	neverUsed := key.LastUsedAt == nil
 	if key.LastUsedAt != nil {
@@ -64,7 +28,7 @@ func buildAPIKeyResponse(key database.APIKey, username string) apiKeyResponse {
 	if len(key.TokenHash) >= 8 {
 		ident = "abk_" + key.TokenHash[:8]
 	}
-	return apiKeyResponse{
+	return handlers.APIKeyResponse{
 		ID:               key.ID,
 		UserID:           key.UserID,
 		Name:             key.Name,
@@ -98,7 +62,7 @@ func (s *Server) createAPIKey(c *gin.Context) {
 		return
 	}
 
-	var req createAPIKeyRequest
+	var req handlers.CreateAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
@@ -161,7 +125,7 @@ func (s *Server) createAPIKey(c *gin.Context) {
 
 	slog.Info("apikey created id user name scopes expires", "created", created.ID, "targetUserID", targetUserID, "created", created.Name, "created", created.Scopes, "created", created.ExpiresAt)
 
-	resp := createAPIKeyResponse{
+	resp := handlers.CreateAPIKeyResponse{
 		ID:        created.ID,
 		Name:      created.Name,
 		Token:     rawToken,
@@ -199,7 +163,7 @@ func (s *Server) listAPIKeys(c *gin.Context) {
 
 	// Build username map for admin view.
 	userCache := map[string]string{}
-	results := make([]apiKeyResponse, 0, len(keys))
+	results := make([]handlers.APIKeyResponse, 0, len(keys))
 	for _, k := range keys {
 		username := ""
 		if showAll {

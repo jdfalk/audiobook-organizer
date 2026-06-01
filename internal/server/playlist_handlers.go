@@ -1,6 +1,6 @@
 // file: internal/server/playlist_handlers.go
-// version: 2.2.0
-// last-edited: 2026-05-11
+// version: 2.3.0
+// last-edited: 2026-06-01
 // guid: 7a3d5f2e-8c4b-4a70-b8c5-3d7e0f1b9a79
 //
 // HTTP endpoints for user-created playlists (spec 3.4 task 3).
@@ -26,41 +26,12 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/playlist"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 )
-
-// playlistCreateReq is the payload for POST /api/v1/playlists.
-type playlistCreateReq struct {
-	Name        string   `json:"name" binding:"required"`
-	Description string   `json:"description,omitempty"`
-	Type        string   `json:"type" binding:"required"` // static|smart
-	BookIDs     []string `json:"book_ids,omitempty"`
-	Query       string   `json:"query,omitempty"`
-	SortJSON    string   `json:"sort_json,omitempty"`
-	Limit       int      `json:"limit,omitempty"`
-}
-
-// playlistUpdateReq mirrors playlistCreateReq but all fields are
-// optional — only set ones are applied.
-type playlistUpdateReq struct {
-	Name        *string   `json:"name,omitempty"`
-	Description *string   `json:"description,omitempty"`
-	BookIDs     *[]string `json:"book_ids,omitempty"`
-	Query       *string   `json:"query,omitempty"`
-	SortJSON    *string   `json:"sort_json,omitempty"`
-	Limit       *int      `json:"limit,omitempty"`
-}
-
-type playlistBooksAddReq struct {
-	BookIDs []string `json:"book_ids" binding:"required"`
-}
-
-type playlistReorderReq struct {
-	BookIDs []string `json:"book_ids" binding:"required"`
-}
 
 // handleCreatePlaylist — POST /api/v1/playlists
 func (s *Server) handleCreatePlaylist(c *gin.Context) {
-	var req playlistCreateReq
+	var req handlers.PlaylistCreateReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
@@ -172,7 +143,7 @@ func (s *Server) handleUpdatePlaylist(c *gin.Context) {
 		return
 	}
 
-	var req playlistUpdateReq
+	var req handlers.PlaylistUpdateReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
@@ -230,7 +201,7 @@ func (s *Server) handleDeletePlaylist(c *gin.Context) {
 // existing entries. No-op on smart playlists.
 func (s *Server) handleAddBooksToPlaylist(c *gin.Context) {
 	id := c.Param("id")
-	var req playlistBooksAddReq
+	var req handlers.PlaylistBooksAddReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
@@ -304,7 +275,7 @@ func (s *Server) handleRemoveBookFromPlaylist(c *gin.Context) {
 // books (use add/remove endpoints for that).
 func (s *Server) handleReorderPlaylist(c *gin.Context) {
 	id := c.Param("id")
-	var req playlistReorderReq
+	var req handlers.PlaylistReorderReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
@@ -391,8 +362,8 @@ func (s *Server) handleMaterializePlaylist(c *gin.Context) {
 }
 
 // validatePlaylistCreate checks required fields and type-specific
-// shape of a playlistCreateReq.
-func validatePlaylistCreate(req *playlistCreateReq) error {
+// shape of a handlers.PlaylistCreateReq.
+func validatePlaylistCreate(req *handlers.PlaylistCreateReq) error {
 	if strings.TrimSpace(req.Name) == "" {
 		return fmt.Errorf("name is required")
 	}

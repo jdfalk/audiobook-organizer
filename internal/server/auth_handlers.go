@@ -1,7 +1,7 @@
 // file: internal/server/auth_handlers.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: 1457df2f-af76-46cb-a2f4-c9f6f275f93a
-// last-edited: 2026-05-01
+// last-edited: 2026-06-01
 
 package server
 
@@ -15,6 +15,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -71,17 +72,8 @@ const (
 	tempLoginTokenTTL    = 15 * time.Minute
 )
 
-type authUserResponse struct {
-	ID        string    `json:"id"`
-	Username  string    `json:"username"`
-	Email     string    `json:"email"`
-	Roles     []string  `json:"roles"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-func buildAuthUserResponse(user *database.User) authUserResponse {
-	return authUserResponse{
+func buildAuthUserResponse(user *database.User) handlers.AuthUserResponse {
+	return handlers.AuthUserResponse{
 		ID:        user.ID,
 		Username:  user.Username,
 		Email:     user.Email,

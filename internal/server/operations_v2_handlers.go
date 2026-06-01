@@ -1,7 +1,7 @@
 // file: internal/server/operations_v2_handlers.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: e5f6a7b8-c9d0-1e2f-3a4b-5c6d7e8f9a0b
-// last-edited: 2026-05-08
+// last-edited: 2026-06-01
 
 // UOS-06: SSE event hub, /operations/timeline, single-op introspection,
 // cancel, trigger-op, and /op-defs endpoints.
@@ -18,55 +18,8 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 )
-
-// operationV2Response is the JSON shape returned by the timeline and single-op
-// endpoints. It mirrors the TypeScript OperationV2 interface in api.ts.
-type operationV2Response struct {
-	ID              string     `json:"id"`
-	DefID           string     `json:"def_id"`
-	Plugin          string     `json:"plugin"`
-	DisplayName     string     `json:"display_name"`
-	Status          string     `json:"status"`
-	Priority        int        `json:"priority"`
-	NotifyLevel     int        `json:"notify_level"`
-	ProgressCurrent *int       `json:"progress_current"`
-	ProgressTotal   *int       `json:"progress_total"`
-	ProgressMessage *string    `json:"progress_message"`
-	CurrentPhase    *string    `json:"current_phase"`
-	CurrentItem     *string    `json:"current_item"`
-	ActorUserID     *string    `json:"actor_user_id"`
-	ParentID        *string    `json:"parent_id"`
-	QueuedAt        time.Time  `json:"queued_at"`
-	StartedAt       *time.Time `json:"started_at"`
-	CompletedAt     *time.Time `json:"completed_at"`
-	ErrorMessage    *string    `json:"error_message"`
-	ResumeCount     int        `json:"resume_count"`
-	TraceID         string     `json:"trace_id"`
-	SpanID          string     `json:"span_id"`
-}
-
-// opLogV2Response is the JSON shape for a single log line.
-type opLogV2Response struct {
-	OperationID string    `json:"operation_id"`
-	Level       string    `json:"level"`
-	Message     string    `json:"message"`
-	Attrs       any       `json:"attrs"`
-	CreatedAt   time.Time `json:"created_at"`
-}
-
-// opDefResponse is the JSON shape returned by /op-defs.
-type opDefResponse struct {
-	ID           string   `json:"id"`
-	Plugin       string   `json:"plugin"`
-	DisplayName  string   `json:"display_name"`
-	Description  string   `json:"description"`
-	Cancellable  bool     `json:"cancellable"`
-	Isolate      bool     `json:"isolate"`
-	ResumePolicy string   `json:"resume_policy"`
-	Triggers     []string `json:"triggers"`
-	DependsOn    []string `json:"depends_on"`
-}
 
 // handleGetOperationTimeline implements GET /api/v1/operations/timeline?since=15m.
 // It reads operations from the v2 store that were queued within the given window.
@@ -80,7 +33,7 @@ func (s *Server) handleGetOperationTimeline(c *gin.Context) {
 
 	store := s.opsV2Store()
 	if store == nil {
-		httputil.RespondWithOK(c, gin.H{"operations": []operationV2Response{}})
+		httputil.RespondWithOK(c, gin.H{"operations": []handlers.OperationV2Response{}})
 		return
 	}
 
@@ -91,7 +44,7 @@ func (s *Server) handleGetOperationTimeline(c *gin.Context) {
 		return
 	}
 
-	resp := make([]operationV2Response, 0, len(rows))
+	resp := make([]handlers.OperationV2Response, 0, len(rows))
 	for _, r := range rows {
 		item := rowToResponse(r, s.displayNameFor(r.DefID), s.notifyLevelFor(r.DefID))
 		if r.Status == "running" && s.opRegistry != nil {
@@ -126,7 +79,7 @@ func (s *Server) handleGetOperationV2(c *gin.Context) {
 		logs = nil
 	}
 
-	logResp := make([]opLogV2Response, 0, len(logs))
+	logResp := make([]handlers.OpLogV2Response, 0, len(logs))
 	for _, l := range logs {
 		logResp = append(logResp, logRowToResponse(l))
 	}
@@ -188,11 +141,11 @@ func (s *Server) handleTriggerOperationV2(c *gin.Context) {
 // Returns the set of registered OperationDefs.
 func (s *Server) handleListOpDefs(c *gin.Context) {
 	if s.opRegistry == nil {
-		httputil.RespondWithOK(c, gin.H{"defs": []opDefResponse{}})
+		httputil.RespondWithOK(c, gin.H{"defs": []handlers.OpDefResponse{}})
 		return
 	}
 	defs := s.opRegistry.ActiveDefs()
-	resp := make([]opDefResponse, 0, len(defs))
+	resp := make([]handlers.OpDefResponse, 0, len(defs))
 	for _, d := range defs {
 		resp = append(resp, defToResponse(d))
 	}
@@ -302,8 +255,8 @@ func (s *Server) notifyLevelFor(defID string) int {
 }
 
 // rowToResponse converts a database.OperationV2Row to the HTTP response shape.
-func rowToResponse(r database.OperationV2Row, displayName string, notifyLevel int) operationV2Response {
-	resp := operationV2Response{
+func rowToResponse(r database.OperationV2Row, displayName string, notifyLevel int) handlers.OperationV2Response {
+	resp := handlers.OperationV2Response{
 		ID:           r.ID,
 		DefID:        r.DefID,
 		Plugin:       r.Plugin,
@@ -334,7 +287,7 @@ func rowToResponse(r database.OperationV2Row, displayName string, notifyLevel in
 }
 
 // logRowToResponse converts a database.OpLogV2Row to the HTTP response shape.
-func logRowToResponse(l database.OpLogV2Row) opLogV2Response {
+func logRowToResponse(l database.OpLogV2Row) handlers.OpLogV2Response {
 	var attrsAny any
 	if l.Attrs != "" && l.Attrs != "{}" {
 		var m map[string]any
@@ -346,7 +299,7 @@ func logRowToResponse(l database.OpLogV2Row) opLogV2Response {
 	} else {
 		attrsAny = map[string]any{}
 	}
-	return opLogV2Response{
+	return handlers.OpLogV2Response{
 		OperationID: l.OperationID,
 		Level:       l.Level,
 		Message:     l.Message,
@@ -356,7 +309,7 @@ func logRowToResponse(l database.OpLogV2Row) opLogV2Response {
 }
 
 // defToResponse converts a registry.OperationDef to the HTTP response shape.
-func defToResponse(d opsregistry.OperationDef) opDefResponse {
+func defToResponse(d opsregistry.OperationDef) handlers.OpDefResponse {
 	triggers := make([]string, 0, len(d.Triggers))
 	for _, t := range d.Triggers {
 		triggers = append(triggers, t.EventName)
@@ -376,7 +329,7 @@ func defToResponse(d opsregistry.OperationDef) opDefResponse {
 		rp = "ask"
 	}
 
-	return opDefResponse{
+	return handlers.OpDefResponse{
 		ID:           d.ID,
 		Plugin:       d.Plugin,
 		DisplayName:  d.DisplayName,

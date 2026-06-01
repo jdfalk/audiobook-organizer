@@ -1,6 +1,7 @@
 // file: internal/server/operations_handlers.go
-// version: 2.8.0
+// version: 2.9.0
 // guid: 9326aa39-ca40-4db3-a3be-7e76e6e2a23f
+// last-edited: 2026-06-01
 //
 // Background-operation HTTP handlers split out of server.go: the
 // long-running scan / organize / transcode starters, generic
@@ -24,6 +25,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/scheduler"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	"github.com/jdfalk/audiobook-organizer/internal/sweep"
 )
 
@@ -711,15 +713,9 @@ func calculateNextWindowRun(startHour int) string {
 	return next.Format(time.RFC3339)
 }
 
-type maintenanceWindowConfigReq struct {
-	Enabled     bool `json:"enabled"`
-	WindowStart int  `json:"window_start"`
-	WindowEnd   int  `json:"window_end"`
-}
-
 // updateMaintenanceWindowConfig persists maintenance window schedule settings.
 func (s *Server) updateMaintenanceWindowConfig(c *gin.Context) {
-	var req maintenanceWindowConfigReq
+	var req handlers.MaintenanceWindowConfigReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
