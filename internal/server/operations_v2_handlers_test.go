@@ -21,6 +21,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -125,7 +126,7 @@ func TestHandleGetOperationTimeline_OrderedByStartedAtDesc(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	var body struct {
 		Data struct {
-			Operations []operationV2Response `json:"operations"`
+			Operations []handlers.OperationV2Response `json:"operations"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
