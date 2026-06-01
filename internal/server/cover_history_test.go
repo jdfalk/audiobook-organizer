@@ -1,5 +1,5 @@
 // file: internal/server/cover_history_test.go
-// version: 1.0.2
+// version: 1.0.3
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 // last-edited: 2026-05-07
 
@@ -41,7 +41,7 @@ func setupCoverHistoryServer(t *testing.T) (*Server, database.Store, string) {
 		store.Close()
 	})
 
-	srv := NewServer(nil)
+	srv := NewServer(store)
 	return srv, store, rootDir
 }
 

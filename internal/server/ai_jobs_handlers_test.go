@@ -1,5 +1,5 @@
 // file: internal/server/ai_jobs_handlers_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 136d5ad0-d226-471a-8c2c-64992ba3882d
 
 package server
@@ -34,8 +34,7 @@ func setupAIJobsTestServer(t *testing.T) (*Server, *database.SQLiteStore) {
 		store.Close()
 	})
 
-	// Create server AFTER setting global store so NewServer(nil) will use our SQLiteStore
-	srv := NewServer(nil)
+	srv := NewServer(store)
 	return srv, store
 }
 

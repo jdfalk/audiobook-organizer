@@ -1,5 +1,5 @@
 // file: internal/server/server_coverage_phase2_test.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: d5e6f7a8-b9c0-1d2e-3f4a-5b6c7d8e9f0a
 // last-edited: 2026-04-30
 
@@ -57,7 +57,7 @@ func TestGetAudiobookTagsErrors(t *testing.T) {
 			database.SetGlobalStore(mockStore)
 			defer func() { database.SetGlobalStore(oldStore) }()
 
-			srv := NewServer(nil)
+			srv := NewServer(mockStore)
 
 			req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks/"+tt.bookID+"/tags", nil)
 			w := httptest.NewRecorder()
@@ -113,7 +113,7 @@ func TestAddBlockedHashErrors(t *testing.T) {
 			database.SetGlobalStore(mockStore)
 			defer func() { database.SetGlobalStore(oldStore) }()
 
-			srv := NewServer(nil)
+			srv := NewServer(mockStore)
 
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/blocked-hashes", bytes.NewBufferString(tt.body))
 			req.Header.Set("Content-Type", "application/json")
@@ -145,7 +145,7 @@ func TestAddBlockedHashDatabaseError(t *testing.T) {
 	database.SetGlobalStore(mockStore)
 	defer func() { database.SetGlobalStore(oldStore) }()
 
-	srv := NewServer(nil)
+	srv := NewServer(mockStore)
 
 	body := `{"hash": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef", "reason": "duplicate file"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/blocked-hashes", bytes.NewBufferString(body))
@@ -195,7 +195,7 @@ func TestDeleteWorkErrors(t *testing.T) {
 			database.SetGlobalStore(mockStore)
 			defer func() { database.SetGlobalStore(oldStore) }()
 
-			srv := NewServer(nil)
+			srv := NewServer(mockStore)
 
 			req := httptest.NewRequest(http.MethodDelete, "/api/v1/works/"+tt.workID, nil)
 			w := httptest.NewRecorder()

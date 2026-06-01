@@ -1,5 +1,5 @@
 // file: internal/server/deluge_integration_test.go
-// version: 2.0.0
+// version: 2.0.1
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 // last-edited: 2026-05-11
 //
@@ -110,7 +110,7 @@ func TestHandleDelugeStatus_NotConfigured(t *testing.T) {
 		config.AppConfig.DownloadClient.Torrent.Deluge.Host = origHost
 	}()
 
-	srv := NewServer(nil)
+	srv := NewServer(store)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/deluge/status", nil)
 	w := httptest.NewRecorder()
@@ -149,7 +149,7 @@ func TestHandleDelugeStatus_Configured(t *testing.T) {
 	config.AppConfig.DelugeWebURL = "http://localhost:8112"
 	defer func() { config.AppConfig.DelugeWebURL = origURL }()
 
-	srv := NewServer(nil)
+	srv := NewServer(store)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/deluge/status", nil)
 	w := httptest.NewRecorder()

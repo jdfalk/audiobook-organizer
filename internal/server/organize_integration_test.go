@@ -1,5 +1,5 @@
 // file: internal/server/organize_integration_test.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: b8c9d0e1-f2a3-4567-bcde-890123456f01
 
 package server
@@ -49,7 +49,7 @@ func TestOrganizeService_ViaHTTP(t *testing.T) {
 	// doesn't Start its worker pool (Container.Start does that during
 	// Server.Start, which we don't call here). Start it explicitly so
 	// the enqueued op actually runs.
-	server := NewServer(nil)
+	server := NewServer(env.Store)
 	if server.opRegistry != nil {
 		server.opRegistry.Start(context.Background())
 		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })

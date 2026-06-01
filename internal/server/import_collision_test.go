@@ -1,5 +1,5 @@
 // file: internal/server/import_collision_test.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: 9c0d1e2f-3a4b-5c6d-7e8f-9a0b1c2d3e4f
 // last-edited: 2026-05-03
 
@@ -35,7 +35,7 @@ func setupImportCollisionServer(t *testing.T) (*Server, database.Store) {
 		store.Close()
 	})
 
-	srv := NewServer(nil)
+	srv := NewServer(store)
 	return srv, store
 }
 

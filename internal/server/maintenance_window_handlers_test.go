@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_window_handlers_test.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: d5e6f7a8-b9c0-1234-efab-456789012345
 // last-edited: 2026-05-11
 
@@ -39,7 +39,7 @@ func setupMaintenanceTestServer(t *testing.T) *Server {
 		store.Close()
 	})
 
-	srv := NewServer(nil)
+	srv := NewServer(store)
 	srv.scheduler = scheduler.NewTaskScheduler(scheduler.SchedulerDeps{
 		Store:               srv.Store,
 		OpRegistry:          srv.opRegistry,

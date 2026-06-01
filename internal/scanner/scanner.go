@@ -1,7 +1,7 @@
 // file: internal/scanner/scanner.go
-// version: 1.40.0
+// version: 1.41.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
-// last-edited: 2026-05-02
+// last-edited: 2026-06-01
 
 package scanner
 
@@ -138,20 +138,10 @@ func SetStore(s database.Store) {
 // getStore returns the package-local store with read-lock protection.
 // Used internally by the free helpers in scanner.go and the per-book
 // helpers in book_files.go.
-//
-// Test back-compat: when SetStore hasn't been called, falls through
-// to database.GetGlobalStore so the many test paths that wire only
-// the package-level global (via SetGlobalStoreForTest) keep working.
-// Production always calls SetStore from NewServer, so this fallback
-// is dead code outside of tests.
 func getStore() database.Store {
 	pkgStoreMu.RLock()
-	s := pkgStore
-	pkgStoreMu.RUnlock()
-	if s == nil {
-		return database.GetGlobalStore()
-	}
-	return s
+	defer pkgStoreMu.RUnlock()
+	return pkgStore
 }
 
 // globalScanCache is set before a scan and used inside ProcessBooksParallel to

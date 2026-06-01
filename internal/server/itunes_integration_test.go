@@ -1,5 +1,5 @@
 // file: internal/server/itunes_integration_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: e5f6a7b8-c9d0-1234-efab-567890123cde
 
 package server
@@ -51,7 +51,7 @@ func TestITunesImport_FullWorkflow(t *testing.T) {
 	}, xmlPath)
 
 	// Import via HTTP handler
-	server := NewServer(nil)
+	server := NewServer(env.Store)
 	if server.opRegistry != nil {
 		server.opRegistry.Start(context.Background())
 		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
@@ -118,7 +118,7 @@ func TestITunesImport_OrganizeMode(t *testing.T) {
 			FilePath: bookPath, TotalTime: 100000},
 	}, xmlPath)
 
-	server := NewServer(nil)
+	server := NewServer(env.Store)
 	if server.opRegistry != nil {
 		server.opRegistry.Start(context.Background())
 		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
@@ -165,7 +165,7 @@ func TestITunesImport_SkipDuplicates(t *testing.T) {
 			FilePath: bookPath, TotalTime: 50000},
 	}, xmlPath)
 
-	server := NewServer(nil)
+	server := NewServer(env.Store)
 	if server.opRegistry != nil {
 		server.opRegistry.Start(context.Background())
 		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
@@ -214,7 +214,7 @@ func TestITunesWriteBack(t *testing.T) {
 	require.NoError(t, err)
 
 	// Execute write-back via HTTP — ITL is not configured in test, so should return 400
-	server := NewServer(nil)
+	server := NewServer(env.Store)
 	if server.opRegistry != nil {
 		server.opRegistry.Start(context.Background())
 		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
@@ -247,7 +247,7 @@ func TestITunesValidate_Endpoint(t *testing.T) {
 			FilePath: "/nonexistent/missing.m4b", TotalTime: 20000},
 	}, xmlPath)
 
-	server := NewServer(nil)
+	server := NewServer(env.Store)
 	if server.opRegistry != nil {
 		server.opRegistry.Start(context.Background())
 		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })

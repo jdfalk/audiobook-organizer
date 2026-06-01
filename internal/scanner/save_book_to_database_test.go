@@ -1,6 +1,7 @@
 // file: internal/scanner/save_book_to_database_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 0f1e2d3c-4b5a-6978-8899-aabbccddeeff
+// last-edited: 2026-06-01
 
 package scanner
 
@@ -40,8 +41,10 @@ func TestSaveBookToDatabase_GlobalStoreCreateAndUpdate(t *testing.T) {
 
 	prevStore := database.GetGlobalStore()
 	database.SetGlobalStore(store)
+	SetStore(store)
 	t.Cleanup(func() {
 		database.SetGlobalStore(prevStore)
+		SetStore(nil)
 	})
 
 	prevConfig := config.AppConfig
@@ -103,8 +106,10 @@ func TestSaveBookToDatabase_BlocklistSkips(t *testing.T) {
 	defer cleanup()
 	prevStore := database.GetGlobalStore()
 	database.SetGlobalStore(store)
+	SetStore(store)
 	t.Cleanup(func() {
 		database.SetGlobalStore(prevStore)
+		SetStore(nil)
 	})
 
 	prevConfig := config.AppConfig
@@ -169,7 +174,11 @@ func TestSaveBookToDatabase_DedupOnImportHook(t *testing.T) {
 
 	prevStore := database.GetGlobalStore()
 	database.SetGlobalStore(store)
-	t.Cleanup(func() { database.SetGlobalStore(prevStore) })
+	SetStore(store)
+	t.Cleanup(func() {
+		database.SetGlobalStore(prevStore)
+		SetStore(nil)
+	})
 
 	prevConfig := config.AppConfig
 	t.Cleanup(func() { config.AppConfig = prevConfig })
