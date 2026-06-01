@@ -1,6 +1,7 @@
 // file: internal/scanner/unit_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a2b3c4d5-e6f7-8901-abcd-ef2345678901
+// last-edited: 2026-06-01
 
 package scanner
 
@@ -932,7 +933,8 @@ func TestResolveAuthorID(t *testing.T) {
 		store := dbmocks.NewMockStore(t)
 		origStore := database.GetGlobalStore()
 		database.SetGlobalStore(store)
-		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+		SetStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 		store.EXPECT().GetAuthorByName("Stephen King").Return(&database.Author{ID: 42, Name: "Stephen King"}, nil)
 
@@ -946,7 +948,8 @@ func TestResolveAuthorID(t *testing.T) {
 		store := dbmocks.NewMockStore(t)
 		origStore := database.GetGlobalStore()
 		database.SetGlobalStore(store)
-		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+		SetStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 		store.EXPECT().GetAuthorByName("New Author").Return(nil, nil)
 		store.EXPECT().CreateAuthor("New Author").Return(&database.Author{ID: 99, Name: "New Author"}, nil)
@@ -961,7 +964,8 @@ func TestResolveAuthorID(t *testing.T) {
 		store := dbmocks.NewMockStore(t)
 		origStore := database.GetGlobalStore()
 		database.SetGlobalStore(store)
-		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+		SetStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 		store.EXPECT().GetAuthorByName("Fail Author").Return(nil, fmt.Errorf("db error"))
 
@@ -974,7 +978,8 @@ func TestResolveAuthorID(t *testing.T) {
 		store := dbmocks.NewMockStore(t)
 		origStore := database.GetGlobalStore()
 		database.SetGlobalStore(store)
-		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+		SetStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 		store.EXPECT().GetAuthorByName("Create Fail").Return(nil, nil)
 		store.EXPECT().CreateAuthor("Create Fail").Return(nil, fmt.Errorf("some random error"))
@@ -988,7 +993,8 @@ func TestResolveAuthorID(t *testing.T) {
 		store := dbmocks.NewMockStore(t)
 		origStore := database.GetGlobalStore()
 		database.SetGlobalStore(store)
-		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+		SetStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 		store.EXPECT().GetAuthorByName("Conflict Author").Return(nil, nil).Once()
 		store.EXPECT().CreateAuthor("Conflict Author").Return(nil, fmt.Errorf("UNIQUE constraint failed"))
@@ -1004,7 +1010,8 @@ func TestResolveAuthorID(t *testing.T) {
 		store := dbmocks.NewMockStore(t)
 		origStore := database.GetGlobalStore()
 		database.SetGlobalStore(store)
-		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+		SetStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 		store.EXPECT().GetAuthorByName("Ghost").Return(nil, nil).Once()
 		store.EXPECT().CreateAuthor("Ghost").Return(nil, fmt.Errorf("UNIQUE constraint failed"))
@@ -1019,7 +1026,8 @@ func TestResolveAuthorID(t *testing.T) {
 		store := dbmocks.NewMockStore(t)
 		origStore := database.GetGlobalStore()
 		database.SetGlobalStore(store)
-		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+		SetStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 		store.EXPECT().GetAuthorByName("Vanished").Return(nil, nil).Once()
 		store.EXPECT().CreateAuthor("Vanished").Return(nil, fmt.Errorf("UNIQUE constraint failed"))
@@ -1034,7 +1042,8 @@ func TestResolveAuthorID(t *testing.T) {
 		store := dbmocks.NewMockStore(t)
 		origStore := database.GetGlobalStore()
 		database.SetGlobalStore(store)
-		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+		SetStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 		// "J.B." should become "J. B."
 		store.EXPECT().GetAuthorByName("J. B.").Return(&database.Author{ID: 10, Name: "J. B."}, nil)
@@ -1061,7 +1070,8 @@ func TestResolveSeriesID(t *testing.T) {
 		store := dbmocks.NewMockStore(t)
 		origStore := database.GetGlobalStore()
 		database.SetGlobalStore(store)
-		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+		SetStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 		authorID := 5
 		store.EXPECT().GetSeriesByName("Dune", &authorID).Return(&database.Series{ID: 33, Name: "Dune"}, nil)
@@ -1076,7 +1086,8 @@ func TestResolveSeriesID(t *testing.T) {
 		store := dbmocks.NewMockStore(t)
 		origStore := database.GetGlobalStore()
 		database.SetGlobalStore(store)
-		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+		SetStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 		store.EXPECT().GetSeriesByName("New Series", (*int)(nil)).Return(nil, nil)
 		store.EXPECT().CreateSeries("New Series", (*int)(nil)).Return(&database.Series{ID: 55, Name: "New Series"}, nil)
@@ -1091,7 +1102,8 @@ func TestResolveSeriesID(t *testing.T) {
 		store := dbmocks.NewMockStore(t)
 		origStore := database.GetGlobalStore()
 		database.SetGlobalStore(store)
-		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+		SetStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 		store.EXPECT().GetSeriesByName("Fail", (*int)(nil)).Return(nil, fmt.Errorf("db error"))
 
@@ -1104,7 +1116,8 @@ func TestResolveSeriesID(t *testing.T) {
 		store := dbmocks.NewMockStore(t)
 		origStore := database.GetGlobalStore()
 		database.SetGlobalStore(store)
-		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+		SetStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 		store.EXPECT().GetSeriesByName("Bad", (*int)(nil)).Return(nil, nil)
 		store.EXPECT().CreateSeries("Bad", (*int)(nil)).Return(nil, fmt.Errorf("random error"))
@@ -1118,7 +1131,8 @@ func TestResolveSeriesID(t *testing.T) {
 		store := dbmocks.NewMockStore(t)
 		origStore := database.GetGlobalStore()
 		database.SetGlobalStore(store)
-		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+		SetStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 		store.EXPECT().GetSeriesByName("Conflict", (*int)(nil)).Return(nil, nil).Once()
 		store.EXPECT().CreateSeries("Conflict", (*int)(nil)).Return(nil, fmt.Errorf("UNIQUE constraint failed"))
@@ -1134,7 +1148,8 @@ func TestResolveSeriesID(t *testing.T) {
 		store := dbmocks.NewMockStore(t)
 		origStore := database.GetGlobalStore()
 		database.SetGlobalStore(store)
-		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+		SetStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 		store.EXPECT().GetSeriesByName("Ghost", (*int)(nil)).Return(nil, nil).Once()
 		store.EXPECT().CreateSeries("Ghost", (*int)(nil)).Return(nil, fmt.Errorf("duplicate key value violates"))
@@ -1149,7 +1164,8 @@ func TestResolveSeriesID(t *testing.T) {
 		store := dbmocks.NewMockStore(t)
 		origStore := database.GetGlobalStore()
 		database.SetGlobalStore(store)
-		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+		SetStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 		store.EXPECT().GetSeriesByName("Vanished", (*int)(nil)).Return(nil, nil).Once()
 		store.EXPECT().CreateSeries("Vanished", (*int)(nil)).Return(nil, fmt.Errorf("duplicate key value violates"))
@@ -1349,7 +1365,8 @@ func TestProcessBooksParallelSaveWithScanCacheUpdate(t *testing.T) {
 	store := dbmocks.NewMockStore(t)
 	origStore := database.GetGlobalStore()
 	database.SetGlobalStore(store)
-	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+	SetStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 	oldSaver := saveBook
 	t.Cleanup(func() { saveBook = oldSaver })
@@ -1444,7 +1461,8 @@ func TestSaveBookToDatabaseNewBook(t *testing.T) {
 	store := dbmocks.NewMockStore(t)
 	origStore := database.GetGlobalStore()
 	database.SetGlobalStore(store)
-	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+	SetStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 	store.EXPECT().GetAuthorByName("Author").Return(&database.Author{ID: 1, Name: "Author"}, nil)
 	store.EXPECT().GetSeriesByName(mock.Anything, mock.Anything).Return(nil, nil).Maybe()
@@ -1472,7 +1490,8 @@ func TestSaveBookToDatabaseExistingBook(t *testing.T) {
 	store := dbmocks.NewMockStore(t)
 	origStore := database.GetGlobalStore()
 	database.SetGlobalStore(store)
-	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+	SetStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 	tmp := t.TempDir()
 	fpath := filepath.Join(tmp, "test.m4b")
@@ -1495,7 +1514,8 @@ func TestSaveBookToDatabaseAuthorResolveError(t *testing.T) {
 	store := dbmocks.NewMockStore(t)
 	origStore := database.GetGlobalStore()
 	database.SetGlobalStore(store)
-	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+	SetStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 	store.EXPECT().GetAuthorByName("Bad Author").Return(nil, fmt.Errorf("db error"))
 
@@ -1508,7 +1528,8 @@ func TestSaveBookToDatabaseBookLookupError(t *testing.T) {
 	store := dbmocks.NewMockStore(t)
 	origStore := database.GetGlobalStore()
 	database.SetGlobalStore(store)
-	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+	SetStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 	store.EXPECT().GetAuthorByName(mock.Anything).Return(nil, nil).Maybe()
 	store.EXPECT().GetAllWorks().Return(nil, nil)
@@ -1530,7 +1551,8 @@ func TestSaveBookToDatabaseBlockedHash(t *testing.T) {
 	store := dbmocks.NewMockStore(t)
 	origStore := database.GetGlobalStore()
 	database.SetGlobalStore(store)
-	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+	SetStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 	store.EXPECT().GetAuthorByName(mock.Anything).Return(nil, nil).Maybe()
 	store.EXPECT().GetAllWorks().Return(nil, nil).Maybe()
@@ -1554,7 +1576,8 @@ func TestCreateBookFilesForBookWithStore(t *testing.T) {
 	store := dbmocks.NewMockStore(t)
 	origStore := database.GetGlobalStore()
 	database.SetGlobalStore(store)
-	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+	SetStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 	tmp := t.TempDir()
 	bookPath := filepath.Join(tmp, "book.m4b")
@@ -1580,7 +1603,8 @@ func TestCreateBookFilesForBookExistingFiles(t *testing.T) {
 	store := dbmocks.NewMockStore(t)
 	origStore := database.GetGlobalStore()
 	database.SetGlobalStore(store)
-	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+	SetStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 	store.EXPECT().GetBookByFilePath("/tmp/book.m4b").Return(&database.Book{
 		ID:       "book-1",
@@ -1597,7 +1621,8 @@ func TestCreateBookFilesForBookNotFound(t *testing.T) {
 	store := dbmocks.NewMockStore(t)
 	origStore := database.GetGlobalStore()
 	database.SetGlobalStore(store)
-	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+	SetStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 	store.EXPECT().GetBookByFilePath("/tmp/missing.m4b").Return(nil, nil)
 
@@ -1609,7 +1634,8 @@ func TestCreateBookFilesWithSegmentFiles(t *testing.T) {
 	store := dbmocks.NewMockStore(t)
 	origStore := database.GetGlobalStore()
 	database.SetGlobalStore(store)
-	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+	SetStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 	tmp := t.TempDir()
 	seg1 := filepath.Join(tmp, "seg1.m4b")
@@ -1636,7 +1662,8 @@ func TestSaveBookToDatabaseRelinkByOrgID(t *testing.T) {
 	store := dbmocks.NewMockStore(t)
 	origStore := database.GetGlobalStore()
 	database.SetGlobalStore(store)
-	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+	SetStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 	store.EXPECT().GetAuthorByName(mock.Anything).Return(nil, nil).Maybe()
 	store.EXPECT().GetAllWorks().Return(nil, nil).Maybe()
@@ -1669,7 +1696,8 @@ func TestSaveBookToDatabaseHashDedupAlreadyLinked(t *testing.T) {
 	store := dbmocks.NewMockStore(t)
 	origStore := database.GetGlobalStore()
 	database.SetGlobalStore(store)
-	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+	SetStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore); SetStore(nil) })
 
 	store.EXPECT().GetAuthorByName(mock.Anything).Return(nil, nil).Maybe()
 	store.EXPECT().GetAllWorks().Return(nil, nil)

@@ -1,7 +1,7 @@
 // file: internal/testutil/integration.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-05-07
+// last-edited: 2026-06-01
 
 package testutil
 
@@ -54,10 +54,10 @@ func SetupIntegration(t *testing.T) (*IntegrationEnv, func()) {
 	require.NoError(t, err)
 
 	database.SetGlobalStore(store)
-	// Reset scanner's package-local store so it falls through to the
-	// global we just set. Previous test runs in the same process may
-	// have left a stale pkgStore via scanner.SetStore from NewServer.
-	scanner.SetStore(nil)
+	// Wire the scanner's package-local store to the test store.
+	// Previous test runs in the same process may have left a stale
+	// pkgStore via scanner.SetStore from NewServer.
+	scanner.SetStore(store)
 
 	hub := realtime.NewEventHub()
 	realtime.SetGlobalHub(hub)
@@ -85,6 +85,7 @@ func SetupIntegration(t *testing.T) (*IntegrationEnv, func()) {
 
 	cleanup := func() {
 		database.SetGlobalStore(nil)
+		scanner.SetStore(nil)
 		store.Close()
 		config.AppConfig = origCfg
 	}

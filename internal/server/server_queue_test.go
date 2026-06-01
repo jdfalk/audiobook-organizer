@@ -1,5 +1,5 @@
 // file: internal/server/server_queue_test.go
-// version: 2.0.0
+// version: 2.0.1
 // guid: b1c2d3e4-f5a6-7890-bcde-f01234567890
 // last-edited: 2026-05-11
 
@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
 	dbmocks "github.com/jdfalk/audiobook-organizer/internal/database/mocks"
 	"github.com/stretchr/testify/assert"
 )
@@ -25,9 +24,8 @@ func TestCancelOperation_NilRegistry(t *testing.T) {
 	mockStore.EXPECT().
 		UpdateOperationStatus("test-op-789", "canceled", 0, 0, "force canceled (stale operation)").
 		Return(nil).Once()
-	database.SetGlobalStore(mockStore)
 
-	srv := &Server{router: gin.New()} // opRegistry left nil
+	srv := &Server{router: gin.New(), store: mockStore} // opRegistry left nil
 	srv.setupRoutes()
 
 	req := httptest.NewRequest("DELETE", "/api/v1/operations/test-op-789", nil)

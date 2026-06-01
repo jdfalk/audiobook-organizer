@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers_test.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: 7a3e2f1b-9c4d-4e8a-b6f0-1d5c2a0e3b7f
 // last-edited: 2026-05-03
 
@@ -29,7 +29,7 @@ func setupRatingTestServer(t *testing.T) *Server {
 		database.SetGlobalStore(origStore)
 		store.Close()
 	})
-	srv := NewServer(nil)
+	srv := NewServer(store)
 	return srv
 }
 

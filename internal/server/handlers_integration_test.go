@@ -1,5 +1,5 @@
 // file: internal/server/handlers_integration_test.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 package server
@@ -48,7 +48,7 @@ func setupHandlerTestServer(t *testing.T) *Server {
 		database.SetGlobalStore(oldStore)
 	})
 
-	return NewServer(nil)
+	return NewServer(mockDB)
 }
 
 // TestListWorks_Success tests the listWorks handler with successful response

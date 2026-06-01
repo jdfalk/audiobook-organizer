@@ -263,18 +263,9 @@ type ServerConfig struct {
 	HTTP3Port    string // Optional HTTP/3 port (UDP). If set with TLS, enables HTTP/3
 }
 
-// NewServer creates a new server instance
-// Store returns the database.Store dependency the server was constructed
-// with. Handlers should prefer s.Store() over database.GetGlobalStore(); the
-// global is being phased out per the 4.4 DI migration.
+// Store returns the database.Store dependency the server was constructed with.
 func (s *Server) Store() database.Store {
-	if s.store != nil {
-		return s.store
-	}
-	// Fallback during migration: if s.store wasn't set (older construction
-	// paths, tests that build Server literals), fall back to the package
-	// global so behavior is unchanged.
-	return database.GetGlobalStore()
+	return s.store
 }
 
 // OpRegistry returns the operations registry. Used by the operation-runner
@@ -312,15 +303,10 @@ func NewServer(store database.Store) *Server {
 	// Register metrics (idempotent)
 	metrics.Register()
 
-	// Services below need a concrete Store at construction time, so
-	// resolve a non-nil value here for them. But we only pin the
-	// passed-in store on s.store when the caller provided one — if
-	// the caller passed nil, s.Store() falls through to the package
-	// global dynamically, which matters for tests that swap
-	// database.GetGlobalStore() mid-test.
 	resolvedStore := store
 	if resolvedStore == nil {
-		resolvedStore = database.GetGlobalStore()
+		slog.Error("NewServer called with nil store — this is a programming error; callers must provide a concrete database.Store")
+		os.Exit(1)
 	}
 	// Wire the scanner package's local store so its free helpers
 	// (createBookFilesForBook, saveBookToDatabase, ProcessBooksParallel

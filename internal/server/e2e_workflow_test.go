@@ -1,5 +1,5 @@
 // file: internal/server/e2e_workflow_test.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: c9d0e1f2-a3b4-5678-cdef-901234567012
 
 package server
@@ -45,7 +45,7 @@ func TestE2E_ITunesImportOrganizeWriteBack(t *testing.T) {
 			FilePath: dunePath, TotalTime: 72000000},
 	}, xmlPath)
 
-	server := NewServer(nil)
+	server := NewServer(env.Store)
 	if server.opRegistry != nil {
 		server.opRegistry.Start(context.Background())
 		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })

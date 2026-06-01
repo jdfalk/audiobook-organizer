@@ -1,5 +1,5 @@
 // file: internal/server/entity_tag_handlers_test.go
-// version: 1.0.0
+// version: 1.0.1
 
 package server
 
@@ -32,7 +32,7 @@ func setupEntityTagServer(t *testing.T) (*Server, database.Store) {
 		store.Close()
 	})
 
-	srv := NewServer(nil)
+	srv := NewServer(store)
 	return srv, store
 }
 
