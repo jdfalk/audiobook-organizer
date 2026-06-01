@@ -1,5 +1,5 @@
 // file: web/src/utils/__tests__/activityTagColors.test.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: f1e2d3c4-b5a6-7890-cdef-1234567890ab
 
 import { describe, it, expect } from 'vitest';
@@ -12,9 +12,10 @@ describe('tagChipProps', () => {
     expect(p.label).toBe('metadata-apply');
   });
 
-  it('source: prefix → secondary color', () => {
+  it('source: prefix → default color + custom sx', () => {
     const p = tagChipProps('source:pipeline');
-    expect(p.color).toBe('secondary');
+    expect(p.color).toBe('default');
+    expect(p.sx).toBeDefined();
     expect(p.label).toBe('pipeline');
   });
 
@@ -22,8 +23,11 @@ describe('tagChipProps', () => {
     expect(tagChipProps('outcome:ok').color).toBe('success');
   });
 
-  it('outcome:warn → warning', () => {
-    expect(tagChipProps('outcome:warn').color).toBe('warning');
+  it('outcome:warn → default color + yellow sx + "warning" label', () => {
+    const p = tagChipProps('outcome:warn');
+    expect(p.color).toBe('default');
+    expect(p.sx).toBeDefined();
+    expect(p.label).toBe('warning');
   });
 
   it('outcome:error → error', () => {

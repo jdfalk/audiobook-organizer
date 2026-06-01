@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 2.21.0
+// version: 2.22.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-05-29
 
@@ -202,6 +202,10 @@ type Server struct {
 	indexQueue       chan indexRequest
 	indexQueueMu     sync.RWMutex
 	indexQueueClosed bool
+	// indexWorkerBusy is atomically incremented while the worker processes
+	// an item and decremented when done. Tests use this to synchronize
+	// without relying on timed sleeps.
+	indexWorkerBusy int32
 	http3Server      *http3.Server
 
 	hub              *realtime.EventHub
