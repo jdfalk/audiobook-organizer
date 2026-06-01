@@ -1,6 +1,7 @@
 // file: internal/plugins/maintenance/title_backfill.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+// last-edited: 2026-06-01
 
 package maintenance
 
@@ -11,12 +12,19 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/titleutil"
 	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
 )
 
 type titleBackfillParams struct {
 	DryRun bool `json:"dryRun"`
+}
+
+// pendingUpdate holds a book whose title needs stripping.
+type pendingUpdate struct {
+	book     database.Book
+	newTitle string
 }
 
 func (p *Plugin) titleBackfillDef() sdk.OperationDef {
@@ -54,12 +62,18 @@ func (p *Plugin) runTitleBackfill(ctx context.Context, raw json.RawMessage, repo
 		_ = reporter.Log(slog.LevelInfo, "DRY RUN — no changes will be written")
 	}
 
+	// Phase 1: get real total upfront — O(1) counter lookup in PebbleDB.
+	// Falls back to 0 (indeterminate bar) if the count isn't available.
+	totalBooks, countErr := store.CountBooks()
+	if countErr != nil || totalBooks <= 0 {
+		totalBooks = 0
+	}
+	_ = reporter.UpdateProgress(0, totalBooks, "Phase 1/2: scanning titles…")
+
 	const pageSize = 500
 	offset := 0
-	var totalScanned, totalChanged, totalSkipped, errCount int
-
-	prog := sdk.NewProgress(reporter, 0) // total unknown at start
-	prog.Start("Scanning books for poisoned titles...")
+	var scanned, skipped int
+	var toUpdate []pendingUpdate
 
 	for {
 		if ctx.Err() != nil {
@@ -78,57 +92,75 @@ func (p *Plugin) runTitleBackfill(ctx context.Context, raw json.RawMessage, repo
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			totalScanned++
-
-			// TODO (learning-mode contribution): implement the decision predicate.
-			// Given book.Title (the current stored title), decide:
-			//   1. cleaned := titleutil.StripChapterPrefix(book.Title)
-			//   2. If cleaned == book.Title or cleaned == "" → skip (log at Debug if changed is empty)
-			//   3. Otherwise log "old → new" at Info, and if !params.DryRun call store.UpdateBook
-			//
-			// Constraints to consider:
-			//   - An empty cleaned result means the entire title WAS the prefix (e.g. "03 - ").
-			//     We should NOT write an empty title — skip and warn instead.
-			//   - UpdateBook replaces ALL columns; preserve the rest of the book struct.
-			//     Set book.Title = cleaned before passing &book.
-			//   - Count: totalChanged++ on write (or dry-run would-write); totalSkipped++
-			//     on skip; errCount++ on store error (log Warn, don't abort).
-			//
-			// ~8 lines of code. Fill in below:
+			scanned++
 
 			cleaned := titleutil.StripChapterPrefix(book.Title)
-
 			switch {
 			case cleaned == book.Title:
-				// Nothing to strip — clean title
-				totalSkipped++
+				skipped++
 			case cleaned == "":
-				// Entire title was a prefix — don't blank the title
 				_ = reporter.Log(slog.LevelWarn, fmt.Sprintf(
 					"book %s: title %q stripped to empty, skipping", book.ID, book.Title))
-				totalSkipped++
+				skipped++
 			default:
-				_ = reporter.Log(slog.LevelInfo, fmt.Sprintf(
-					"book %s: %q → %q", book.ID, book.Title, cleaned))
-				totalChanged++
-				if !params.DryRun {
-					book.Title = cleaned
-					if _, err := store.UpdateBook(book.ID, &book); err != nil {
-						_ = reporter.Log(slog.LevelWarn, fmt.Sprintf(
-							"book %s: UpdateBook failed: %v", book.ID, err))
-						errCount++
-						totalChanged-- // didn't actually change
-					}
-				}
+				toUpdate = append(toUpdate, pendingUpdate{book: book, newTitle: cleaned})
 			}
 		}
 
 		offset += len(books)
-		prog.StepN(totalScanned, fmt.Sprintf("Scanned %d books, %d to update so far...", totalScanned, totalChanged))
+
+		// Use real total if available; fall back to scanned so bar moves.
+		total := totalBooks
+		if total == 0 {
+			total = scanned
+		}
+		_ = reporter.UpdateProgress(scanned, total,
+			fmt.Sprintf("Phase 1/2: scanned %d/%d — %d titles to fix", scanned, total, len(toUpdate)))
 
 		if len(books) < pageSize {
 			break
 		}
+	}
+
+	// Phase 2: apply (or preview). We now know exactly how many to change,
+	// so the bar switches to changed/toChange with real percentages.
+	toChange := len(toUpdate)
+	if toChange == 0 {
+		suffix := ""
+		if params.DryRun {
+			suffix = " (dry run)"
+		}
+		result := fmt.Sprintf("Scanned %d books: 0 titles need updating, %d skipped%s", scanned, skipped, suffix)
+		_ = reporter.Log(slog.LevelInfo, result)
+		_ = reporter.UpdateProgress(1, 1, result)
+		return nil
+	}
+
+	_ = reporter.UpdateProgress(0, toChange,
+		fmt.Sprintf("Phase 2/2: updating %d titles…", toChange))
+
+	var changed, errCount int
+	for i, u := range toUpdate {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		_ = reporter.Log(slog.LevelInfo, fmt.Sprintf(
+			"book %s: %q → %q", u.book.ID, u.book.Title, u.newTitle))
+
+		if !params.DryRun {
+			u.book.Title = u.newTitle
+			if _, err := store.UpdateBook(u.book.ID, &u.book); err != nil {
+				_ = reporter.Log(slog.LevelWarn, fmt.Sprintf(
+					"book %s: UpdateBook failed: %v", u.book.ID, err))
+				errCount++
+				continue
+			}
+		}
+		changed++
+
+		_ = reporter.UpdateProgress(i+1, toChange,
+			fmt.Sprintf("Phase 2/2: updated %d/%d titles", i+1, toChange))
 	}
 
 	suffix := ""
@@ -136,9 +168,9 @@ func (p *Plugin) runTitleBackfill(ctx context.Context, raw json.RawMessage, repo
 		suffix = " (dry run — no writes)"
 	}
 	result := fmt.Sprintf("Scanned %d books: %d titles updated, %d skipped, %d errors%s",
-		totalScanned, totalChanged, totalSkipped, errCount, suffix)
+		scanned, changed, skipped, errCount, suffix)
 	_ = reporter.Log(slog.LevelInfo, result)
-	prog.Done(result)
+	_ = reporter.UpdateProgress(toChange, toChange, result)
 
 	if errCount > 0 {
 		return fmt.Errorf("%d UpdateBook errors (see op log for details)", errCount)
