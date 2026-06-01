@@ -1,5 +1,5 @@
 // file: internal/server/user_handlers.go
-// version: 2.2.0
+// version: 2.3.0
 // last-edited: 2026-05-01
 // guid: 2d0e1f8a-3b9c-4a70-b8c5-3d7e0f1b9a99
 //
@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -131,7 +132,7 @@ func (s *Server) handleAcceptInvite(c *gin.Context) {
 		return
 	}
 
-	setSessionCookie(c, sess.ID, sess.ExpiresAt)
+	handlers.SetSessionCookie(c, sess.ID, sess.ExpiresAt)
 	httputil.RespondWithCreated(c, gin.H{"user": user, "session": sess})
 }
 
