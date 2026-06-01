@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/dedup_books.go
-// version: 2.1.1
+// version: 2.2.0
 // guid: a1000010-0000-0000-0000-000000000010
 // last-edited: 2026-05-01
 
@@ -484,7 +484,12 @@ func ddNormalizeDedupTitle(title string) string {
 		return ""
 	}
 	s = strings.ReplaceAll(s, "(unabridged)", "")
-	reLeadNum := regexp.MustCompile(`^\s*(\(\d+[/\-]\d+\)|\d+[\.\-\s])\s*`)
+	// Strip leading chapter markers but require an explicit delimiter (dot, dash,
+	// colon) with surrounding whitespace — NOT a bare "001 Title" where a space
+	// alone follows the number. "001 Title" could be a real title (series position,
+	// box-set index); only "001 - Title", "001. Title", "03: Title", or "(76/85)
+	// Title" are unambiguous chapter markers.
+	reLeadNum := regexp.MustCompile(`^\s*(\(\s*\d+\s*[/\-]\s*\d+\s*\)\s+|\d+\s*[\.\-:]\s+)`)
 	s = reLeadNum.ReplaceAllString(s, "")
 	s = ddNonAlphanumRE.ReplaceAllString(s, " ")
 	fields := strings.FieldsFunc(s, unicode.IsSpace)
