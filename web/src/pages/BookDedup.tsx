@@ -1,7 +1,7 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.26.0
+// version: 3.27.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
-// last-edited: 2026-05-20
+// last-edited: 2026-05-31
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate, Link as RouterLink } from 'react-router-dom';
@@ -2215,6 +2215,7 @@ function AcousticDedupTab() {
   const [scanning, setScanning] = useState(false);
   const [fingerprinting, setFingerprinting] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [statusSeverity, setStatusSeverity] = useState<'info' | 'error'>('info');
   const [page, setPage] = useState(0);
   // Bigger default than 25 and exposes 50/100/250 because 12K candidates at
   // 25/page is 512 clicks — the user understandably refuses to triage that
@@ -2324,6 +2325,7 @@ function AcousticDedupTab() {
       await api.mergeDedupCandidate(candidateId, keepId);
       setCandidates((prev) => prev.filter((c) => c.id !== candidateId));
     } catch (err) {
+      setStatusSeverity('error');
       setStatusMsg(err instanceof Error ? err.message : 'Merge failed');
     } finally {
       setResolving((s) => { const next = new Set(s); next.delete(candidateId); return next; });
@@ -2336,6 +2338,7 @@ function AcousticDedupTab() {
       await api.dismissDedupCandidate(candidateId);
       setCandidates((prev) => prev.filter((c) => c.id !== candidateId));
     } catch (err) {
+      setStatusSeverity('error');
       setStatusMsg(err instanceof Error ? err.message : 'Dismiss failed');
     } finally {
       setResolving((s) => { const next = new Set(s); next.delete(candidateId); return next; });
@@ -2627,7 +2630,7 @@ function AcousticDedupTab() {
         </Typography>
       </Paper>
 
-      {statusMsg && <Alert severity="info" sx={{ mb: 2 }} onClose={() => setStatusMsg(null)}>{statusMsg}</Alert>}
+      {statusMsg && <Alert severity={statusSeverity} sx={{ mb: 2 }} onClose={() => { setStatusMsg(null); setStatusSeverity('info'); }}>{statusMsg}</Alert>}
 
       {loading ? (
         <LinearProgress />
