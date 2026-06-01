@@ -1,5 +1,5 @@
 // file: internal/server/entities_handlers.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: 52cb6f75-cb3e-44e3-bf36-a8bba8a24d21
 //
 // Entity HTTP handlers split out of server.go: works, authors, series,
@@ -209,25 +209,16 @@ func (s *Server) getWorkStats(c *gin.Context) {
 }
 
 func (s *Server) listAuthors(c *gin.Context) {
-	// Check cache first
 	if cached, ok := s.authorsCache.Get("all"); ok {
 		httputil.RespondWithOK(c, cached)
 		return
 	}
-
-	// Cache miss: fetch from service
 	resp, err := s.authorSeriesService.ListAuthorsWithCounts()
 	if err != nil {
 		httputil.InternalError(c, "failed to list authors", err)
 		return
 	}
-
-	// Store in cache
-	s.authorsCache.Set("all", gin.H{
-		"items": resp.Items,
-		"count": resp.Count,
-	})
-
+	s.authorsCache.Set("all", resp)
 	httputil.RespondWithOK(c, resp)
 }
 
@@ -722,25 +713,16 @@ func (s *Server) countSeries(c *gin.Context) {
 }
 
 func (s *Server) listSeries(c *gin.Context) {
-	// Check cache first
 	if cached, ok := s.seriesCache.Get("all"); ok {
 		httputil.RespondWithOK(c, cached)
 		return
 	}
-
-	// Cache miss: fetch from service
 	resp, err := s.authorSeriesService.ListSeriesWithCounts()
 	if err != nil {
 		httputil.InternalError(c, "failed to list series", err)
 		return
 	}
-
-	// Store in cache
-	s.seriesCache.Set("all", gin.H{
-		"items": resp.Items,
-		"count": resp.Count,
-	})
-
+	s.seriesCache.Set("all", resp)
 	httputil.RespondWithOK(c, resp)
 }
 
@@ -1021,10 +1003,7 @@ func (s *Server) warmAuthorsCache() {
 		slog.Info("authors warm-up failed", "err", err)
 		return
 	}
-	s.authorsCache.Set("all", gin.H{
-		"items": result.Items,
-		"count": result.Count,
-	})
+	s.authorsCache.Set("all", result)
 	slog.Info("authors cache warmed", "count", result.Count)
 }
 
@@ -1038,9 +1017,6 @@ func (s *Server) warmSeriesCache() {
 		slog.Info("series warm-up failed", "err", err)
 		return
 	}
-	s.seriesCache.Set("all", gin.H{
-		"items": result.Items,
-		"count": result.Count,
-	})
+	s.seriesCache.Set("all", result)
 	slog.Info("series cache warmed", "count", result.Count)
 }

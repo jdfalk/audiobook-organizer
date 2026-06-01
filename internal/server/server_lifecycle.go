@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.22.0
+// version: 1.23.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-05-20
 
@@ -230,12 +230,8 @@ func (s *Server) Start(cfg ServerConfig) error {
 	// library_state filter) so the user's first load doesn't pay the full
 	// cold-miss cost (~3 min on 50K-book library).
 	go s.warmAudiobookListCache()
-	// DISABLED: authors/series cache warm-ups consume 22.9GB → 69.9GB peak memory in minutes
-	// ListAuthorsWithCounts/ListSeriesWithCounts build massive gin.H response objects
-	// Root cause: returning full response structure in cache instead of just counts
-	// Fix: separate cache storage from API response format
-	// go s.warmAuthorsCache()
-	// go s.warmSeriesCache()
+	go s.warmAuthorsCache()
+	go s.warmSeriesCache()
 
 	s.httpServer = &http.Server{
 		Addr:              fmt.Sprintf("%s:%s", cfg.Host, cfg.Port),

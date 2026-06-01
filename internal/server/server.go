@@ -1,7 +1,7 @@
 // file: internal/server/server.go
-// version: 2.22.0
+// version: 2.23.1
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-05-29
+// last-edited: 2026-06-01
 
 package server
 
@@ -170,8 +170,8 @@ type Server struct {
 	dedupCache             *cache.Cache[gin.H]
 	listCache              *cache.Cache[gin.H]
 	facetsCache            *cache.Cache[gin.H]
-	authorsCache           *cache.Cache[gin.H]
-	seriesCache            *cache.Cache[gin.H]
+	authorsCache           *cache.Cache[*audiobookspkg.AuthorWithCountListResponse]
+	seriesCache            *cache.Cache[*audiobookspkg.SeriesWithCountsResponse]
 	itunesSvc              *itunesservice.Service
 	updater                *updater.Updater
 	updateScheduler        *updater.Scheduler
@@ -343,8 +343,8 @@ func NewServer(store database.Store) *Server {
 		dedupCache:   cache.NewWithLimit[gin.H]("dedup", 24*time.Hour, 1000),
 		listCache:    cache.NewWithLimit[gin.H]("list", 24*time.Hour, 2000),
 		facetsCache:  cache.NewWithLimit[gin.H]("facets", 24*time.Hour, 100),
-		authorsCache: cache.NewWithLimit[gin.H]("authors", 24*time.Hour, 500),
-		seriesCache:  cache.NewWithLimit[gin.H]("series", 24*time.Hour, 500),
+		authorsCache: cache.NewWithLimit[*audiobookspkg.AuthorWithCountListResponse]("authors", 24*time.Hour, 1),
+		seriesCache:  cache.NewWithLimit[*audiobookspkg.SeriesWithCountsResponse]("series", 24*time.Hour, 1),
 		// olService, updater, updateScheduler are container-built;
 		// wireServerFromContainer populates the fields.
 		diagnosticsService: diagnostics.NewService(resolvedStore, nil, config.AppConfig.ITunesLibraryReadPath),
