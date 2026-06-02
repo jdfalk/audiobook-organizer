@@ -15,7 +15,6 @@
 package handlers
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -62,16 +61,10 @@ type OrganizeServicer interface {
 // database is not internal/server, so there is no circular-import risk.
 type OrganizeStore = database.Store
 
-// OrganizeEventPublisher is the narrow interface for publishing lifecycle events
-// from OrganizeHandler.
-type OrganizeEventPublisher interface {
-	Publish(ctx context.Context, event plugin.Event)
-}
-
-// OrganizeWriteBackEnqueuer enqueues a write-back job for a book after rename.
-type OrganizeWriteBackEnqueuer interface {
-	Enqueue(bookID string)
-}
+// OrganizeWriteBackEnqueuer is an alias for the shared WriteBackEnqueuer; kept
+// here so existing call sites that reference OrganizeWriteBackEnqueuer continue
+// to compile without change.
+type OrganizeWriteBackEnqueuer = WriteBackEnqueuer
 
 // -----------------------------------------------------------------------
 // Handler
@@ -88,8 +81,8 @@ type OrganizeHandler struct {
 	renameSvc    RenameServicer
 	previewSvc   OrganizePreviewServicer
 	organizeSvc  OrganizeServicer
-	writeBack    OrganizeWriteBackEnqueuer // may be nil
-	publisher    OrganizeEventPublisher
+	writeBack    WriteBackEnqueuer // may be nil
+	publisher    EventPublisher
 	rootDir      string
 	autoOrganize bool
 }
@@ -101,8 +94,8 @@ func NewOrganizeHandler(
 	renameSvc RenameServicer,
 	previewSvc OrganizePreviewServicer,
 	organizeSvc OrganizeServicer,
-	writeBack OrganizeWriteBackEnqueuer,
-	publisher OrganizeEventPublisher,
+	writeBack WriteBackEnqueuer,
+	publisher EventPublisher,
 	rootDir string,
 	autoOrganize bool,
 ) *OrganizeHandler {
@@ -292,11 +285,13 @@ func (h *OrganizeHandler) OrganizeBook(c *gin.Context) {
 			OldValue:    oldPath,
 			NewValue:    newPath,
 		})
-		h.publisher.Publish(c.Request.Context(), plugin.NewEvent(plugin.EventFileOrganized, book.ID, map[string]any{
-			"old_path":     oldPath,
-			"new_path":     newPath,
-			"operation_id": op.ID,
-		}))
+		if h.publisher != nil {
+			h.publisher.Publish(c.Request.Context(), plugin.NewEvent(plugin.EventFileOrganized, book.ID, map[string]any{
+				"old_path":     oldPath,
+				"new_path":     newPath,
+				"operation_id": op.ID,
+			}))
+		}
 		httputil.RespondWithOK(c, gin.H{
 			"message":      fmt.Sprintf("re-organized: %s → %s", oldPath, newPath),
 			"book_id":      book.ID,
@@ -325,12 +320,14 @@ func (h *OrganizeHandler) OrganizeBook(c *gin.Context) {
 	// NotifyDelugeAfterOrganize; the organize operation already succeeded.
 	deluge.NotifyDelugeAfterOrganize(h.store, book.ID, newPath)
 
-	h.publisher.Publish(c.Request.Context(), plugin.NewEvent(plugin.EventFileOrganized, createdBook.ID, map[string]any{
-		"old_path":         oldPath,
-		"new_path":         newPath,
-		"original_book_id": book.ID,
-		"operation_id":     op.ID,
-	}))
+	if h.publisher != nil {
+		h.publisher.Publish(c.Request.Context(), plugin.NewEvent(plugin.EventFileOrganized, createdBook.ID, map[string]any{
+			"old_path":         oldPath,
+			"new_path":         newPath,
+			"original_book_id": book.ID,
+			"operation_id":     op.ID,
+		}))
+	}
 
 	httputil.RespondWithOK(c, gin.H{
 		"message":          fmt.Sprintf("organized: %s → %s", oldPath, newPath),
