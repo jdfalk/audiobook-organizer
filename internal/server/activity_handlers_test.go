@@ -1,6 +1,9 @@
 // file: internal/server/activity_handlers_test.go
-// version: 2.1.0
+// version: 3.0.0
 // guid: d4e5f6a7-b8c9-0123-defa-234567890123
+
+// Updated for Phase 2 handler extraction: tests now use handlers.ActivityHandler
+// directly instead of *Server methods.
 
 package server
 
@@ -16,12 +19,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // setupActivityTestRouter creates a temporary ActivityStore, wraps it in an
-// ActivityService, mounts the listActivity handler on a minimal gin router,
+// ActivityService, mounts the ListActivity handler on a minimal gin router,
 // and returns the router plus a cleanup function.
 func setupActivityTestRouter(t *testing.T) (*gin.Engine, func()) {
 	t.Helper()
@@ -37,8 +41,8 @@ func setupActivityTestRouter(t *testing.T) (*gin.Engine, func()) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 
-	srv := &Server{activityService: svc}
-	router.GET("/api/v1/activity", srv.listActivity)
+	h := handlers.NewActivityHandler(svc, nil)
+	router.GET("/api/v1/activity", h.ListActivity)
 
 	cleanup := func() {
 		store.Close()
@@ -85,8 +89,8 @@ func TestListActivity_WithFilters(t *testing.T) {
 	svc := activity.NewService(store)
 	gin.SetMode(gin.TestMode)
 	filterRouter := gin.New()
-	srv := &Server{activityService: svc}
-	filterRouter.GET("/api/v1/activity", srv.listActivity)
+	h := handlers.NewActivityHandler(svc, nil)
+	filterRouter.GET("/api/v1/activity", h.ListActivity)
 
 	now := time.Now().UTC()
 
@@ -143,8 +147,8 @@ func TestListActivity_SearchParam(t *testing.T) {
 	svc := activity.NewService(store)
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	srv := &Server{activityService: svc}
-	r.GET("/api/v1/activity", srv.listActivity)
+	h := handlers.NewActivityHandler(svc, nil)
+	r.GET("/api/v1/activity", h.ListActivity)
 
 	now := time.Now().UTC()
 
@@ -195,8 +199,8 @@ func TestListActivitySources(t *testing.T) {
 	svc := activity.NewService(store)
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	srv := &Server{activityService: svc}
-	r.GET("/api/v1/activity/sources", srv.listActivitySources)
+	h := handlers.NewActivityHandler(svc, nil)
+	r.GET("/api/v1/activity/sources", h.ListActivitySources)
 
 	now := time.Now().UTC()
 
@@ -240,6 +244,9 @@ func TestListActivitySources(t *testing.T) {
 	assert.Equal(t, 1, resp.Data.Sources[1].Count)
 }
 
+// operationActivityEntry mirrors the handler-package type for JSON unmarshaling in tests.
+type operationActivityEntry = handlers.OperationActivityEntry
+
 // TestListOperationActivity_FallbackToOpLogs verifies that when the activity
 // store has no rows for an operation, the handler falls back to op_logs_v2 and
 // returns those entries with the correct shape and tags.
@@ -266,9 +273,9 @@ func TestListOperationActivity_FallbackToOpLogs(t *testing.T) {
 	}))
 
 	gin.SetMode(gin.TestMode)
-	srv := &Server{store: sqlStore, activityService: actSvc}
+	h := handlers.NewActivityHandler(actSvc, sqlStore)
 	r := gin.New()
-	r.GET("/api/v1/operations/:id/activity", srv.listOperationActivity)
+	r.GET("/api/v1/operations/:id/activity", h.ListOperationActivity)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/api/v1/operations/"+opID+"/activity", nil)
@@ -278,9 +285,9 @@ func TestListOperationActivity_FallbackToOpLogs(t *testing.T) {
 
 	var resp struct {
 		Data struct {
-			OperationID string                   `json:"operation_id"`
-			Entries     []operationActivityEntry `json:"entries"`
-			Total       int                      `json:"total"`
+			OperationID string                       `json:"operation_id"`
+			Entries     []operationActivityEntry     `json:"entries"`
+			Total       int                          `json:"total"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))

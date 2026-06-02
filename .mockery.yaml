@@ -137,3 +137,24 @@ packages:
     interfaces:
       AuthStore:
       APIKeyHandlerStore:
+      PluginRegistrar:
+      CacheMetricsStore:
+      CacheMetadataStore:
+      ReadingStore:
+      ActivityService:
+      ActivityOpsStore:
+      UserStore:
+      SplitBookOpEnqueuer:
+      SplitBookCandidateStore:
+      MetadataCacheBookStore:
+      MetadataCacheFetchService:
+      WriteBackEnqueuer:
+      EventPublisher:
+      RenameServicer:
+      OrganizePreviewServicer:
+      OrganizeServicer:
+      FilesystemBrowser:
+      ImportPathCreator:
+      FileImporter:
+      FilesystemStore:
+      PlaylistStore:
