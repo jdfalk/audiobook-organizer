@@ -86,7 +86,7 @@ func (h *CacheHandler) HandleCacheStats(c *gin.Context) {
 		return
 	}
 
-	stats := AggregateCacheMetrics(metrics)
+	stats := aggregateCacheMetrics(metrics)
 
 	// Patch DB-backed caches that have no in-memory size gauge.
 	// metadata_fetch lives in PebbleDB; count its keys via prefix scan.
@@ -179,9 +179,9 @@ func (h *CacheHandler) HandleCacheStatsHistory(c *gin.Context) {
 	}{Cache: cacheName, Since: since.UTC().Format(time.RFC3339), Snapshots: snaps})
 }
 
-// AggregateCacheMetrics extracts all audiobook_organizer_cache_* metrics from Prometheus
+// aggregateCacheMetrics extracts all audiobook_organizer_cache_* metrics from Prometheus
 // and builds a CacheStat for each unique cache name.
-func AggregateCacheMetrics(mfs []*io_prometheus_client.MetricFamily) []CacheStat {
+func aggregateCacheMetrics(mfs []*io_prometheus_client.MetricFamily) []CacheStat {
 	// Map from cache name to its aggregated stats
 	statMap := make(map[string]*CacheStat)
 

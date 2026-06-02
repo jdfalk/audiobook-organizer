@@ -107,11 +107,11 @@ func (h *PluginsHandler) EnablePlugin(c *gin.Context) {
 	h.registry.Enable(id)
 
 	// Persist to config.
-	cfg := h.pluginCfgs[id]
-	cfg.Enabled = true
 	if h.pluginCfgs == nil {
 		h.pluginCfgs = make(map[string]config.PluginConfig)
 	}
+	cfg := h.pluginCfgs[id]
+	cfg.Enabled = true
 	h.pluginCfgs[id] = cfg
 
 	httputil.RespondWithOK(c, gin.H{"id": id, "enabled": true})
@@ -130,11 +130,11 @@ func (h *PluginsHandler) DisablePlugin(c *gin.Context) {
 	}
 	h.registry.Disable(id)
 
-	cfg := h.pluginCfgs[id]
-	cfg.Enabled = false
 	if h.pluginCfgs == nil {
 		h.pluginCfgs = make(map[string]config.PluginConfig)
 	}
+	cfg := h.pluginCfgs[id]
+	cfg.Enabled = false
 	h.pluginCfgs[id] = cfg
 
 	httputil.RespondWithOK(c, gin.H{"id": id, "enabled": false})
