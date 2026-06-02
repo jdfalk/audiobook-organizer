@@ -64,12 +64,6 @@ type FilesystemStore interface {
 	UpdateBook(id string, book *database.Book) (*database.Book, error)
 }
 
-// FilesystemEventPublisher is the narrow interface for publishing lifecycle
-// events from FilesystemHandler.
-type FilesystemEventPublisher interface {
-	Publish(ctx context.Context, event plugin.Event)
-}
-
 // -----------------------------------------------------------------------
 // Handler
 // -----------------------------------------------------------------------
@@ -84,8 +78,8 @@ type FilesystemHandler struct {
 	browser      FilesystemBrowser
 	pathCreator  ImportPathCreator
 	fileImporter FileImporter
-	opEnqueuer   SplitBookOpEnqueuer  // may be nil
-	publisher    FilesystemEventPublisher
+	opEnqueuer   SplitBookOpEnqueuer // may be nil
+	publisher    EventPublisher
 	rootDir      string
 	autoOrganize bool
 }
@@ -98,7 +92,7 @@ func NewFilesystemHandler(
 	pathCreator ImportPathCreator,
 	fileImporter FileImporter,
 	opEnqueuer SplitBookOpEnqueuer,
-	publisher FilesystemEventPublisher,
+	publisher EventPublisher,
 	rootDir string,
 	autoOrganize bool,
 ) *FilesystemHandler {
@@ -268,6 +262,9 @@ func (h *FilesystemHandler) AddImportPath(c *gin.Context) {
 			if scanErr == nil {
 				if len(books) > 0 {
 					_ = scanner.ProcessBooks(books, nil)
+					// h.autoOrganize and h.rootDir are snapshot values from construction time.
+					// organizer.NewOrganizer still reads config.AppConfig — these two sources
+					// must be kept in sync by the caller (wireHandlers passes them consistently).
 					if h.autoOrganize && h.rootDir != "" {
 						org := organizer.NewOrganizer(&config.AppConfig)
 						for _, b := range books {
@@ -333,10 +330,12 @@ func (h *FilesystemHandler) ImportFile(c *gin.Context) {
 		return
 	}
 
-	h.publisher.Publish(c.Request.Context(), plugin.NewEvent(plugin.EventBookImported, result.ID, map[string]any{
-		"file_path": result.FilePath,
-		"source":    "import",
-	}))
+	if h.publisher != nil {
+		h.publisher.Publish(c.Request.Context(), plugin.NewEvent(plugin.EventBookImported, result.ID, map[string]any{
+			"file_path": result.FilePath,
+			"source":    "import",
+		}))
+	}
 
 	httputil.RespondWithCreated(c, result)
 }

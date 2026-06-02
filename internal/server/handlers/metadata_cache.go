@@ -43,21 +43,19 @@ type MetadataCacheFetchService interface {
 	InvalidateCachedCandidates(bookID string) error
 }
 
-// MetadataCacheWriteBackEnqueuer is the narrow interface for enqueueing
-// write-back jobs after metadata is applied.
-type MetadataCacheWriteBackEnqueuer interface {
-	Enqueue(bookID string)
-}
+// MetadataCacheWriteBackEnqueuer is an alias for the shared WriteBackEnqueuer;
+// kept here so existing call sites continue to compile without change.
+type MetadataCacheWriteBackEnqueuer = WriteBackEnqueuer
 
 // MetadataCacheHandler handles the persistent metadata-cache HTTP endpoints.
 type MetadataCacheHandler struct {
 	store   MetadataCacheBookStore
 	svc     MetadataCacheFetchService
-	batcher MetadataCacheWriteBackEnqueuer // may be nil
+	batcher WriteBackEnqueuer // may be nil
 }
 
 // NewMetadataCacheHandler constructs a MetadataCacheHandler.
-func NewMetadataCacheHandler(store MetadataCacheBookStore, svc MetadataCacheFetchService, batcher MetadataCacheWriteBackEnqueuer) *MetadataCacheHandler {
+func NewMetadataCacheHandler(store MetadataCacheBookStore, svc MetadataCacheFetchService, batcher WriteBackEnqueuer) *MetadataCacheHandler {
 	return &MetadataCacheHandler{store: store, svc: svc, batcher: batcher}
 }
 
