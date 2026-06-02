@@ -34,9 +34,10 @@ type ActivityOpsStore interface {
 	GetOpLogsV2(opID string, limit int) ([]database.OpLogV2Row, error)
 }
 
-// operationActivityEntry is the unified response shape for a single
+// OperationActivityEntry is the unified response shape for a single
 // chronological event inside an operation transcript.
-type operationActivityEntry struct {
+// Exported so tests outside the handlers package can unmarshal the response.
+type OperationActivityEntry struct {
 	Timestamp     time.Time `json:"timestamp"`
 	Level         string    `json:"level"`
 	OperationID   string    `json:"operation_id"`
@@ -45,6 +46,9 @@ type operationActivityEntry struct {
 	Details       string    `json:"details,omitempty"`
 	Tags          []string  `json:"tags,omitempty"`
 }
+
+// operationActivityEntry is an alias for the exported type, used internally.
+type operationActivityEntry = OperationActivityEntry
 
 // ActivityHandler handles activity-log HTTP endpoints.
 type ActivityHandler struct {

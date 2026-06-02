@@ -73,13 +73,23 @@ type PlaylistStore interface {
 
 // PlaylistHandler handles all /playlists routes.
 type PlaylistHandler struct {
-	store       PlaylistStore
-	searchIndex *search.BleveIndex // may be nil — smart playlists return 503 when nil
+	store      PlaylistStore
+	indexFn    func() *search.BleveIndex // lazily resolved — smart playlists return 503 when nil
 }
 
 // NewPlaylistHandler constructs a PlaylistHandler.
+// searchIndexFn is called at request time so the handler works correctly
+// when the search index is opened after construction (e.g. in Start()).
+// Pass nil or a function that returns nil to disable smart-playlist evaluation.
 func NewPlaylistHandler(store PlaylistStore, searchIndex *search.BleveIndex) *PlaylistHandler {
-	return &PlaylistHandler{store: store, searchIndex: searchIndex}
+	fn := func() *search.BleveIndex { return searchIndex }
+	return &PlaylistHandler{store: store, indexFn: fn}
+}
+
+// NewPlaylistHandlerWithGetter constructs a PlaylistHandler with a lazy index getter.
+// Use this when the search index is set after construction (e.g. in tests).
+func NewPlaylistHandlerWithGetter(store PlaylistStore, indexFn func() *search.BleveIndex) *PlaylistHandler {
+	return &PlaylistHandler{store: store, indexFn: indexFn}
 }
 
 // -----------------------------------------------------------------------
@@ -162,7 +172,7 @@ func (h *PlaylistHandler) GetPlaylist(c *gin.Context) {
 		resp["book_ids"] = pl.BookIDs
 	case database.UserPlaylistTypeSmart:
 		bookIDs, evalErr := playlist.EvaluateSmartPlaylist(
-			h.store, h.searchIndex,
+			h.store, h.indexFn(),
 			pl.Query, pl.SortJSON, pl.Limit,
 			CallingUserID(c),
 		)
@@ -382,7 +392,7 @@ func (h *PlaylistHandler) MaterializePlaylist(c *gin.Context) {
 		return
 	}
 	bookIDs, evalErr := playlist.EvaluateSmartPlaylist(
-		h.store, h.searchIndex,
+		h.store, h.indexFn(),
 		src.Query, src.SortJSON, src.Limit,
 		CallingUserID(c),
 	)

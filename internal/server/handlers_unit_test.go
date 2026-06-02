@@ -24,6 +24,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -813,17 +814,18 @@ func TestHandler_FactoryReset_NoBody(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-// =============== handleGetPosition ===============
+// =============== handleGetPosition (now ReadingHandler.GetPosition) ===============
 
 func TestHandler_GetPosition_Success(t *testing.T) {
-	srv, mockStore, router := setupHandlerTest(t)
+	_, mockStore, router := setupHandlerTest(t)
 
 	pos := &database.UserPosition{
 		UserID: "_local", BookID: "b1", SegmentID: "seg1", PositionSeconds: 123.5,
 	}
 	mockStore.EXPECT().GetUserPosition("_local", "b1").Return(pos, nil)
 
-	router.GET("/books/:id/position", srv.handleGetPosition)
+	h := handlers.NewReadingHandler(mockStore)
+	router.GET("/books/:id/position", h.GetPosition)
 
 	req := httptest.NewRequest("GET", "/books/b1/position", nil)
 	w := httptest.NewRecorder()
@@ -840,11 +842,12 @@ func TestHandler_GetPosition_Success(t *testing.T) {
 }
 
 func TestHandler_GetPosition_NoneRecorded(t *testing.T) {
-	srv, mockStore, router := setupHandlerTest(t)
+	_, mockStore, router := setupHandlerTest(t)
 
 	mockStore.EXPECT().GetUserPosition("_local", "b2").Return(nil, nil)
 
-	router.GET("/books/:id/position", srv.handleGetPosition)
+	h := handlers.NewReadingHandler(mockStore)
+	router.GET("/books/:id/position", h.GetPosition)
 
 	req := httptest.NewRequest("GET", "/books/b2/position", nil)
 	w := httptest.NewRecorder()
@@ -856,17 +859,18 @@ func TestHandler_GetPosition_NoneRecorded(t *testing.T) {
 	assert.Nil(t, resp["position"])
 }
 
-// =============== handleGetBookState ===============
+// =============== handleGetBookState (now ReadingHandler.GetBookState) ===============
 
 func TestHandler_GetBookState_Success(t *testing.T) {
-	srv, mockStore, router := setupHandlerTest(t)
+	_, mockStore, router := setupHandlerTest(t)
 
 	state := &database.UserBookState{
 		UserID: "_local", BookID: "b1", Status: "in_progress", ProgressPct: 45,
 	}
 	mockStore.EXPECT().GetUserBookState("_local", "b1").Return(state, nil)
 
-	router.GET("/books/:id/state", srv.handleGetBookState)
+	h := handlers.NewReadingHandler(mockStore)
+	router.GET("/books/:id/state", h.GetBookState)
 
 	req := httptest.NewRequest("GET", "/books/b1/state", nil)
 	w := httptest.NewRecorder()

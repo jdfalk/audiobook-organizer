@@ -65,16 +65,18 @@ func TestListAuthorsAndSeries_ReturnsEmptyArrayWhenNil(t *testing.T) {
 }
 
 func TestImportPaths_ListNilAndRemoveInvalidID(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-
+	// Phase 2: filesystemH captures the store at wireHandlers time, so we must
+	// inject the mock store before constructing the server via setupTestServerWithStore.
 	mockStore := dbmocks.NewMockStore(t)
+	mockStore.EXPECT().SetRootDir(mock.Anything).Return()
 	mockStore.EXPECT().GetAllImportPaths().Return(([]database.ImportPath)(nil), nil)
 	mockStore.EXPECT().DeleteImportPath(mock.Anything).Return(nil).Maybe()
+	// Suppress any store calls made during server construction / route registration.
+	mockStore.EXPECT().GetDashboardStats().Return(nil, fmt.Errorf("no stats")).Maybe()
+	mockStore.EXPECT().CountBooksByPathPrefix(mock.Anything).Return(0, nil).Maybe()
 
-	origStore := server.store
-	server.store = mockStore
-	t.Cleanup(func() { server.store = origStore })
+	server, cleanup := setupTestServerWithStore(t, mockStore)
+	defer cleanup()
 
 	// listImportPaths should return [] not null.
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/import-paths", nil)

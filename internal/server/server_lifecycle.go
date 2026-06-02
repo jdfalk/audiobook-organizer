@@ -912,14 +912,10 @@ func (s *Server) setupRoutes() {
 	api := s.router.Group("/api/v1")
 	api.Use(apiRateLimiter, bodyLimitMiddleware)
 	{
-		s.wireHandlers(api, authMiddleware)
-
-		// Public cache stats endpoint (no auth required)
-		api.GET("/cache/stats", s.handleCacheStats)
-		api.GET("/cache/stats/history", s.handleCacheStatsHistory)
-
 		protected := api.Group("")
 		protected.Use(authMiddleware)
+
+		s.wireHandlers(api, authMiddleware, protected)
 		{
 			// Audiobook routes
 			protected.GET("/audiobooks", s.perm(auth.PermLibraryView), s.listAudiobooks)
@@ -1051,22 +1047,6 @@ func (s *Server) setupRoutes() {
 			protected.POST("/dedup/embed", s.perm(auth.PermScanTrigger), s.triggerEmbedScan)
 			protected.POST("/dedup/embed-async", s.perm(auth.PermScanTrigger), s.triggerEmbedAsync)
 
-			// MAYDEPLOY-G2/G4: split-book backfill (chapter-cluster scrub)
-			protected.POST("/dedup/split-book-scan", s.perm(auth.PermScanTrigger), s.triggerSplitBookScan)
-			protected.GET("/dedup/split-book-candidates", s.perm(auth.PermLibraryView), s.listSplitBookCandidates)
-			protected.POST("/dedup/split-book-candidates/:id/merge", s.perm(auth.PermLibraryEditMetadata), s.mergeSplitBookCandidate)
-
-			// File system routes
-			protected.GET("/filesystem/home", s.perm(auth.PermSettingsManage), s.getHomeDirectory)
-			protected.GET("/filesystem/browse", s.perm(auth.PermSettingsManage), s.browseFilesystem)
-			protected.POST("/filesystem/exclude", s.perm(auth.PermSettingsManage), s.createExclusion)
-			protected.DELETE("/filesystem/exclude", s.perm(auth.PermSettingsManage), s.removeExclusion)
-
-			// Import path routes
-			protected.GET("/import-paths", s.perm(auth.PermSettingsManage), s.listImportPaths)
-			protected.POST("/import-paths", s.perm(auth.PermSettingsManage), s.addImportPath)
-			protected.DELETE("/import-paths/:id", s.perm(auth.PermSettingsManage), s.removeImportPath)
-
 			// Operation routes
 			protected.GET("/operations", s.perm(auth.PermLibraryView), s.listOperations)
 			// UOS-14: /operations/active and /operations/recent are removed — return 410 Gone.
@@ -1096,7 +1076,6 @@ func (s *Server) setupRoutes() {
 			protected.GET("/operations/:id/results", s.perm(auth.PermLibraryView), s.handleGetOperationResults)
 			protected.GET("/operations/:id/status", s.perm(auth.PermLibraryView), s.getOperationStatus)
 			protected.GET("/operations/:id/logs", s.perm(auth.PermLibraryView), s.getOperationLogs)
-			protected.GET("/operations/:id/activity", s.perm(auth.PermLibraryView), s.listOperationActivity)
 			protected.GET("/operations/:id/result", s.perm(auth.PermLibraryView), s.getOperationResult)
 			protected.DELETE("/operations/:id", s.perm(auth.PermSettingsManage), s.cancelOperation)
 			protected.POST("/operations/clear-stale", s.perm(auth.PermSettingsManage), s.clearStaleOperations)
@@ -1120,7 +1099,6 @@ func (s *Server) setupRoutes() {
 			protected.POST("/operations/:id/revert", s.perm(auth.PermLibraryOrganize), s.revertOperation)
 
 			// Import routes
-			protected.POST("/import/file", s.perm(auth.PermScanTrigger), s.importFile)
 			protected.POST("/import/collision-preview", s.perm(auth.PermLibraryView), s.handleImportCollisionPreview)
 
 			// iTunes import routes
@@ -1194,14 +1172,7 @@ func (s *Server) setupRoutes() {
 			adminOnly.Use(servermiddleware.RequireAdmin())
 			{
 				adminOnly.POST("/maintenance/wipe", s.handleWipe)
-				adminOnly.GET("/cache/stats/keys", s.handleCacheKeysIntrospection)
-				adminOnly.POST("/admin/recompact-digests", s.recompactDigests)
 			}
-
-			// Unified activity log
-			protected.GET("/activity", s.perm(auth.PermLibraryView), s.listActivity)
-			protected.GET("/activity/sources", s.perm(auth.PermLibraryView), s.listActivitySources)
-			protected.POST("/activity/compact", s.perm(auth.PermSettingsManage), s.compactActivity)
 
 			// Policy routes
 			protected.GET("/policy/tags", s.perm(auth.PermLibraryView), s.handlePolicyTags)
@@ -1244,30 +1215,14 @@ func (s *Server) setupRoutes() {
 			protected.POST("/metadata/batch-unreject-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleUnrejectCandidates)
 			protected.POST("/audiobooks/:id/fetch-metadata", s.perm(auth.PermLibraryEditMetadata), s.fetchAudiobookMetadata)
 			protected.POST("/audiobooks/:id/search-metadata", s.perm(auth.PermLibraryEditMetadata), s.searchAudiobookMetadata)
-			// METADATA-CACHED-MATCHER: list every book that has a cached
-			// candidate set. Powers the Review popup without enumerating
-			// the operation log.
-			protected.GET("/audiobooks/metadata/cached", s.perm(auth.PermLibraryView), s.listCachedCandidates)
-			// Task 12: cache-sourced review list, batch-apply, and unreject.
-			protected.GET("/audiobooks/metadata/cache/review", s.perm(auth.PermLibraryView), s.getCacheReviewResults)
-			protected.POST("/audiobooks/metadata/batch-apply-cached", s.perm(auth.PermLibraryEditMetadata), s.batchApplyFromCache)
 			protected.POST("/audiobooks/:id/apply-metadata", s.perm(auth.PermLibraryEditMetadata), s.applyAudiobookMetadata)
 			protected.POST("/audiobooks/:id/mark-no-match", s.perm(auth.PermLibraryEditMetadata), s.markAudiobookNoMatch)
-			protected.POST("/audiobooks/:id/clear-no-match", s.perm(auth.PermLibraryEditMetadata), s.clearMetadataNoMatch)
 			protected.POST("/audiobooks/:id/revert-metadata", s.perm(auth.PermLibraryEditMetadata), s.revertAudiobookMetadata)
 			protected.GET("/audiobooks/:id/metadata-rejections", s.perm(auth.PermLibraryView), s.handleGetMetadataRejections)
 			protected.GET("/audiobooks/:id/similar", s.perm(auth.PermLibraryView), s.handleSimilarBooks)
 			protected.GET("/audiobooks/:id/cow-versions", s.perm(auth.PermLibraryView), s.listBookCOWVersions)
 			protected.POST("/audiobooks/:id/cow-versions/prune", s.perm(auth.PermLibraryEditMetadata), s.pruneBookCOWVersions)
 			protected.POST("/audiobooks/:id/write-back", s.perm(auth.PermLibraryEditMetadata), s.writeBackAudiobookMetadata)
-
-			// Rename preview and apply
-			protected.POST("/audiobooks/:id/rename/preview", s.perm(auth.PermLibraryOrganize), s.previewRename)
-			protected.POST("/audiobooks/:id/rename/apply", s.perm(auth.PermLibraryOrganize), s.applyRename)
-
-			// Organize preview and execute (single book)
-			protected.GET("/audiobooks/:id/preview-organize", s.perm(auth.PermLibraryOrganize), s.previewOrganize)
-			protected.POST("/audiobooks/:id/organize", s.perm(auth.PermLibraryOrganize), s.organizeBook)
 
 			// AI-powered parsing routes
 			protected.POST("/ai/parse-filename", s.perm(auth.PermLibraryEditMetadata), s.parseFilenameWithAI)
@@ -1338,24 +1293,10 @@ func (s *Server) setupRoutes() {
 
 			// Bench routes (only available with -tags bench)
 			s.setupUserTagRoutes(protected)
-			s.registerReadingRoutes(protected)
-			s.registerPlaylistRoutes(protected)
-			s.registerUserAdminRoutes(protected)
 			s.registerVersionLifecycleRoutes(protected)
 			s.registerEntityTagRoutes(protected)
 			s.registerDelugeRoutes(protected)
 			s.setupBenchRoutes(protected)
-
-			// Plugin management API
-			plugins := protected.Group("/plugins")
-			{
-				plugins.GET("", s.perm(auth.PermSettingsManage), s.listPlugins)
-				plugins.GET("/:id", s.perm(auth.PermSettingsManage), s.getPlugin)
-				plugins.POST("/:id/enable", s.perm(auth.PermSettingsManage), s.enablePlugin)
-				plugins.POST("/:id/disable", s.perm(auth.PermSettingsManage), s.disablePlugin)
-				plugins.GET("/:id/health", s.perm(auth.PermSettingsManage), s.pluginHealth)
-				plugins.PUT("/:id/settings", s.perm(auth.PermSettingsManage), s.updatePluginSettings)
-			}
 		}
 	}
 

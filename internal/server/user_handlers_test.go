@@ -170,14 +170,6 @@ func TestHandleListInvites(t *testing.T) {
 	}
 }
 
-func TestGenerateToken(t *testing.T) {
-	t1 := generateToken()
-	t2 := generateToken()
-
-	if t1 == "" || len(t1) != 64 { // 32 bytes = 64 hex chars
-		t.Errorf("unexpected token length: %d", len(t1))
-	}
-	if t1 == t2 {
-		t.Error("tokens should be unique")
-	}
-}
+// TestGenerateToken was removed in Phase 2: generateToken moved to
+// internal/server/handlers/user.go (unexported). It is covered by
+// the handler-level invite tests in that package.

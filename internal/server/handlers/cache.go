@@ -179,6 +179,12 @@ func (h *CacheHandler) HandleCacheStatsHistory(c *gin.Context) {
 	}{Cache: cacheName, Since: since.UTC().Format(time.RFC3339), Snapshots: snaps})
 }
 
+// AggregateCacheMetrics is the exported wrapper around aggregateCacheMetrics,
+// used by server-level helpers (e.g. runCacheStatsSnapshotter) outside this package.
+func AggregateCacheMetrics(mfs []*io_prometheus_client.MetricFamily) []CacheStat {
+	return aggregateCacheMetrics(mfs)
+}
+
 // aggregateCacheMetrics extracts all audiobook_organizer_cache_* metrics from Prometheus
 // and builds a CacheStat for each unique cache name.
 func aggregateCacheMetrics(mfs []*io_prometheus_client.MetricFamily) []CacheStat {

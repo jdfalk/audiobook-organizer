@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 )
 
 func TestActivity_Integration_RecordAndHTTPQuery(t *testing.T) {
@@ -31,8 +32,8 @@ func TestActivity_Integration_RecordAndHTTPQuery(t *testing.T) {
 	svc := activity.NewService(store)
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	srv := &Server{activityService: svc}
-	r.GET("/api/v1/activity", srv.listActivity)
+	h := handlers.NewActivityHandler(svc, nil)
+	r.GET("/api/v1/activity", h.ListActivity)
 
 	// Simulate an iTunes sync writing activity
 	_ = svc.Record(database.ActivityEntry{

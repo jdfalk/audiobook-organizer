@@ -11,9 +11,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"context"
+	"fmt"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/batch"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/fileops"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	"github.com/jdfalk/audiobook-organizer/internal/work"
 )
 
@@ -231,16 +236,26 @@ func TestListSeries_Success(t *testing.T) {
 	}
 }
 
-// TestBrowseFilesystem_NoPath tests the browseFilesystem handler without path
+// errBrowser is a minimal FilesystemBrowser that returns an error for any path.
+type errBrowser struct{ err error }
+
+func (b *errBrowser) BrowseDirectory(_ context.Context, _ string) (*fileops.BrowseResult, error) {
+	return nil, b.err
+}
+func (b *errBrowser) CreateExclusion(_ context.Context, _ string) error { return nil }
+func (b *errBrowser) RemoveExclusion(_ context.Context, _ string) error { return nil }
+
+// TestBrowseFilesystem_NoPath tests the BrowseFilesystem handler without path.
 func TestBrowseFilesystem_NoPath(t *testing.T) {
-	server := setupHandlerTestServer(t)
+	browser := &errBrowser{err: fmt.Errorf("path is required")}
+	h := handlers.NewFilesystemHandler(nil, browser, nil, nil, nil, nil, "", false)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/browse?path=", nil)
 	c, _ := gin.CreateTestContext(w)
 	c.Request = req
 
-	server.browseFilesystem(c)
+	h.BrowseFilesystem(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400, got %d", w.Code)
