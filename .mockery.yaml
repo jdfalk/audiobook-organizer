@@ -214,3 +214,14 @@ packages:
       MergeService:
       DedupEngine:
       OperationsRegistry:
+  github.com/jdfalk/audiobook-organizer/internal/server/handlers/duplicates:
+    config:
+      dir: internal/server/handlers/duplicates/mocks
+      filename: "mock_{{.InterfaceName | snakecase}}.go"
+      pkgname: duplicatesmocks
+    interfaces:
+      DuplicatesStore:
+      MergeService:
+      MetadataFetchService:
+      AudiobookService:
+      OperationsRegistry:

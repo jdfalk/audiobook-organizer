@@ -925,11 +925,8 @@ func (s *Server) setupRoutes() {
 			// /audiobooks/search removed — use GET /audiobooks?search= instead
 			protected.GET("/audiobooks/count", s.perm(auth.PermLibraryView), s.countAudiobooks)
 			protected.GET("/audiobooks/facets", s.perm(auth.PermLibraryView), s.audiobookFacets)
-			protected.GET("/audiobooks/duplicates", s.perm(auth.PermLibraryView), s.listDuplicateAudiobooks)
-			protected.GET("/audiobooks/duplicates/scan-results", s.perm(auth.PermLibraryView), s.listBookDuplicateScanResults)
-			protected.POST("/audiobooks/duplicates/scan", s.perm(auth.PermLibraryEditMetadata), s.scanBookDuplicates)
-			protected.POST("/audiobooks/duplicates/merge", s.perm(auth.PermLibraryEditMetadata), s.mergeBookDuplicatesAsVersions)
-			protected.POST("/audiobooks/duplicates/dismiss", s.perm(auth.PermLibraryEditMetadata), s.dismissBookDuplicateGroup)
+			// /audiobooks/duplicates(/scan-results,/scan,/merge,/dismiss) migrated to
+			// the handlers/duplicates sub-package (wire_handlers.go).
 			protected.GET("/audiobooks/quarantined", s.perm(auth.PermLibraryView), s.listQuarantinedBooks)
 			protected.GET("/audiobooks/soft-deleted", s.perm(auth.PermLibraryView), s.listSoftDeletedAudiobooks)
 			protected.DELETE("/audiobooks/purge-soft-deleted", s.perm(auth.PermLibraryDelete), s.purgeSoftDeletedAudiobooks)
@@ -990,21 +987,13 @@ func (s *Server) setupRoutes() {
 			// /authors/:id, /narrators[/count], /audiobooks/:id/narrators,
 			// /series[/count], /series/:id[/books,/name,/split], PATCH /series/:id,
 			// /series/bulk-delete, and the work routes migrated to the
-			// handlers/entities sub-package (wire_handlers.go). The duplicate /
-			// dedup / merge / prune / normalize sibling routes stay here.
-			protected.GET("/authors/duplicates", s.perm(auth.PermLibraryView), s.listDuplicateAuthors)
-			protected.POST("/authors/duplicates/refresh", s.perm(auth.PermLibraryEditMetadata), s.refreshDuplicateAuthors)
+			// handlers/entities sub-package (wire_handlers.go).
+			// /authors/duplicates(/refresh), /audiobooks/merge,
+			// /series/duplicates(/refresh), /series/deduplicate, /series/merge,
+			// /series/prune(/preview), /series/normalize(/preview) and
+			// /dedup/validate migrated to the handlers/duplicates sub-package
+			// (wire_handlers.go).
 			// /authors/duplicates/ai-review[/apply] migrated to AIHandler (wire_handlers.go)
-			protected.POST("/audiobooks/merge", s.perm(auth.PermLibraryEditMetadata), s.mergeBooks)
-			protected.GET("/series/duplicates", s.perm(auth.PermLibraryView), s.listSeriesDuplicates)
-			protected.POST("/series/duplicates/refresh", s.perm(auth.PermLibraryEditMetadata), s.refreshSeriesDuplicates)
-			protected.POST("/series/deduplicate", s.perm(auth.PermLibraryEditMetadata), s.deduplicateSeriesHandler)
-			protected.POST("/series/merge", s.perm(auth.PermLibraryEditMetadata), s.mergeSeriesGroup)
-			protected.GET("/series/prune/preview", s.perm(auth.PermLibraryView), s.seriesPrunePreview)
-			protected.POST("/series/prune", s.perm(auth.PermLibraryEditMetadata), s.seriesPrune)
-			protected.GET("/series/normalize/preview", s.perm(auth.PermLibraryView), s.seriesNormalizePreview)
-			protected.POST("/series/normalize", s.perm(auth.PermLibraryEditMetadata), s.seriesNormalize)
-			protected.POST("/dedup/validate", s.perm(auth.PermLibraryEditMetadata), s.validateDedupEntry)
 
 			// Embedding-based dedup
 			//
