@@ -1,14 +1,15 @@
-// file: internal/server/operations_v2_handlers.go
-// version: 1.3.0
-// guid: e5f6a7b8-c9d0-1e2f-3a4b-5c6d7e8f9a0b
-// last-edited: 2026-06-01
+// file: internal/server/handlers/operations_v2.go
+// version: 1.0.0
+// guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
+// last-edited: 2026-06-03
 
 // UOS-06: SSE event hub, /operations/timeline, single-op introspection,
 // cancel, trigger-op, and /op-defs endpoints.
 
-package server
+package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -18,12 +19,40 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
-	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 )
 
-// handleGetOperationTimeline implements GET /api/v1/operations/timeline?since=15m.
+// OperationsRegistry is the narrow interface OperationsV2Handler requires from
+// the operations registry. It lists only the methods the handlers call.
+type OperationsRegistry interface {
+	GetCurrentItem(opID string) string
+	Cancel(opID string) error
+	EnqueueOp(ctx context.Context, defID string, params any, opts ...opsregistry.EnqueueOption) (string, error)
+	ActiveDefs() []opsregistry.OperationDef
+}
+
+// OperationsEventHub is the narrow interface OperationsV2Handler requires from
+// the operations SSE event bus. Only Subscribe is used.
+type OperationsEventHub interface {
+	Subscribe() (<-chan opsregistry.Event, func())
+}
+
+// OperationsV2Handler handles the UOS-06 operations v2 endpoints: timeline,
+// single-op introspection, cancel, trigger, op-def listing, and the SSE stream.
+type OperationsV2Handler struct {
+	opsStore database.OpsV2Store
+	registry OperationsRegistry
+	hub      OperationsEventHub
+}
+
+// NewOperationsV2Handler constructs an OperationsV2Handler. The opsStore may be
+// nil (the store does not implement OpsV2Store); the handlers guard for it.
+func NewOperationsV2Handler(opsStore database.OpsV2Store, registry OperationsRegistry, hub OperationsEventHub) *OperationsV2Handler {
+	return &OperationsV2Handler{opsStore: opsStore, registry: registry, hub: hub}
+}
+
+// GetOperationTimeline implements GET /api/v1/operations/timeline?since=15m.
 // It reads operations from the v2 store that were queued within the given window.
-func (s *Server) handleGetOperationTimeline(c *gin.Context) {
+func (h *OperationsV2Handler) GetOperationTimeline(c *gin.Context) {
 	sinceStr := c.DefaultQuery("since", "15m")
 	dur, err := parseSinceDuration(sinceStr)
 	if err != nil {
@@ -31,24 +60,23 @@ func (s *Server) handleGetOperationTimeline(c *gin.Context) {
 		return
 	}
 
-	store := s.opsV2Store()
-	if store == nil {
-		httputil.RespondWithOK(c, gin.H{"operations": []handlers.OperationV2Response{}})
+	if h.opsStore == nil {
+		httputil.RespondWithOK(c, gin.H{"operations": []OperationV2Response{}})
 		return
 	}
 
 	since := time.Now().UTC().Add(-dur)
-	rows, err := store.ListOperationsV2Since(since, 200)
+	rows, err := h.opsStore.ListOperationsV2Since(since, 200)
 	if err != nil {
 		httputil.InternalError(c, "failed to list operations", err)
 		return
 	}
 
-	resp := make([]handlers.OperationV2Response, 0, len(rows))
+	resp := make([]OperationV2Response, 0, len(rows))
 	for _, r := range rows {
-		item := rowToResponse(r, s.displayNameFor(r.DefID), s.notifyLevelFor(r.DefID))
-		if r.Status == "running" && s.opRegistry != nil {
-			if ci := s.opRegistry.GetCurrentItem(r.ID); ci != "" {
+		item := rowToResponse(r, h.displayNameFor(r.DefID), h.notifyLevelFor(r.DefID))
+		if r.Status == "running" && h.registry != nil {
+			if ci := h.registry.GetCurrentItem(r.ID); ci != "" {
 				item.CurrentItem = &ci
 			}
 		}
@@ -57,36 +85,35 @@ func (s *Server) handleGetOperationTimeline(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"operations": resp})
 }
 
-// handleGetOperationV2 implements GET /api/v1/operations/v2/:id.
+// GetOperationV2 implements GET /api/v1/operations/v2/:id.
 // Returns the operation plus its last 50 log lines.
-func (s *Server) handleGetOperationV2(c *gin.Context) {
+func (h *OperationsV2Handler) GetOperationV2(c *gin.Context) {
 	id := c.Param("id")
-	store := s.opsV2Store()
-	if store == nil {
+	if h.opsStore == nil {
 		httputil.RespondWithNotFound(c, "operation", id)
 		return
 	}
 
-	row, err := store.GetOperationV2(id)
+	row, err := h.opsStore.GetOperationV2(id)
 	if err != nil || row == nil {
 		httputil.RespondWithNotFound(c, "operation", id)
 		return
 	}
 
-	logs, err := store.GetOpLogsV2(id, 50)
+	logs, err := h.opsStore.GetOpLogsV2(id, 50)
 	if err != nil {
 		// Non-fatal: return the op without logs.
 		logs = nil
 	}
 
-	logResp := make([]handlers.OpLogV2Response, 0, len(logs))
+	logResp := make([]OpLogV2Response, 0, len(logs))
 	for _, l := range logs {
 		logResp = append(logResp, logRowToResponse(l))
 	}
 
-	opResp := rowToResponse(*row, s.displayNameFor(row.DefID), s.notifyLevelFor(row.DefID))
-	if row.Status == "running" && s.opRegistry != nil {
-		if ci := s.opRegistry.GetCurrentItem(id); ci != "" {
+	opResp := rowToResponse(*row, h.displayNameFor(row.DefID), h.notifyLevelFor(row.DefID))
+	if row.Status == "running" && h.registry != nil {
+		if ci := h.registry.GetCurrentItem(id); ci != "" {
 			opResp.CurrentItem = &ci
 		}
 	}
@@ -96,25 +123,25 @@ func (s *Server) handleGetOperationV2(c *gin.Context) {
 	})
 }
 
-// handleCancelOperationV2 implements DELETE /api/v1/operations/v2/:id.
+// CancelOperationV2 implements DELETE /api/v1/operations/v2/:id.
 // Cancels the operation via the registry (if running) or marks it canceled (if queued).
-func (s *Server) handleCancelOperationV2(c *gin.Context) {
+func (h *OperationsV2Handler) CancelOperationV2(c *gin.Context) {
 	id := c.Param("id")
-	if s.opRegistry == nil {
+	if h.registry == nil {
 		httputil.RespondWithInternalError(c, "operations registry not initialized")
 		return
 	}
-	if err := s.opRegistry.Cancel(id); err != nil {
+	if err := h.registry.Cancel(id); err != nil {
 		httputil.InternalError(c, "cancel failed", err)
 		return
 	}
 	httputil.RespondWithNoContent(c)
 }
 
-// handleTriggerOperationV2 implements POST /api/v1/operations/v2.
+// TriggerOperationV2 implements POST /api/v1/operations/v2.
 // Body: { "def_id": "...", "params": {...} }
-func (s *Server) handleTriggerOperationV2(c *gin.Context) {
-	if s.opRegistry == nil {
+func (h *OperationsV2Handler) TriggerOperationV2(c *gin.Context) {
+	if h.registry == nil {
 		httputil.RespondWithInternalError(c, "operations registry not initialized")
 		return
 	}
@@ -128,7 +155,7 @@ func (s *Server) handleTriggerOperationV2(c *gin.Context) {
 		return
 	}
 
-	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), body.DefID, body.Params)
+	opID, err := h.registry.EnqueueOp(c.Request.Context(), body.DefID, body.Params)
 	if err != nil {
 		httputil.InternalError(c, "enqueue failed", err)
 		return
@@ -137,29 +164,29 @@ func (s *Server) handleTriggerOperationV2(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gin.H{"op_id": opID})
 }
 
-// handleListOpDefs implements GET /api/v1/op-defs.
+// ListOpDefs implements GET /api/v1/op-defs.
 // Returns the set of registered OperationDefs.
-func (s *Server) handleListOpDefs(c *gin.Context) {
-	if s.opRegistry == nil {
-		httputil.RespondWithOK(c, gin.H{"defs": []handlers.OpDefResponse{}})
+func (h *OperationsV2Handler) ListOpDefs(c *gin.Context) {
+	if h.registry == nil {
+		httputil.RespondWithOK(c, gin.H{"defs": []OpDefResponse{}})
 		return
 	}
-	defs := s.opRegistry.ActiveDefs()
-	resp := make([]handlers.OpDefResponse, 0, len(defs))
+	defs := h.registry.ActiveDefs()
+	resp := make([]OpDefResponse, 0, len(defs))
 	for _, d := range defs {
 		resp = append(resp, defToResponse(d))
 	}
 	httputil.RespondWithOK(c, gin.H{"defs": resp})
 }
 
-// handleGetOpDef implements GET /api/v1/op-defs/:id.
-func (s *Server) handleGetOpDef(c *gin.Context) {
+// GetOpDef implements GET /api/v1/op-defs/:id.
+func (h *OperationsV2Handler) GetOpDef(c *gin.Context) {
 	id := c.Param("id")
-	if s.opRegistry == nil {
+	if h.registry == nil {
 		httputil.RespondWithNotFound(c, "op-def", id)
 		return
 	}
-	for _, d := range s.opRegistry.ActiveDefs() {
+	for _, d := range h.registry.ActiveDefs() {
 		if d.ID == id {
 			httputil.RespondWithOK(c, gin.H{"def": defToResponse(d)})
 			return
@@ -168,16 +195,16 @@ func (s *Server) handleGetOpDef(c *gin.Context) {
 	httputil.RespondWithNotFound(c, "op-def", id)
 }
 
-// handleOperationsSSE implements GET /api/v1/operations/events.
+// OperationsSSE implements GET /api/v1/operations/events.
 // Streams SSE events from the opHub to the client until the client disconnects.
-func (s *Server) handleOperationsSSE(c *gin.Context) {
-	if s.opHub == nil {
+func (h *OperationsV2Handler) OperationsSSE(c *gin.Context) {
+	if h.hub == nil {
 		// Hub not initialised; return 503 rather than hanging.
 		httputil.RespondWithServiceUnavailable(c, "operations event hub not initialized")
 		return
 	}
 
-	ch, unsubscribe := s.opHub.Subscribe()
+	ch, unsubscribe := h.hub.Subscribe()
 	defer unsubscribe()
 
 	// Required SSE headers.
@@ -213,26 +240,13 @@ func (s *Server) handleOperationsSSE(c *gin.Context) {
 
 // --- helpers ---
 
-// opsV2Store returns the OpsV2Store from the server's composite Store, or nil
-// if the store does not implement it.
-func (s *Server) opsV2Store() database.OpsV2Store {
-	if s.Store() == nil {
-		return nil
-	}
-	st, ok := s.Store().(database.OpsV2Store)
-	if !ok {
-		return nil
-	}
-	return st
-}
-
 // displayNameFor looks up the human-readable display name for a def ID.
 // Falls back to the ID itself if the def is not registered.
-func (s *Server) displayNameFor(defID string) string {
-	if s.opRegistry == nil {
+func (h *OperationsV2Handler) displayNameFor(defID string) string {
+	if h.registry == nil {
 		return defID
 	}
-	for _, d := range s.opRegistry.ActiveDefs() {
+	for _, d := range h.registry.ActiveDefs() {
 		if d.ID == defID {
 			return d.DisplayName
 		}
@@ -242,11 +256,11 @@ func (s *Server) displayNameFor(defID string) string {
 
 // notifyLevelFor looks up the NotifyLevel for a registered def ID.
 // Returns 0 (NotifyAlert) if the def is not found, preserving old behaviour.
-func (s *Server) notifyLevelFor(defID string) int {
-	if s.opRegistry == nil {
+func (h *OperationsV2Handler) notifyLevelFor(defID string) int {
+	if h.registry == nil {
 		return 0
 	}
-	for _, d := range s.opRegistry.ActiveDefs() {
+	for _, d := range h.registry.ActiveDefs() {
 		if d.ID == defID {
 			return int(d.NotifyLevel)
 		}
@@ -255,8 +269,8 @@ func (s *Server) notifyLevelFor(defID string) int {
 }
 
 // rowToResponse converts a database.OperationV2Row to the HTTP response shape.
-func rowToResponse(r database.OperationV2Row, displayName string, notifyLevel int) handlers.OperationV2Response {
-	resp := handlers.OperationV2Response{
+func rowToResponse(r database.OperationV2Row, displayName string, notifyLevel int) OperationV2Response {
+	resp := OperationV2Response{
 		ID:           r.ID,
 		DefID:        r.DefID,
 		Plugin:       r.Plugin,
@@ -287,7 +301,7 @@ func rowToResponse(r database.OperationV2Row, displayName string, notifyLevel in
 }
 
 // logRowToResponse converts a database.OpLogV2Row to the HTTP response shape.
-func logRowToResponse(l database.OpLogV2Row) handlers.OpLogV2Response {
+func logRowToResponse(l database.OpLogV2Row) OpLogV2Response {
 	var attrsAny any
 	if l.Attrs != "" && l.Attrs != "{}" {
 		var m map[string]any
@@ -299,7 +313,7 @@ func logRowToResponse(l database.OpLogV2Row) handlers.OpLogV2Response {
 	} else {
 		attrsAny = map[string]any{}
 	}
-	return handlers.OpLogV2Response{
+	return OpLogV2Response{
 		OperationID: l.OperationID,
 		Level:       l.Level,
 		Message:     l.Message,
@@ -309,7 +323,7 @@ func logRowToResponse(l database.OpLogV2Row) handlers.OpLogV2Response {
 }
 
 // defToResponse converts a registry.OperationDef to the HTTP response shape.
-func defToResponse(d opsregistry.OperationDef) handlers.OpDefResponse {
+func defToResponse(d opsregistry.OperationDef) OpDefResponse {
 	triggers := make([]string, 0, len(d.Triggers))
 	for _, t := range d.Triggers {
 		triggers = append(triggers, t.EventName)
@@ -329,7 +343,7 @@ func defToResponse(d opsregistry.OperationDef) handlers.OpDefResponse {
 		rp = "ask"
 	}
 
-	return handlers.OpDefResponse{
+	return OpDefResponse{
 		ID:           d.ID,
 		Plugin:       d.Plugin,
 		DisplayName:  d.DisplayName,

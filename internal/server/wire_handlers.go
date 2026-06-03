@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 	dedupengine "github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
@@ -85,6 +86,15 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 	playlistH := handlers.NewPlaylistHandlerWithGetter(s.Store(), s.SearchIndex)
 	pluginsH := handlers.NewPluginsHandler(s.pluginRegistry, config.AppConfig.Plugins)
 	versionsH := handlers.NewVersionsHandler(s.Store())
+
+	// Resolve the opsV2 store from the composite store (nil if unsupported).
+	var opsV2 database.OpsV2Store
+	if st := s.Store(); st != nil {
+		if v2, ok := st.(database.OpsV2Store); ok {
+			opsV2 = v2
+		}
+	}
+	opsV2H := handlers.NewOperationsV2Handler(opsV2, s.opRegistry, s.opHub)
 
 	// ── Public cache routes (no auth) ────────────────────────────────────────
 	api.GET("/cache/stats", cacheH.HandleCacheStats)
@@ -164,6 +174,15 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 	protected.POST("/audiobooks/:id/split-to-books", s.perm(auth.PermLibraryEditMetadata), versionsH.SplitSegmentsToBooks)
 	protected.POST("/audiobooks/:id/move-segments", s.perm(auth.PermLibraryEditMetadata), versionsH.MoveSegments)
 	protected.GET("/version-groups/:id", s.perm(auth.PermLibraryView), versionsH.GetVersionGroup)
+
+	// Operations v2 (UOS-06)
+	protected.GET("/operations/timeline", s.perm(auth.PermLibraryView), opsV2H.GetOperationTimeline)
+	protected.GET("/operations/events", s.perm(auth.PermLibraryView), opsV2H.OperationsSSE)
+	protected.GET("/operations/v2/:id", s.perm(auth.PermLibraryView), opsV2H.GetOperationV2)
+	protected.DELETE("/operations/v2/:id", s.perm(auth.PermSettingsManage), opsV2H.CancelOperationV2)
+	protected.POST("/operations/v2", s.perm(auth.PermScanTrigger), opsV2H.TriggerOperationV2)
+	protected.GET("/op-defs", s.perm(auth.PermLibraryView), opsV2H.ListOpDefs)
+	protected.GET("/op-defs/:id", s.perm(auth.PermLibraryView), opsV2H.GetOpDef)
 
 	// Plugins
 	plugins := protected.Group("/plugins")
