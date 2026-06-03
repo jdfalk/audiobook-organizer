@@ -1,5 +1,5 @@
 // file: internal/server/handlers_integration_test.go
-// version: 1.1.1
+// version: 1.2.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 package server
@@ -19,8 +19,28 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
+	entities "github.com/jdfalk/audiobook-organizer/internal/server/handlers/entities"
 	"github.com/jdfalk/audiobook-organizer/internal/work"
 )
+
+// newEntitiesHandler constructs an entities.Handler from the test server's
+// (real) services + caches. The entities domain handlers were extracted into
+// the handlers/entities sub-package; these integration tests still exercise the
+// real WorkService/AuthorSeriesService → MockStore → JSON-envelope path. The
+// enrichBooks stub is trivial since none of these tests hit the enriching
+// (author/series books) endpoints.
+func newEntitiesHandler(s *Server) *entities.Handler {
+	return entities.New(
+		s.Store(),
+		s.workService,
+		s.authorSeriesService,
+		s.opRegistry,
+		s.authorsCache,
+		s.seriesCache,
+		s.dedupCache,
+		func(b []database.Book) []any { return make([]any, len(b)) },
+	)
+}
 
 // setupHandlerTestServer creates a test server with mock database
 func setupHandlerTestServer(t *testing.T) *Server {
@@ -65,7 +85,8 @@ func TestListWorks_Success(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = req
 
-	server.listWorks(c)
+	h := newEntitiesHandler(server)
+	h.ListWorks(c)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", w.Code)
@@ -108,7 +129,8 @@ func TestCreateWork_Success(t *testing.T) {
 		}
 	}
 
-	server.createWork(c)
+	h := newEntitiesHandler(server)
+	h.CreateWork(c)
 
 	if w.Code != http.StatusCreated {
 		t.Errorf("expected status 201, got %d", w.Code)
@@ -125,7 +147,8 @@ func TestCreateWork_InvalidJSON(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = req
 
-	server.createWork(c)
+	h := newEntitiesHandler(server)
+	h.CreateWork(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400, got %d", w.Code)
@@ -149,7 +172,8 @@ func TestGetWork_Success(t *testing.T) {
 		}
 	}
 
-	server.getWork(c)
+	h := newEntitiesHandler(server)
+	h.GetWork(c)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", w.Code)
@@ -173,7 +197,8 @@ func TestGetWork_NotFound(t *testing.T) {
 		}
 	}
 
-	server.getWork(c)
+	h := newEntitiesHandler(server)
+	h.GetWork(c)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("expected status 404, got %d", w.Code)
@@ -189,7 +214,8 @@ func TestListAuthors_Success(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = req
 
-	server.listAuthors(c)
+	h := newEntitiesHandler(server)
+	h.ListAuthors(c)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", w.Code)
@@ -217,7 +243,8 @@ func TestListSeries_Success(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = req
 
-	server.listSeries(c)
+	h := newEntitiesHandler(server)
+	h.ListSeries(c)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", w.Code)
@@ -311,7 +338,8 @@ func TestDeleteWork_Success(t *testing.T) {
 		}
 	}
 
-	server.deleteWork(c)
+	h := newEntitiesHandler(server)
+	h.DeleteWork(c)
 
 	// c.Status() may return 200 if no response body is written, which is OK
 	// The handler sets status correctly via c.Status()
@@ -334,7 +362,8 @@ func TestUpdateWork_InvalidTitle(t *testing.T) {
 	c.Request = req
 	c.Params = append(c.Params, gin.Param{Key: "id", Value: "1"})
 
-	server.updateWork(c)
+	h := newEntitiesHandler(server)
+	h.UpdateWork(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400, got %d", w.Code)
