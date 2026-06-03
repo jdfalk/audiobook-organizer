@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.09.0 -->
+<!-- version: 3.10.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-06-03 -->
 
@@ -8,6 +8,34 @@
 ## [Unreleased]
 
 ### Changes
+
+#### June 3, 2026 — Handler extraction Phase 4 (system domain)
+
+Continues the ADR-003 server handler refactor. The **system** domain (24 HTTP
+handlers: health, status, announcements, storage, logs, activity-log,
+reset/factory-reset, config get/update, SSE events, backup CRUD, dashboard,
+blocked-hash CRUD, user-preference CRUD, policy-tags, quick-queries) was moved
+out of `internal/server/system_handlers.go` into a new
+`internal/server/handlers/system` sub-package (`package system`) with
+`handler.go` + `interfaces.go`.
+
+- Dependencies reached via narrow interfaces (`SystemStore` listing the exact
+  `database.Store` methods used + embedding `database.SettingsStore` for
+  `config.SaveConfigToDatabase`; `SystemService`; `ConfigUpdateService`;
+  `PluginHealthChecker`; `EventStreamer`; `OperationLogsProvider`), the concrete
+  `*metafetch.OpenLibraryService` (factoryReset reaches its `.Mu`/`.OLStore`
+  fields, which an interface cannot abstract), and four injected funcs
+  (`getDiskStats`, `resetLibrarySizeCache`, `appVersion`,
+  `filterReviewedAuthorGroups`) that wrap server-package helpers / build-tagged
+  functions / mutable package vars staying in package `server`.
+- 22 protected routes moved into `wire_handlers.go` with identical paths +
+  permission guards. The 4 public, unguarded routes (`/health`, `/api/health`,
+  `/api/v1/health`, `/api/events`) stay in `setupRoutes` — registered on
+  `s.router` *before* the `/api/*` redirect middleware — and delegate to the
+  migrated handler via closures, preserving their pre-middleware ordering.
+- `system_handlers.go` deleted; mocks are mockery-generated (`systemmocks`); 39
+  new handler unit tests added. Existing server whitebox tests rewired through a
+  `newSystemHandler(srv)` test constructor.
 
 #### June 3, 2026 — Handler extraction Phase 3 (versions, operations_v2, itunes, ai, diagnostics)
 

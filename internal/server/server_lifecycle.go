@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.29.0
+// version: 1.30.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-06-03
 
@@ -852,13 +852,16 @@ func (s *Server) setupRoutes() {
 	// Prometheus metrics endpoint (standard path)
 	s.router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
-	// Health check endpoint (both paths for compatibility)
-	s.router.GET("/health", s.healthCheck)
-	s.router.GET("/api/health", s.healthCheck)
-	s.router.GET("/api/v1/health", s.healthCheck)
+	// Health check endpoint (both paths for compatibility). Registered here on
+	// s.router BEFORE the /api/* redirect middleware (below) so they keep
+	// bypassing it; they delegate to the migrated system handler, which is wired
+	// later in wireHandlers (always before any request is served).
+	s.router.GET("/health", func(c *gin.Context) { s.systemHandler.HealthCheck(c) })
+	s.router.GET("/api/health", func(c *gin.Context) { s.systemHandler.HealthCheck(c) })
+	s.router.GET("/api/v1/health", func(c *gin.Context) { s.systemHandler.HealthCheck(c) })
 
-	// Real-time events (SSE)
-	s.router.GET("/api/events", s.handleEvents)
+	// Real-time events (SSE). Same pre-middleware-ordering rationale as /health.
+	s.router.GET("/api/events", func(c *gin.Context) { s.systemHandler.HandleEvents(c) })
 
 	// Public temp-login consumer at the root so URLs are short and
 	// browser-friendly. Validates the token, deletes it (single-use),
@@ -969,10 +972,8 @@ func (s *Server) setupRoutes() {
 			protected.POST("/audiobooks/:id/alternative-titles", s.perm(auth.PermLibraryEditMetadata), s.addBookAlternativeTitle)
 			protected.DELETE("/audiobooks/:id/alternative-titles", s.perm(auth.PermLibraryDelete), s.removeBookAlternativeTitle)
 
-			// User preferences
-			protected.GET("/preferences/:key", s.perm(auth.PermLibraryView), s.getUserPreference)
-			protected.PUT("/preferences/:key", s.perm(auth.PermLibraryEditMetadata), s.setUserPreference)
-			protected.DELETE("/preferences/:key", s.perm(auth.PermLibraryDelete), s.deleteUserPreference)
+			// User preferences migrated to the handlers/system sub-package
+			// (wireHandlers).
 
 			// Metadata change history
 			protected.GET("/audiobooks/:id/metadata-history", s.perm(auth.PermLibraryView), s.getBookMetadataHistory)
@@ -1138,26 +1139,8 @@ func (s *Server) setupRoutes() {
 				adminOnly.POST("/maintenance/wipe", s.handleWipe)
 			}
 
-			// Policy routes
-			protected.GET("/policy/tags", s.perm(auth.PermLibraryView), s.handlePolicyTags)
-
-			// System routes
-			protected.GET("/system/status", s.perm(auth.PermSettingsManage), s.getSystemStatus)
-			protected.GET("/system/announcements", s.perm(auth.PermSettingsManage), s.getSystemAnnouncements)
-			protected.GET("/system/storage", s.perm(auth.PermSettingsManage), s.getSystemStorage)
-			protected.GET("/system/logs", s.perm(auth.PermSettingsManage), s.getSystemLogs)
-			protected.GET("/system/activity-log", s.perm(auth.PermSettingsManage), s.getSystemActivityLog)
-			protected.POST("/system/reset", s.perm(auth.PermSettingsManage), s.resetSystem)
-			protected.POST("/system/factory-reset", s.perm(auth.PermSettingsManage), s.factoryReset)
-			protected.GET("/config", s.perm(auth.PermSettingsManage), s.getConfig)
-			protected.PUT("/config", s.perm(auth.PermSettingsManage), s.updateConfig)
-			protected.GET("/dashboard", s.perm(auth.PermLibraryView), s.getDashboard)
-
-			// Backup routes
-			protected.POST("/backup/create", s.perm(auth.PermSettingsManage), s.createBackup)
-			protected.GET("/backup/list", s.perm(auth.PermSettingsManage), s.listBackups)
-			protected.POST("/backup/restore", s.perm(auth.PermSettingsManage), s.restoreBackup)
-			protected.DELETE("/backup/:filename", s.perm(auth.PermSettingsManage), s.deleteBackup)
+			// Policy, system, config, dashboard, and backup routes migrated to the
+			// handlers/system sub-package (wireHandlers).
 
 			// Enhanced metadata routes
 			protected.POST("/metadata/batch-update", s.perm(auth.PermLibraryEditMetadata), s.batchUpdateMetadata)
@@ -1173,7 +1156,8 @@ func (s *Server) setupRoutes() {
 			// Returns books with their latest fetch status + by_status counts; supports
 			// repeatable ?status= filtering for the Library page toggles + Resume Review.
 			protected.GET("/library/metadata-results", s.perm(auth.PermLibraryView), s.handleListMetadataResults)
-			protected.GET("/library/quick-queries", s.perm(auth.PermLibraryView), s.getQuickQueries)
+			// /library/quick-queries migrated to the handlers/system sub-package
+			// (wireHandlers).
 			protected.POST("/metadata/batch-apply-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleBatchApplyCandidates)
 			protected.POST("/metadata/batch-reject-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleRejectCandidates)
 			protected.POST("/metadata/batch-unreject-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleUnrejectCandidates)
@@ -1210,10 +1194,8 @@ func (s *Server) setupRoutes() {
 			protected.POST("/update/check", s.perm(auth.PermSettingsManage), s.checkForUpdate)
 			protected.POST("/update/apply", s.perm(auth.PermSettingsManage), s.applyUpdate)
 
-			// Blocked hashes management routes
-			protected.GET("/blocked-hashes", s.perm(auth.PermLibraryView), s.listBlockedHashes)
-			protected.POST("/blocked-hashes", s.perm(auth.PermLibraryEditMetadata), s.addBlockedHash)
-			protected.DELETE("/blocked-hashes/:hash", s.perm(auth.PermLibraryDelete), s.removeBlockedHash)
+			// Blocked hashes management routes migrated to the handlers/system
+			// sub-package (wireHandlers).
 
 			// Diagnostics routes (db-health/export/submit-ai/ai-results/
 			// apply-suggestions migrated to DiagnosticsHandler in

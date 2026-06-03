@@ -1,5 +1,5 @@
 // file: internal/server/wire_handlers.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: f7a8b9c0-d1e2-3456-7890-abcdef012345
 // last-edited: 2026-06-03
 
@@ -15,6 +15,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	entities "github.com/jdfalk/audiobook-organizer/internal/server/handlers/entities"
 	operations "github.com/jdfalk/audiobook-organizer/internal/server/handlers/operations"
+	system "github.com/jdfalk/audiobook-organizer/internal/server/handlers/system"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
 	"github.com/jdfalk/audiobook-organizer/internal/undo"
 )
@@ -212,9 +213,74 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 			return NewRevertService(s.Store()).RevertOperation(id)
 		},
 	)
-	// getSystemLogs (system_handlers.go) delegates its operation_id branch to
+	// getSystemLogs (system handler) delegates its operation_id branch to
 	// operationsH.GetOperationLogs; stash it on the Server for that call.
 	s.operationsHandler = operationsH
+
+	// System domain handler (health/status/announcements/storage/logs/
+	// activity-log/reset/factory-reset/config/SSE events/backups/dashboard/
+	// blocked-hashes/user-preferences/policy-tags/quick-queries). Guard typed-nil
+	// boxing for each interface-typed concrete-pointer dep so the handler's
+	// in-method nil guards (which mirror the old `s.X == nil` / `s.X != nil`
+	// checks on the concrete pointers) are preserved: boxing a nil concrete
+	// pointer into an interface yields a non-nil interface and would defeat them.
+	// s.systemService / s.configUpdateService are concrete *struct pointers always
+	// constructed in NewServer, but the guards keep parity with the established
+	// pattern and are harmless. s.pluginRegistry can legitimately be nil
+	// (HealthCheckAll skipped). s.hub is passed as a LAZY provider closure (not a
+	// snapshot): handleEvents read s.hub at request time, and a test nils s.hub
+	// AFTER wiring to drive the SSE 503 guard — snapshotting it here would capture
+	// a live hub and invoke HandleSSE instead of 503 (mirrors the operations
+	// getScheduler seam). s.olService is passed as a CONCRETE
+	// pointer (factoryReset reaches its .Mu / .OLStore fields, which an interface
+	// cannot abstract); the handler nil-checks it directly. s.operationsHandler
+	// (set just above) backs OperationLogsProvider. The store is passed as a LAZY
+	// provider closure (not a snapshot): the original handlers read s.Store() at
+	// request time, and a router-integration test swaps server.store post-wire to
+	// inject a mock — snapshotting would miss it. s.Store() returns the
+	// database.Store interface, so a nil store stays a nil interface.
+	var sysSvc system.SystemService
+	if s.systemService != nil {
+		sysSvc = s.systemService
+	}
+	var sysConfigUpdate system.ConfigUpdateService
+	if s.configUpdateService != nil {
+		sysConfigUpdate = s.configUpdateService
+	}
+	var sysPlugins system.PluginHealthChecker
+	if s.pluginRegistry != nil {
+		sysPlugins = s.pluginRegistry
+	}
+	var sysOpLogs system.OperationLogsProvider
+	if s.operationsHandler != nil {
+		sysOpLogs = s.operationsHandler
+	}
+	systemH := system.New(
+		// Lazy store provider: resolve s.Store() at request time (late binding, as
+		// the original handlers did). A test swaps server.store post-wire, so a
+		// snapshot would miss it. s.Store() returns the database.Store interface,
+		// so a nil store stays a nil interface and the handler's store==nil guards
+		// hold.
+		func() system.SystemStore { return s.Store() },
+		sysSvc,
+		sysConfigUpdate,
+		sysPlugins,
+		// Lazy hub provider: resolve s.hub at request time with a typed-nil guard
+		// so a nil *realtime.EventHub is never boxed into a non-nil interface.
+		func() system.EventStreamer {
+			if s.hub == nil {
+				return nil
+			}
+			return s.hub
+		},
+		sysOpLogs,
+		s.olService, // concrete pointer; handler nil-checks it for field access
+		getDiskStats,
+		resetLibrarySizeCache,
+		func() string { return appVersion },
+		s.filterReviewedAuthorGroups,
+	)
+	s.systemHandler = systemH
 
 	// iTunes handlers. Guard the service/importer wiring: s.itunesSvc is set
 	// from the service registry and may be nil (iTunes disabled / not
@@ -489,6 +555,34 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 	protected.POST("/maintenance-window/run", s.perm(auth.PermSettingsManage), operationsH.RunMaintenanceWindowNow)
 	protected.GET("/maintenance-window/status", s.perm(auth.PermSettingsManage), operationsH.GetMaintenanceWindowStatus)
 	protected.PUT("/maintenance-window/config", s.perm(auth.PermSettingsManage), operationsH.UpdateMaintenanceWindowConfig)
+
+	// System domain (migrated from server_lifecycle.go). Paths + permission
+	// guards copied verbatim. The public /health (x3) and /api/events routes stay
+	// in setupRoutes — they are registered on s.router BEFORE the /api/* redirect
+	// middleware, so re-registering them here would change their middleware
+	// ordering; they delegate to systemH via closures instead.
+	protected.GET("/policy/tags", s.perm(auth.PermLibraryView), systemH.HandlePolicyTags)
+	protected.GET("/system/status", s.perm(auth.PermSettingsManage), systemH.GetSystemStatus)
+	protected.GET("/system/announcements", s.perm(auth.PermSettingsManage), systemH.GetSystemAnnouncements)
+	protected.GET("/system/storage", s.perm(auth.PermSettingsManage), systemH.GetSystemStorage)
+	protected.GET("/system/logs", s.perm(auth.PermSettingsManage), systemH.GetSystemLogs)
+	protected.GET("/system/activity-log", s.perm(auth.PermSettingsManage), systemH.GetSystemActivityLog)
+	protected.POST("/system/reset", s.perm(auth.PermSettingsManage), systemH.ResetSystem)
+	protected.POST("/system/factory-reset", s.perm(auth.PermSettingsManage), systemH.FactoryReset)
+	protected.GET("/config", s.perm(auth.PermSettingsManage), systemH.GetConfig)
+	protected.PUT("/config", s.perm(auth.PermSettingsManage), systemH.UpdateConfig)
+	protected.GET("/dashboard", s.perm(auth.PermLibraryView), systemH.GetDashboard)
+	protected.POST("/backup/create", s.perm(auth.PermSettingsManage), systemH.CreateBackup)
+	protected.GET("/backup/list", s.perm(auth.PermSettingsManage), systemH.ListBackups)
+	protected.POST("/backup/restore", s.perm(auth.PermSettingsManage), systemH.RestoreBackup)
+	protected.DELETE("/backup/:filename", s.perm(auth.PermSettingsManage), systemH.DeleteBackup)
+	protected.GET("/library/quick-queries", s.perm(auth.PermLibraryView), systemH.GetQuickQueries)
+	protected.GET("/blocked-hashes", s.perm(auth.PermLibraryView), systemH.ListBlockedHashes)
+	protected.POST("/blocked-hashes", s.perm(auth.PermLibraryEditMetadata), systemH.AddBlockedHash)
+	protected.DELETE("/blocked-hashes/:hash", s.perm(auth.PermLibraryDelete), systemH.RemoveBlockedHash)
+	protected.GET("/preferences/:key", s.perm(auth.PermLibraryView), systemH.GetUserPreference)
+	protected.PUT("/preferences/:key", s.perm(auth.PermLibraryEditMetadata), systemH.SetUserPreference)
+	protected.DELETE("/preferences/:key", s.perm(auth.PermLibraryDelete), systemH.DeleteUserPreference)
 
 	// Plugins
 	plugins := protected.Group("/plugins")

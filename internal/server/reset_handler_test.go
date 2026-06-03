@@ -1,5 +1,5 @@
 // file: internal/server/reset_handler_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package server
@@ -43,7 +43,7 @@ func TestResetSystem_Success(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = req
 
-	server.resetSystem(c)
+	newSystemHandler(server).ResetSystem(c)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", w.Code)
@@ -92,7 +92,7 @@ func TestResetSystem_Error(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = req
 
-	server.resetSystem(c)
+	newSystemHandler(server).ResetSystem(c)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected status 500, got %d", w.Code)
@@ -123,7 +123,7 @@ func TestResetSystem_MultipleResets(t *testing.T) {
 	c1, _ := gin.CreateTestContext(w1)
 	c1.Request = req1
 
-	server.resetSystem(c1)
+	newSystemHandler(server).ResetSystem(c1)
 
 	if w1.Code != http.StatusOK {
 		t.Errorf("first reset: expected status 200, got %d", w1.Code)
@@ -142,7 +142,7 @@ func TestResetSystem_MultipleResets(t *testing.T) {
 	c2, _ := gin.CreateTestContext(w2)
 	c2.Request = req2
 
-	server.resetSystem(c2)
+	newSystemHandler(server).ResetSystem(c2)
 
 	if w2.Code != http.StatusOK {
 		t.Errorf("second reset: expected status 200, got %d", w2.Code)

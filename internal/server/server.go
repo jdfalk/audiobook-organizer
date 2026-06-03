@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 2.24.0
+// version: 2.25.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-06-01
 
@@ -41,6 +41,7 @@ import (
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"github.com/jdfalk/audiobook-organizer/internal/scheduler"
 	operationshandlers "github.com/jdfalk/audiobook-organizer/internal/server/handlers/operations"
+	systemhandlers "github.com/jdfalk/audiobook-organizer/internal/server/handlers/system"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 
 	// Blank-import the plugin packages so their init() functions run and
@@ -185,6 +186,12 @@ type Server struct {
 	// wireHandlers call that populates this field, so it is never nil at request
 	// time.
 	operationsHandler *operationshandlers.Handler
+	// systemHandler is the migrated system-domain handler (instantiated in
+	// wireHandlers). The public /health and /api/events routes are registered in
+	// setupRoutes (before the /api/* redirect middleware, so their pre-middleware
+	// ordering is preserved) via closures that delegate to this handler; the
+	// remaining protected system routes are registered directly in wireHandlers.
+	systemHandler *systemhandlers.Handler
 	batchPoller            *BatchPoller
 	mergeService           *merge.Service
 	diagnosticsService     *diagnostics.Service
