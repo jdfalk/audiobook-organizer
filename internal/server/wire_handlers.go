@@ -1,5 +1,5 @@
 // file: internal/server/wire_handlers.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: f7a8b9c0-d1e2-3456-7890-abcdef012345
 // last-edited: 2026-06-03
 
@@ -13,6 +13,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	dedupengine "github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
+	deduphandler "github.com/jdfalk/audiobook-organizer/internal/server/handlers/dedup"
 	entities "github.com/jdfalk/audiobook-organizer/internal/server/handlers/entities"
 	operations "github.com/jdfalk/audiobook-organizer/internal/server/handlers/operations"
 	system "github.com/jdfalk/audiobook-organizer/internal/server/handlers/system"
@@ -281,6 +282,45 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 		s.filterReviewedAuthorGroups,
 	)
 	s.systemHandler = systemH
+
+	// Dedup domain handler (candidate / cluster / series listing, merge /
+	// dismiss / remove, bulk merge, stats, CSV/JSON export, the dedup / embed /
+	// acoustid / book-signature scan triggers, and per-segment acoustid compare).
+	// Guard typed-nil boxing for each interface-typed concrete-pointer dep so the
+	// handler's in-method nil guards (mirroring the old `s.opRegistry == nil` /
+	// `s.mergeService == nil` checks) hold: boxing a nil concrete pointer into an
+	// interface yields a non-nil interface and would defeat them. s.opRegistry,
+	// s.mergeService and s.dedupEngine are all wired before setupRoutes
+	// (wireServerFromContainer) and never swapped post-wire, so snapshotting them
+	// here is safe. The store and the embedding store are passed as LAZY provider
+	// closures (not snapshots): the original handlers read s.Store() / s.embeddingStore
+	// at request time, and a router-integration test swaps server.store post-wire to
+	// inject a mock — snapshotting would miss it. s.Store() returns the
+	// database.Store interface (a nil store stays a nil interface); s.embeddingStore
+	// is a concrete *database.EmbeddingStore (a nil pointer stays nil, no boxing).
+	// publishEvent / markDuplicatesFlaggedDirty are injected as funcs because the
+	// *Server methods stay in package server (shared with other domains).
+	var dedupOpReg deduphandler.OperationsRegistry
+	if s.opRegistry != nil {
+		dedupOpReg = s.opRegistry
+	}
+	var dedupMergeSvc deduphandler.MergeService
+	if s.mergeService != nil {
+		dedupMergeSvc = s.mergeService
+	}
+	var dedupEng deduphandler.DedupEngine
+	if s.dedupEngine != nil {
+		dedupEng = s.dedupEngine
+	}
+	dedupH := deduphandler.New(
+		func() deduphandler.DedupStore { return s.Store() },
+		func() *database.EmbeddingStore { return s.embeddingStore },
+		dedupOpReg,
+		dedupMergeSvc,
+		dedupEng,
+		s.publishEvent,
+		s.markDuplicatesFlaggedDirty,
+	)
 
 	// iTunes handlers. Guard the service/importer wiring: s.itunesSvc is set
 	// from the service registry and may be nil (iTunes disabled / not
@@ -583,6 +623,31 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 	protected.GET("/preferences/:key", s.perm(auth.PermLibraryView), systemH.GetUserPreference)
 	protected.PUT("/preferences/:key", s.perm(auth.PermLibraryEditMetadata), systemH.SetUserPreference)
 	protected.DELETE("/preferences/:key", s.perm(auth.PermLibraryDelete), systemH.DeleteUserPreference)
+
+	// Embedding-based dedup domain routes (migrated from server_lifecycle.go).
+	// The split-book /dedup/* routes (registered above) and the
+	// /dedup/fingerprint-rescan + /dedup/validate survivors stay where they are.
+	protected.GET("/dedup/candidates", s.perm(auth.PermLibraryView), dedupH.ListDedupCandidates)
+	protected.GET("/dedup/candidates/export", s.perm(auth.PermLibraryView), dedupH.ExportDedupCandidates)
+	protected.GET("/dedup/stats", s.perm(auth.PermLibraryView), dedupH.GetDedupStats)
+	protected.POST("/dedup/candidates/:id/merge", s.perm(auth.PermLibraryEditMetadata), dedupH.MergeDedupCandidate)
+	protected.POST("/dedup/candidates/:id/dismiss", s.perm(auth.PermLibraryEditMetadata), dedupH.DismissDedupCandidate)
+	protected.POST("/dedup/candidates/bulk-merge", s.perm(auth.PermLibraryEditMetadata), dedupH.BulkMergeDedupCandidates)
+	protected.POST("/dedup/candidates/merge-cluster", s.perm(auth.PermLibraryEditMetadata), dedupH.MergeDedupCluster)
+	protected.POST("/dedup/candidates/dismiss-cluster", s.perm(auth.PermLibraryEditMetadata), dedupH.DismissDedupCluster)
+	protected.POST("/dedup/candidates/remove-from-cluster", s.perm(auth.PermLibraryEditMetadata), dedupH.RemoveFromDedupCluster)
+	protected.GET("/dedup/candidates/series-summary", s.perm(auth.PermLibraryView), dedupH.ListDedupCandidateSeries)
+	protected.POST("/dedup/candidates/merge-series", s.perm(auth.PermLibraryEditMetadata), dedupH.MergeDedupCandidateSeries)
+	protected.POST("/dedup/scan", s.perm(auth.PermScanTrigger), dedupH.TriggerDedupScan)
+	protected.POST("/dedup/scan-llm", s.perm(auth.PermScanTrigger), dedupH.TriggerDedupLLM)
+	protected.POST("/dedup/scan-acoustid", s.perm(auth.PermScanTrigger), dedupH.TriggerDedupAcoustID)
+	protected.POST("/audiobooks/:id/compare-acoustid", s.perm(auth.PermLibraryView), dedupH.HandleCompareAcoustID)
+	protected.POST("/dedup/scan-book-signature", s.perm(auth.PermScanTrigger), dedupH.TriggerBookSignatureScan)
+	protected.POST("/dedup/refresh", s.perm(auth.PermScanTrigger), dedupH.TriggerDedupRefresh)
+	protected.POST("/dedup/purge-stale", s.perm(auth.PermScanTrigger), dedupH.PurgeStaleCandidates)
+	protected.POST("/dedup/reset-acoustid", s.perm(auth.PermScanTrigger), dedupH.ResetAcoustIDFingerprints)
+	protected.POST("/dedup/embed", s.perm(auth.PermScanTrigger), dedupH.TriggerEmbedScan)
+	protected.POST("/dedup/embed-async", s.perm(auth.PermScanTrigger), dedupH.TriggerEmbedAsync)
 
 	// Plugins
 	plugins := protected.Group("/plugins")
