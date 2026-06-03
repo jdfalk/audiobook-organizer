@@ -1,5 +1,5 @@
 // file: internal/server/handlers/auth.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: c3d4e5f6-a7b8-9012-cdef-012345678901
 // last-edited: 2026-06-01
 
@@ -279,9 +279,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 	setSessionCookie(c, session.ID, session.ExpiresAt)
+	// The session token lives only in the HttpOnly cookie set above. Do NOT
+	// return session.ID in the JSON body — that would expose the bearer token
+	// to page JavaScript and defeat the HttpOnly protection against XSS theft.
+	// Expose non-authenticating metadata only (expiry) for UI display.
 	httputil.RespondWithOK(c, gin.H{
-		"user":    buildAuthUserResponse(user),
-		"session": session,
+		"user":       buildAuthUserResponse(user),
+		"expires_at": session.ExpiresAt,
 	})
 }
 

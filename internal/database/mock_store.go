@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.55.0
+// version: 1.56.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 // last-edited: 2026-05-16
 
@@ -239,6 +239,7 @@ type MockStore struct {
 	GetUserPlaylistByNameFunc      func(name string) (*UserPlaylist, error)
 	GetUserPlaylistByITunesPIDFunc func(pid string) (*UserPlaylist, error)
 	ListUserPlaylistsFunc          func(playlistType string, limit, offset int) ([]UserPlaylist, int, error)
+	ListUserPlaylistsForUserFunc   func(userID, playlistType string, limit, offset int) ([]UserPlaylist, int, error)
 	UpdateUserPlaylistFunc         func(pl *UserPlaylist) error
 	DeleteUserPlaylistFunc         func(id string) error
 	ListDirtyUserPlaylistsFunc     func() ([]UserPlaylist, error)
@@ -1504,6 +1505,13 @@ func (m *MockStore) GetUserPlaylistByITunesPID(pid string) (*UserPlaylist, error
 func (m *MockStore) ListUserPlaylists(playlistType string, limit, offset int) ([]UserPlaylist, int, error) {
 	if m.ListUserPlaylistsFunc != nil {
 		return m.ListUserPlaylistsFunc(playlistType, limit, offset)
+	}
+	return nil, 0, nil
+}
+
+func (m *MockStore) ListUserPlaylistsForUser(userID, playlistType string, limit, offset int) ([]UserPlaylist, int, error) {
+	if m.ListUserPlaylistsForUserFunc != nil {
+		return m.ListUserPlaylistsForUserFunc(userID, playlistType, limit, offset)
 	}
 	return nil, 0, nil
 }

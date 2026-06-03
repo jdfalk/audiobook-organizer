@@ -16216,6 +16216,92 @@ func (_c *MockUserPlaylistStore_ListUserPlaylists_Call) RunAndReturn(run func(pl
 	return _c
 }
 
+// ListUserPlaylistsForUser provides a mock function for the type MockUserPlaylistStore
+func (_mock *MockUserPlaylistStore) ListUserPlaylistsForUser(userID string, playlistType string, limit int, offset int) ([]database.UserPlaylist, int, error) {
+	ret := _mock.Called(userID, playlistType, limit, offset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListUserPlaylistsForUser")
+	}
+
+	var r0 []database.UserPlaylist
+	var r1 int
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, int, int) ([]database.UserPlaylist, int, error)); ok {
+		return returnFunc(userID, playlistType, limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string, int, int) []database.UserPlaylist); ok {
+		r0 = returnFunc(userID, playlistType, limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.UserPlaylist)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, string, int, int) int); ok {
+		r1 = returnFunc(userID, playlistType, limit, offset)
+	} else {
+		r1 = ret.Get(1).(int)
+	}
+	if returnFunc, ok := ret.Get(2).(func(string, string, int, int) error); ok {
+		r2 = returnFunc(userID, playlistType, limit, offset)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockUserPlaylistStore_ListUserPlaylistsForUser_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListUserPlaylistsForUser'
+type MockUserPlaylistStore_ListUserPlaylistsForUser_Call struct {
+	*mock.Call
+}
+
+// ListUserPlaylistsForUser is a helper method to define mock.On call
+//   - userID string
+//   - playlistType string
+//   - limit int
+//   - offset int
+func (_e *MockUserPlaylistStore_Expecter) ListUserPlaylistsForUser(userID interface{}, playlistType interface{}, limit interface{}, offset interface{}) *MockUserPlaylistStore_ListUserPlaylistsForUser_Call {
+	return &MockUserPlaylistStore_ListUserPlaylistsForUser_Call{Call: _e.mock.On("ListUserPlaylistsForUser", userID, playlistType, limit, offset)}
+}
+
+func (_c *MockUserPlaylistStore_ListUserPlaylistsForUser_Call) Run(run func(userID string, playlistType string, limit int, offset int)) *MockUserPlaylistStore_ListUserPlaylistsForUser_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
+		var arg3 int
+		if args[3] != nil {
+			arg3 = args[3].(int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockUserPlaylistStore_ListUserPlaylistsForUser_Call) Return(userPlaylists []database.UserPlaylist, n int, err error) *MockUserPlaylistStore_ListUserPlaylistsForUser_Call {
+	_c.Call.Return(userPlaylists, n, err)
+	return _c
+}
+
+func (_c *MockUserPlaylistStore_ListUserPlaylistsForUser_Call) RunAndReturn(run func(userID string, playlistType string, limit int, offset int) ([]database.UserPlaylist, int, error)) *MockUserPlaylistStore_ListUserPlaylistsForUser_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // UpdateUserPlaylist provides a mock function for the type MockUserPlaylistStore
 func (_mock *MockUserPlaylistStore) UpdateUserPlaylist(pl *database.UserPlaylist) error {
 	ret := _mock.Called(pl)
@@ -41725,6 +41811,92 @@ func (_c *MockStore_ListUserPlaylists_Call) Return(userPlaylists []database.User
 }
 
 func (_c *MockStore_ListUserPlaylists_Call) RunAndReturn(run func(playlistType string, limit int, offset int) ([]database.UserPlaylist, int, error)) *MockStore_ListUserPlaylists_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListUserPlaylistsForUser provides a mock function for the type MockStore
+func (_mock *MockStore) ListUserPlaylistsForUser(userID string, playlistType string, limit int, offset int) ([]database.UserPlaylist, int, error) {
+	ret := _mock.Called(userID, playlistType, limit, offset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListUserPlaylistsForUser")
+	}
+
+	var r0 []database.UserPlaylist
+	var r1 int
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, int, int) ([]database.UserPlaylist, int, error)); ok {
+		return returnFunc(userID, playlistType, limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string, int, int) []database.UserPlaylist); ok {
+		r0 = returnFunc(userID, playlistType, limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.UserPlaylist)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, string, int, int) int); ok {
+		r1 = returnFunc(userID, playlistType, limit, offset)
+	} else {
+		r1 = ret.Get(1).(int)
+	}
+	if returnFunc, ok := ret.Get(2).(func(string, string, int, int) error); ok {
+		r2 = returnFunc(userID, playlistType, limit, offset)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockStore_ListUserPlaylistsForUser_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListUserPlaylistsForUser'
+type MockStore_ListUserPlaylistsForUser_Call struct {
+	*mock.Call
+}
+
+// ListUserPlaylistsForUser is a helper method to define mock.On call
+//   - userID string
+//   - playlistType string
+//   - limit int
+//   - offset int
+func (_e *MockStore_Expecter) ListUserPlaylistsForUser(userID interface{}, playlistType interface{}, limit interface{}, offset interface{}) *MockStore_ListUserPlaylistsForUser_Call {
+	return &MockStore_ListUserPlaylistsForUser_Call{Call: _e.mock.On("ListUserPlaylistsForUser", userID, playlistType, limit, offset)}
+}
+
+func (_c *MockStore_ListUserPlaylistsForUser_Call) Run(run func(userID string, playlistType string, limit int, offset int)) *MockStore_ListUserPlaylistsForUser_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
+		var arg3 int
+		if args[3] != nil {
+			arg3 = args[3].(int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_ListUserPlaylistsForUser_Call) Return(userPlaylists []database.UserPlaylist, n int, err error) *MockStore_ListUserPlaylistsForUser_Call {
+	_c.Call.Return(userPlaylists, n, err)
+	return _c
+}
+
+func (_c *MockStore_ListUserPlaylistsForUser_Call) RunAndReturn(run func(userID string, playlistType string, limit int, offset int) ([]database.UserPlaylist, int, error)) *MockStore_ListUserPlaylistsForUser_Call {
 	_c.Call.Return(run)
 	return _c
 }

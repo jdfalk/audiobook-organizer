@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.81.0
+// version: 1.82.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-24
 
@@ -4904,6 +4904,18 @@ func (p *PebbleStore) GetUserPlaylistByITunesPID(pid string) (*UserPlaylist, err
 }
 
 func (p *PebbleStore) ListUserPlaylists(playlistType string, limit, offset int) ([]UserPlaylist, int, error) {
+	// matchUser=false → all users.
+	return p.listUserPlaylists(playlistType, "", false, limit, offset)
+}
+
+// ListUserPlaylistsForUser returns only playlists created by userID.
+func (p *PebbleStore) ListUserPlaylistsForUser(userID, playlistType string, limit, offset int) ([]UserPlaylist, int, error) {
+	return p.listUserPlaylists(playlistType, userID, true, limit, offset)
+}
+
+// listUserPlaylists scans all user playlists, optionally filtering by type and
+// (when matchUser is true) by CreatedByUserID == userFilter, then paginates.
+func (p *PebbleStore) listUserPlaylists(playlistType, userFilter string, matchUser bool, limit, offset int) ([]UserPlaylist, int, error) {
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("upl:"),
 		UpperBound: []byte("upl:~"),
@@ -4919,6 +4931,9 @@ func (p *PebbleStore) ListUserPlaylists(playlistType string, limit, offset int) 
 			continue
 		}
 		if playlistType != "" && pl.Type != playlistType {
+			continue
+		}
+		if matchUser && pl.CreatedByUserID != userFilter {
 			continue
 		}
 		all = append(all, pl)

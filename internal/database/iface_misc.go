@@ -1,5 +1,5 @@
 // file: internal/database/iface_misc.go
-// version: 1.13.0
+// version: 1.14.0
 // guid: 473781a7-1a31-4914-b7c7-8efc91f9f7e6
 // last-edited: 2026-05-16
 
@@ -212,6 +212,10 @@ type UserPlaylistStore interface {
 	GetUserPlaylistByName(name string) (*UserPlaylist, error)
 	GetUserPlaylistByITunesPID(pid string) (*UserPlaylist, error)
 	ListUserPlaylists(playlistType string, limit, offset int) ([]UserPlaylist, int, error)
+	// ListUserPlaylistsForUser returns only playlists created by userID. Used by
+	// the API to scope list results per user (prevents cross-user disclosure).
+	// An empty userID matches playlists with an empty CreatedByUserID.
+	ListUserPlaylistsForUser(userID, playlistType string, limit, offset int) ([]UserPlaylist, int, error)
 	UpdateUserPlaylist(pl *UserPlaylist) error
 	DeleteUserPlaylist(id string) error
 	ListDirtyUserPlaylists() ([]UserPlaylist, error)
