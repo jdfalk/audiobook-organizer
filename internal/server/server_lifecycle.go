@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.28.0
+// version: 1.29.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-06-03
 
@@ -1030,7 +1030,19 @@ func (s *Server) setupRoutes() {
 			protected.POST("/dedup/embed-async", s.perm(auth.PermScanTrigger), s.triggerEmbedAsync)
 
 			// Operation routes
-			protected.GET("/operations", s.perm(auth.PermLibraryView), s.listOperations)
+			//
+			// NOTE: the operations-domain routes (GET /operations,
+			// /operations/stale, POST /operations/{scan,organize,transcode,
+			// optimize,clear-stale,optimize-database,sweep-tombstones,
+			// set-internal-flag}, GET /operations/audit-files, GET
+			// /operations/:id/{status,logs,result,changes}, GET
+			// /operations/:id/undo/preflight, DELETE /operations/:id, DELETE
+			// /operations/history, POST /operations/:id/revert, the /tasks
+			// routes and the /maintenance-window routes) were migrated to
+			// operations.Handler and are now registered in wireHandlers
+			// (wire_handlers.go). The survivors below stay here because they
+			// still call *Server methods directly.
+			//
 			// UOS-14: /operations/active and /operations/recent are removed — return 410 Gone.
 			// Use GET /operations/timeline instead.
 			protected.GET("/operations/active", s.perm(auth.PermLibraryView), func(c *gin.Context) {
@@ -1039,27 +1051,12 @@ func (s *Server) setupRoutes() {
 			protected.GET("/operations/recent", s.perm(auth.PermLibraryView), func(c *gin.Context) {
 				c.JSON(http.StatusGone, gin.H{"error": "gone", "message": "this endpoint has been removed; use GET /api/v1/operations/timeline instead"})
 			})
-			protected.GET("/operations/stale", s.perm(auth.PermLibraryView), s.listStaleOperations)
-			protected.POST("/operations/scan", s.perm(auth.PermScanTrigger), s.startScan)
-			protected.POST("/operations/organize", s.perm(auth.PermScanTrigger), s.startOrganize)
-			protected.POST("/operations/transcode", s.perm(auth.PermScanTrigger), s.startTranscode)
-			protected.POST("/operations/optimize", s.perm(auth.PermScanTrigger), s.startOptimize)
 
 			// UOS-06 operations v2 routes (timeline, events, v2/:id, op-defs)
 			// are registered in wireHandlers via OperationsV2Handler.
 
 			protected.GET("/file-ops/pending", s.perm(auth.PermLibraryView), s.handleListPendingFileOps)
 			protected.GET("/operations/:id/results", s.perm(auth.PermLibraryView), s.handleGetOperationResults)
-			protected.GET("/operations/:id/status", s.perm(auth.PermLibraryView), s.getOperationStatus)
-			protected.GET("/operations/:id/logs", s.perm(auth.PermLibraryView), s.getOperationLogs)
-			protected.GET("/operations/:id/result", s.perm(auth.PermLibraryView), s.getOperationResult)
-			protected.DELETE("/operations/:id", s.perm(auth.PermSettingsManage), s.cancelOperation)
-			protected.POST("/operations/clear-stale", s.perm(auth.PermSettingsManage), s.clearStaleOperations)
-			protected.DELETE("/operations/history", s.perm(auth.PermSettingsManage), s.deleteOperationHistory)
-			protected.POST("/operations/optimize-database", s.perm(auth.PermSettingsManage), s.optimizeDatabase)
-			protected.POST("/operations/sweep-tombstones", s.perm(auth.PermSettingsManage), s.sweepTombstones)
-			protected.POST("/operations/set-internal-flag", s.perm(auth.PermSettingsManage), s.setInternalFlag)
-			protected.GET("/operations/audit-files", s.perm(auth.PermSettingsManage), s.auditFileConsistency)
 			protected.GET("/operations/reconcile/preview", s.perm(auth.PermLibraryView), s.reconcilePreview)
 			protected.POST("/operations/reconcile", s.perm(auth.PermScanTrigger), s.startReconcile)
 			protected.POST("/operations/reconcile/scan", s.perm(auth.PermScanTrigger), s.startReconcileScan)
@@ -1070,9 +1067,6 @@ func (s *Server) setupRoutes() {
 			protected.POST("/operations/mark-broken-segments", s.perm(auth.PermSettingsManage), s.markBrokenSegmentBooksHandler)
 			protected.POST("/operations/merge-novg-duplicates", s.perm(auth.PermSettingsManage), s.mergeNoVGDuplicatesHandler)
 			protected.POST("/operations/assign-orphan-vgs", s.perm(auth.PermSettingsManage), s.assignOrphanVGsHandler)
-			protected.GET("/operations/:id/changes", s.perm(auth.PermLibraryView), s.getOperationChanges)
-			protected.GET("/operations/:id/undo/preflight", s.perm(auth.PermLibraryView), s.undoPreflightHandler)
-			protected.POST("/operations/:id/revert", s.perm(auth.PermLibraryOrganize), s.revertOperation)
 
 			// Import routes
 			protected.POST("/import/collision-preview", s.perm(auth.PermLibraryView), s.handleImportCollisionPreview)
@@ -1120,13 +1114,12 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/:id/cover-history", s.perm(auth.PermLibraryView), s.handleListCoverHistory)
 			protected.POST("/audiobooks/:id/cover-history/restore", s.perm(auth.PermLibraryEditMetadata), s.handleRestoreCover)
 
-			// Unified task/scheduler routes
-			protected.GET("/tasks", s.perm(auth.PermSettingsManage), s.listTasks)
-			protected.POST("/tasks/:name/run", s.perm(auth.PermSettingsManage), s.runTask)
-			protected.PUT("/tasks/:name", s.perm(auth.PermSettingsManage), s.updateTaskConfig)
-			protected.POST("/maintenance-window/run", s.perm(auth.PermSettingsManage), s.runMaintenanceWindowNow)
-			protected.GET("/maintenance-window/status", s.perm(auth.PermSettingsManage), s.getMaintenanceWindowStatus)
-			protected.PUT("/maintenance-window/config", s.perm(auth.PermSettingsManage), s.updateMaintenanceWindowConfig)
+			// Unified task/scheduler routes and the maintenance-window routes
+			// (GET /tasks, POST /tasks/:name/run, PUT /tasks/:name, POST
+			// /maintenance-window/run, GET /maintenance-window/status, PUT
+			// /maintenance-window/config) were migrated to operations.Handler
+			// and are now registered in wireHandlers (wire_handlers.go).
+
 			// Result-getter GETs (not job triggers — these poll async results)
 			protected.GET("/maintenance/scan-composer-tags/:id", s.perm(auth.PermSettingsManage), s.handleGetComposerScanResults)
 			protected.GET("/maintenance/repair-missing-files/:id", s.perm(auth.PermSettingsManage), s.handleGetMissingFileRepairResults)

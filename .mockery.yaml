@@ -1,5 +1,5 @@
 # file: .mockery.yaml
-# version: 1.15.0
+# version: 1.16.0
 # guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 # Mockery configuration (v3)
@@ -180,3 +180,14 @@ packages:
       WorkService:
       AuthorSeriesService:
       OperationsRegistry:
+  github.com/jdfalk/audiobook-organizer/internal/server/handlers/operations:
+    config:
+      dir: internal/server/handlers/operations/mocks
+      filename: "mock_{{.InterfaceName | snakecase}}.go"
+      pkgname: operationsmocks
+    interfaces:
+      OperationsStore:
+      OperationsRegistry:
+      Scheduler:
+      ScanCanceler:
+      AIScanLister:

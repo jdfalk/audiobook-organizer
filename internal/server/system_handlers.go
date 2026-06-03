@@ -1,5 +1,5 @@
 // file: internal/server/system_handlers.go
-// version: 2.5.0
+// version: 2.6.0
 // last-edited: 2026-05-29
 // guid: 0c5a18be-5744-4e41-a35a-e7e96630833b
 //
@@ -207,9 +207,9 @@ func (s *Server) getSystemStorage(c *gin.Context) {
 }
 
 func (s *Server) getSystemLogs(c *gin.Context) {
-	// For operation-specific logs, redirect to getOperationLogs
+	// For operation-specific logs, redirect to the operations handler.
 	if id := c.Query("operation_id"); id != "" {
-		s.getOperationLogs(c)
+		s.operationsHandler.GetOperationLogs(c)
 		return
 	}
 

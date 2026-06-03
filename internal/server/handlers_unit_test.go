@@ -1,5 +1,5 @@
 // file: internal/server/handlers_unit_test.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: f8a2d1c3-4b5e-6789-abcd-ef0123456789
 //
 // Unit tests for HTTP handlers using MockStore + httptest.
@@ -104,7 +104,7 @@ func TestHandler_GetOperationStatus_Found(t *testing.T) {
 	mockStore.EXPECT().GetOperationV2("op-123").Return(nil, errors.New("not found"))
 	mockStore.EXPECT().GetOperationByID("op-123").Return(op, nil)
 
-	router.GET("/operations/:id", srv.getOperationStatus)
+	router.GET("/operations/:id", newOperationsHandler(srv).GetOperationStatus)
 
 	req := httptest.NewRequest("GET", "/operations/op-123", nil)
 	w := httptest.NewRecorder()
@@ -133,7 +133,7 @@ func TestHandler_GetOperationStatus_FoundV2(t *testing.T) {
 	}
 	mockStore.EXPECT().GetOperationV2("v2-op-123").Return(v2, nil)
 
-	router.GET("/operations/:id", srv.getOperationStatus)
+	router.GET("/operations/:id", newOperationsHandler(srv).GetOperationStatus)
 
 	req := httptest.NewRequest("GET", "/operations/v2-op-123", nil)
 	w := httptest.NewRecorder()
@@ -153,7 +153,7 @@ func TestHandler_GetOperationStatus_NotFound(t *testing.T) {
 	mockStore.EXPECT().GetOperationV2("nope").Return(nil, errors.New("not found"))
 	mockStore.EXPECT().GetOperationByID("nope").Return(nil, errors.New("not found"))
 
-	router.GET("/operations/:id", srv.getOperationStatus)
+	router.GET("/operations/:id", newOperationsHandler(srv).GetOperationStatus)
 
 	req := httptest.NewRequest("GET", "/operations/nope", nil)
 	w := httptest.NewRecorder()
@@ -173,7 +173,7 @@ func TestHandler_ListOperations_Success(t *testing.T) {
 	}
 	mockStore.EXPECT().ListOperations(mock.AnythingOfType("int"), mock.AnythingOfType("int")).Return(ops, 2, nil)
 
-	router.GET("/operations", srv.listOperations)
+	router.GET("/operations", newOperationsHandler(srv).ListOperations)
 
 	req := httptest.NewRequest("GET", "/operations?limit=10&offset=0", nil)
 	w := httptest.NewRecorder()
@@ -193,7 +193,7 @@ func TestHandler_ListOperations_StoreError(t *testing.T) {
 
 	mockStore.EXPECT().ListOperations(mock.AnythingOfType("int"), mock.AnythingOfType("int")).Return(nil, 0, errors.New("db error"))
 
-	router.GET("/operations", srv.listOperations)
+	router.GET("/operations", newOperationsHandler(srv).ListOperations)
 
 	req := httptest.NewRequest("GET", "/operations", nil)
 	w := httptest.NewRecorder()
@@ -216,7 +216,7 @@ func TestHandler_GetOperationLogs_Success(t *testing.T) {
 	}
 	mockStore.EXPECT().GetOperationLogs("op-1").Return(logs, nil)
 
-	router.GET("/operations/:id/logs", srv.getOperationLogs)
+	router.GET("/operations/:id/logs", newOperationsHandler(srv).GetOperationLogs)
 
 	req := httptest.NewRequest("GET", "/operations/op-1/logs", nil)
 	w := httptest.NewRecorder()
@@ -240,7 +240,7 @@ func TestHandler_GetOperationLogs_WithTail(t *testing.T) {
 	}
 	mockStore.EXPECT().GetOperationLogs("op-1").Return(logs, nil)
 
-	router.GET("/operations/:id/logs", srv.getOperationLogs)
+	router.GET("/operations/:id/logs", newOperationsHandler(srv).GetOperationLogs)
 
 	req := httptest.NewRequest("GET", "/operations/op-1/logs?tail=1", nil)
 	w := httptest.NewRecorder()
@@ -262,7 +262,7 @@ func TestHandler_GetOperationResult_WithData(t *testing.T) {
 	op := &database.Operation{ID: "op-1", Status: "completed", ResultData: &resultData}
 	mockStore.EXPECT().GetOperationByID("op-1").Return(op, nil)
 
-	router.GET("/operations/:id/result", srv.getOperationResult)
+	router.GET("/operations/:id/result", newOperationsHandler(srv).GetOperationResult)
 
 	req := httptest.NewRequest("GET", "/operations/op-1/result", nil)
 	w := httptest.NewRecorder()
@@ -281,7 +281,7 @@ func TestHandler_GetOperationResult_NoData(t *testing.T) {
 	op := &database.Operation{ID: "op-1", Status: "completed", ResultData: nil}
 	mockStore.EXPECT().GetOperationByID("op-1").Return(op, nil)
 
-	router.GET("/operations/:id/result", srv.getOperationResult)
+	router.GET("/operations/:id/result", newOperationsHandler(srv).GetOperationResult)
 
 	req := httptest.NewRequest("GET", "/operations/op-1/result", nil)
 	w := httptest.NewRecorder()
@@ -295,7 +295,7 @@ func TestHandler_GetOperationResult_NotFound(t *testing.T) {
 
 	mockStore.EXPECT().GetOperationByID("nope").Return(nil, nil)
 
-	router.GET("/operations/:id/result", srv.getOperationResult)
+	router.GET("/operations/:id/result", newOperationsHandler(srv).GetOperationResult)
 
 	req := httptest.NewRequest("GET", "/operations/nope/result", nil)
 	w := httptest.NewRecorder()
@@ -312,7 +312,7 @@ func TestHandler_GetOperationChanges_Success(t *testing.T) {
 	changes := []*database.OperationChange{{ID: "c1", OperationID: "op-1"}}
 	mockStore.EXPECT().GetOperationChanges("op-1").Return(changes, nil)
 
-	router.GET("/operations/:id/changes", srv.getOperationChanges)
+	router.GET("/operations/:id/changes", newOperationsHandler(srv).GetOperationChanges)
 
 	req := httptest.NewRequest("GET", "/operations/op-1/changes", nil)
 	w := httptest.NewRecorder()

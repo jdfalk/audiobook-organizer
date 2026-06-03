@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 2.23.1
+// version: 2.24.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-06-01
 
@@ -40,6 +40,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"github.com/jdfalk/audiobook-organizer/internal/scheduler"
+	operationshandlers "github.com/jdfalk/audiobook-organizer/internal/server/handlers/operations"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 
 	// Blank-import the plugin packages so their init() functions run and
@@ -178,6 +179,12 @@ type Server struct {
 	scheduler              *scheduler.TaskScheduler
 	aiScanStore            *database.AIScanStore
 	pipelineManager        *aiscan.PipelineManager
+	// operationsHandler is the migrated operations-domain handler (instantiated
+	// in wireHandlers). getSystemLogs delegates its operation_id branch to
+	// operationsHandler.GetOperationLogs; routes are registered in the same
+	// wireHandlers call that populates this field, so it is never nil at request
+	// time.
+	operationsHandler *operationshandlers.Handler
 	batchPoller            *BatchPoller
 	mergeService           *merge.Service
 	diagnosticsService     *diagnostics.Service

@@ -1,15 +1,25 @@
-// file: internal/server/operations_handlers.go
-// version: 2.9.0
-// guid: 9326aa39-ca40-4db3-a3be-7e76e6e2a23f
-// last-edited: 2026-06-01
-//
-// Background-operation HTTP handlers split out of server.go: the
-// long-running scan / organize / transcode starters, generic
-// operation status/cancel/listing/revert, maintenance chores
-// (optimize DB, sweep tombstones, audit, clear stale, delete
-// history), and the task scheduler endpoints.
+// file: internal/server/handlers/operations/handler.go
+// version: 1.0.0
+// guid: 1b7fbd86-cdda-4921-b2d0-786f5cadb438
+// last-edited: 2026-06-03
 
-package server
+// Package operations hosts the background-operation HTTP handlers extracted
+// from the server package: the long-running scan / organize / optimize /
+// transcode starters, generic operation status / cancel / listing / logs /
+// result / changes / revert, maintenance chores (optimize DB, sweep tombstones,
+// audit file consistency, clear stale, delete history, set internal flag), the
+// task-scheduler endpoints, and the maintenance-window endpoints.
+//
+// Dependencies that lived on the *Server receiver are reached through narrow
+// interfaces (OperationsStore, OperationsRegistry, Scheduler, ScanCanceler,
+// AIScanLister) and three injected funcs (collectStale, preflightUndo, revert)
+// that wrap server-private helpers, so package operations never imports package
+// server. preflightUndo wraps undo.PreflightUndoConflicts and revert wraps
+// audiobooks.NewRevertService(...).RevertOperation; both consume a full
+// database.Store opaquely, so the controller closes over s.Store() rather than
+// the handler enumerating "methods used".
+
+package operations
 
 import (
 	"context"
@@ -27,10 +37,78 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/scheduler"
 	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	"github.com/jdfalk/audiobook-organizer/internal/sweep"
+	"github.com/jdfalk/audiobook-organizer/internal/undo"
 )
 
-func (s *Server) startScan(c *gin.Context) {
-	if s.opRegistry == nil {
+// Handler hosts the operations-domain HTTP endpoints.
+type Handler struct {
+	store    OperationsStore
+	registry OperationsRegistry
+	// getScheduler resolves the scheduler lazily, at request time. The
+	// *Server.scheduler field is assigned in Start() — AFTER NewServer →
+	// setupRoutes → wireHandlers runs — so snapshotting it at wire time would
+	// always capture nil (the old s.listTasks/s.runTask methods read s.scheduler
+	// at call time, which this preserves). The provider closure performs the
+	// typed-nil guard so a nil *scheduler.TaskScheduler is never boxed into a
+	// non-nil interface (which would defeat the in-method nil checks).
+	getScheduler func() Scheduler
+	pipeline     ScanCanceler
+	scanStore    AIScanLister
+
+	// collectStale wraps the server-private *Server.collectStaleOperations,
+	// which also stays in package server (called from server_lifecycle.go). The
+	// controller passes s.collectStaleOperations.
+	collectStale func(timeout time.Duration) ([]database.Operation, error)
+
+	// preflightUndo wraps undo.PreflightUndoConflicts(s.Store(), id). The undo
+	// report type is an importable alias, but PreflightUndoConflicts consumes a
+	// full database.Store opaquely, so the controller closes over s.Store().
+	preflightUndo func(id string) (*undo.UndoConflictReport, error)
+
+	// revert wraps audiobooks.NewRevertService(s.Store()).RevertOperation(id).
+	// Same opaque-store rationale as preflightUndo.
+	revert func(id string) error
+}
+
+// New constructs an operations Handler from its dependencies. getScheduler is a
+// lazy provider (see the field doc) rather than a plain Scheduler value because
+// *Server.scheduler is populated after wire time.
+func New(
+	store OperationsStore,
+	registry OperationsRegistry,
+	getScheduler func() Scheduler,
+	pipeline ScanCanceler,
+	scanStore AIScanLister,
+	collectStale func(timeout time.Duration) ([]database.Operation, error),
+	preflightUndo func(id string) (*undo.UndoConflictReport, error),
+	revert func(id string) error,
+) *Handler {
+	return &Handler{
+		store:         store,
+		registry:      registry,
+		getScheduler:  getScheduler,
+		pipeline:      pipeline,
+		scanStore:     scanStore,
+		collectStale:  collectStale,
+		preflightUndo: preflightUndo,
+		revert:        revert,
+	}
+}
+
+// resolveScheduler returns the live scheduler via the lazy provider, or nil if
+// no provider was supplied (e.g. some unit tests) or the provider yields nil.
+func (h *Handler) resolveScheduler() Scheduler {
+	if h.getScheduler == nil {
+		return nil
+	}
+	return h.getScheduler()
+}
+
+// --- Operation starters ---
+
+// StartScan implements POST /operations/scan.
+func (h *Handler) StartScan(c *gin.Context) {
+	if h.registry == nil {
 		httputil.RespondWithInternalError(c, "operations registry not initialized")
 		return
 	}
@@ -38,7 +116,7 @@ func (s *Server) startScan(c *gin.Context) {
 	if len(body) == 0 {
 		body = []byte("{}")
 	}
-	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "library.scan", body)
+	opID, err := h.registry.EnqueueOp(c.Request.Context(), "library.scan", body)
 	if err != nil {
 		httputil.InternalError(c, "enqueue failed", err)
 		return
@@ -46,8 +124,9 @@ func (s *Server) startScan(c *gin.Context) {
 	c.JSON(202, gin.H{"op_id": opID, "id": opID})
 }
 
-func (s *Server) startOrganize(c *gin.Context) {
-	if s.opRegistry == nil {
+// StartOrganize implements POST /operations/organize.
+func (h *Handler) StartOrganize(c *gin.Context) {
+	if h.registry == nil {
 		httputil.RespondWithInternalError(c, "operations registry not initialized")
 		return
 	}
@@ -55,7 +134,7 @@ func (s *Server) startOrganize(c *gin.Context) {
 	if len(body) == 0 {
 		body = []byte("{}")
 	}
-	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "library.organize", body)
+	opID, err := h.registry.EnqueueOp(c.Request.Context(), "library.organize", body)
 	if err != nil {
 		httputil.InternalError(c, "enqueue failed", err)
 		return
@@ -63,12 +142,13 @@ func (s *Server) startOrganize(c *gin.Context) {
 	c.JSON(202, gin.H{"op_id": opID, "id": opID})
 }
 
-func (s *Server) startOptimize(c *gin.Context) {
-	if s.opRegistry == nil {
+// StartOptimize implements POST /operations/optimize.
+func (h *Handler) StartOptimize(c *gin.Context) {
+	if h.registry == nil {
 		httputil.RespondWithInternalError(c, "operations registry not initialized")
 		return
 	}
-	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "library.optimize", nil)
+	opID, err := h.registry.EnqueueOp(c.Request.Context(), "library.optimize", nil)
 	if err != nil {
 		httputil.InternalError(c, "enqueue failed", err)
 		return
@@ -76,8 +156,9 @@ func (s *Server) startOptimize(c *gin.Context) {
 	c.JSON(202, gin.H{"op_id": opID, "id": opID})
 }
 
-func (s *Server) startTranscode(c *gin.Context) {
-	if s.opRegistry == nil {
+// StartTranscode implements POST /operations/transcode.
+func (h *Handler) StartTranscode(c *gin.Context) {
+	if h.registry == nil {
 		httputil.RespondWithInternalError(c, "operations registry not initialized")
 		return
 	}
@@ -89,7 +170,7 @@ func (s *Server) startTranscode(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, "book_id is required")
 		return
 	}
-	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "library.transcode", body)
+	opID, err := h.registry.EnqueueOp(c.Request.Context(), "library.transcode", body)
 	if err != nil {
 		httputil.InternalError(c, "enqueue failed", err)
 		return
@@ -97,20 +178,23 @@ func (s *Server) startTranscode(c *gin.Context) {
 	c.JSON(202, gin.H{"op_id": opID, "id": opID})
 }
 
-func (s *Server) getOperationStatus(c *gin.Context) {
-	if s.Store() == nil {
+// --- Operation status / cancel ---
+
+// GetOperationStatus implements GET /operations/:id/status.
+func (h *Handler) GetOperationStatus(c *gin.Context) {
+	if h.store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	id := c.Param("id")
 
 	// Try v2 registry first; fall back to legacy table.
-	if v2, err := s.Store().GetOperationV2(id); err == nil && v2 != nil {
+	if v2, err := h.store.GetOperationV2(id); err == nil && v2 != nil {
 		httputil.RespondWithOK(c, operationV2ToLegacy(v2))
 		return
 	}
 
-	op, err := s.Store().GetOperationByID(id)
+	op, err := h.store.GetOperationByID(id)
 	if err != nil || op == nil {
 		httputil.RespondWithNotFound(c, "operation", id)
 		return
@@ -136,8 +220,9 @@ func operationV2ToLegacy(v2 *database.OperationV2Row) database.Operation {
 	return op
 }
 
-func (s *Server) cancelOperation(c *gin.Context) {
-	if s.Store() == nil {
+// CancelOperation implements DELETE /operations/:id.
+func (h *Handler) CancelOperation(c *gin.Context) {
+	if h.store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
@@ -145,11 +230,11 @@ func (s *Server) cancelOperation(c *gin.Context) {
 	id := c.Param("id")
 
 	// Check if this is an AI scan operation — cancel via pipeline manager
-	if s.pipelineManager != nil && s.aiScanStore != nil {
-		scans, _ := s.aiScanStore.ListScans()
+	if h.pipeline != nil && h.scanStore != nil {
+		scans, _ := h.scanStore.ListScans()
 		for _, scan := range scans {
 			if scan.OperationID == id {
-				if err := s.pipelineManager.CancelScan(scan.ID); err != nil {
+				if err := h.pipeline.CancelScan(scan.ID); err != nil {
 					slog.Info("canceloperation AI scan cancel warning", "scan", scan.ID, "err", err)
 				}
 				httputil.RespondWithNoContent(c)
@@ -159,29 +244,30 @@ func (s *Server) cancelOperation(c *gin.Context) {
 	}
 
 	// Try cancel via v2 registry (running and queued v2 ops).
-	if s.opRegistry != nil {
-		if err := s.opRegistry.Cancel(id); err == nil {
+	if h.registry != nil {
+		if err := h.registry.Cancel(id); err == nil {
 			httputil.RespondWithNoContent(c)
 			return
 		}
 	}
 
 	// Fallback: force-update DB status (e.g., stale after restart)
-	if dbErr := s.Store().UpdateOperationStatus(id, "canceled", 0, 0, "force canceled (stale operation)"); dbErr != nil {
+	if dbErr := h.store.UpdateOperationStatus(id, "canceled", 0, 0, "force canceled (stale operation)"); dbErr != nil {
 		httputil.InternalError(c, "failed to cancel operation", dbErr)
 		return
 	}
 	httputil.RespondWithNoContent(c)
 }
 
-// clearStaleOperations force-marks all pending/running/queued operations as failed.
-func (s *Server) clearStaleOperations(c *gin.Context) {
-	if s.Store() == nil {
+// ClearStaleOperations force-marks all pending/running/queued operations as
+// failed. Implements POST /operations/clear-stale.
+func (h *Handler) ClearStaleOperations(c *gin.Context) {
+	if h.store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
-	ops, err := s.Store().GetRecentOperations(500)
+	ops, err := h.store.GetRecentOperations(500)
 	if err != nil {
 		httputil.InternalError(c, "failed to get operations", err)
 		return
@@ -190,7 +276,7 @@ func (s *Server) clearStaleOperations(c *gin.Context) {
 	cleared := 0
 	for _, op := range ops {
 		if op.Status == "pending" || op.Status == "running" || op.Status == "queued" {
-			_ = s.Store().UpdateOperationStatus(op.ID, "failed", 0, 0, "force cleared by user")
+			_ = h.store.UpdateOperationStatus(op.ID, "failed", 0, 0, "force cleared by user")
 			cleared++
 		}
 	}
@@ -198,10 +284,11 @@ func (s *Server) clearStaleOperations(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"cleared": cleared})
 }
 
-// deleteOperationHistory deletes operations matching the given status(es).
+// DeleteOperationHistory deletes operations matching the given status(es).
 // Query param: ?status=completed or ?status=failed or ?status=completed,failed
-func (s *Server) deleteOperationHistory(c *gin.Context) {
-	if s.Store() == nil {
+// Implements DELETE /operations/history.
+func (h *Handler) DeleteOperationHistory(c *gin.Context) {
+	if h.store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
@@ -215,14 +302,14 @@ func (s *Server) deleteOperationHistory(c *gin.Context) {
 	statuses := strings.Split(statusParam, ",")
 	// Only allow deleting terminal statuses
 	allowed := map[string]bool{"completed": true, "failed": true, "canceled": true}
-	for _, s := range statuses {
-		if !allowed[s] {
-			httputil.RespondWithBadRequest(c, fmt.Sprintf("cannot delete operations with status %q", s))
+	for _, st := range statuses {
+		if !allowed[st] {
+			httputil.RespondWithBadRequest(c, fmt.Sprintf("cannot delete operations with status %q", st))
 			return
 		}
 	}
 
-	deleted, err := s.Store().DeleteOperationsByStatus(statuses)
+	deleted, err := h.store.DeleteOperationsByStatus(statuses)
 	if err != nil {
 		httputil.InternalError(c, "failed to delete operations", err)
 		return
@@ -231,14 +318,17 @@ func (s *Server) deleteOperationHistory(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"deleted": deleted})
 }
 
-// optimizeDatabase splits &-delimited author/narrator strings and re-extracts empty media info.
-func (s *Server) optimizeDatabase(c *gin.Context) {
-	if s.Store() == nil {
+// --- Maintenance chores ---
+
+// OptimizeDatabase splits &-delimited author/narrator strings and re-extracts
+// empty media info. Implements POST /operations/optimize-database.
+func (h *Handler) OptimizeDatabase(c *gin.Context) {
+	if h.store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
-	books, err := s.Store().GetAllBooks(10000, 0)
+	books, err := h.store.GetAllBooks(10000, 0)
 	if err != nil {
 		httputil.InternalError(c, "failed to get audiobooks", err)
 		return
@@ -250,15 +340,15 @@ func (s *Server) optimizeDatabase(c *gin.Context) {
 	for _, book := range books {
 		// Split compound author names into individual book_authors
 		if book.AuthorID != nil {
-			author, err := s.Store().GetAuthorByID(*book.AuthorID)
+			author, err := h.store.GetAuthorByID(*book.AuthorID)
 			if err == nil && author != nil && strings.Contains(author.Name, " & ") {
 				names := splitMultipleNames(author.Name)
 				if len(names) > 1 {
 					var bookAuthors []database.BookAuthor
 					for _, name := range names {
-						a, err := s.Store().GetAuthorByName(name)
+						a, err := h.store.GetAuthorByName(name)
 						if err != nil || a == nil {
-							a, err = s.Store().CreateAuthor(name)
+							a, err = h.store.CreateAuthor(name)
 							if err != nil {
 								continue
 							}
@@ -269,7 +359,7 @@ func (s *Server) optimizeDatabase(c *gin.Context) {
 						})
 					}
 					if len(bookAuthors) > 0 {
-						if err := s.Store().SetBookAuthors(book.ID, bookAuthors); err == nil {
+						if err := h.store.SetBookAuthors(book.ID, bookAuthors); err == nil {
 							authorsSplit++
 						}
 					}
@@ -283,9 +373,9 @@ func (s *Server) optimizeDatabase(c *gin.Context) {
 			if len(names) > 1 {
 				var bookNarrators []database.BookNarrator
 				for _, name := range names {
-					n, err := s.Store().GetNarratorByName(name)
+					n, err := h.store.GetNarratorByName(name)
 					if err != nil || n == nil {
-						n, err = s.Store().CreateNarrator(name)
+						n, err = h.store.CreateNarrator(name)
 						if err != nil {
 							continue
 						}
@@ -295,7 +385,7 @@ func (s *Server) optimizeDatabase(c *gin.Context) {
 					})
 				}
 				if len(bookNarrators) > 0 {
-					if err := s.Store().SetBookNarrators(book.ID, bookNarrators); err == nil {
+					if err := h.store.SetBookNarrators(book.ID, bookNarrators); err == nil {
 						narratorsSplit++
 					}
 				}
@@ -310,12 +400,31 @@ func (s *Server) optimizeDatabase(c *gin.Context) {
 	})
 }
 
-func (s *Server) sweepTombstones(c *gin.Context) {
-	if s.Store() == nil {
+// splitMultipleNames splits an "A & B & C" string into its trimmed parts. It
+// mirrors the server-package helper of the same name (a trivial pure function
+// that was only used by this domain).
+func splitMultipleNames(name string) []string {
+	parts := strings.Split(name, " & ")
+	var result []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	if len(result) == 0 {
+		return []string{name}
+	}
+	return result
+}
+
+// SweepTombstones implements POST /operations/sweep-tombstones.
+func (h *Handler) SweepTombstones(c *gin.Context) {
+	if h.store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	result, err := sweep.SweepTombstones(s.Store())
+	result, err := sweep.SweepTombstones(h.store)
 	if err != nil {
 		httputil.InternalError(c, "failed to sweep tombstones", err)
 		return
@@ -323,9 +432,10 @@ func (s *Server) sweepTombstones(c *gin.Context) {
 	httputil.RespondWithOK(c, result)
 }
 
-// setInternalFlag sets an arbitrary internal settings flag in PebbleDB.
-// Useful for injecting skip/done flags without direct DB access.
-func (s *Server) setInternalFlag(c *gin.Context) {
+// SetInternalFlag sets an arbitrary internal settings flag in PebbleDB. Useful
+// for injecting skip/done flags without direct DB access. Implements POST
+// /operations/set-internal-flag.
+func (h *Handler) SetInternalFlag(c *gin.Context) {
 	var req struct {
 		Key   string `json:"key" binding:"required"`
 		Value string `json:"value"`
@@ -334,11 +444,11 @@ func (s *Server) setInternalFlag(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
-	if s.Store() == nil {
+	if h.store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	if err := s.Store().SetSetting(req.Key, req.Value, "string", false); err != nil {
+	if err := h.store.SetSetting(req.Key, req.Value, "string", false); err != nil {
 		httputil.InternalError(c, "failed to set flag", err)
 		return
 	}
@@ -346,12 +456,13 @@ func (s *Server) setInternalFlag(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"key": req.Key, "value": req.Value})
 }
 
-func (s *Server) auditFileConsistency(c *gin.Context) {
-	if s.Store() == nil {
+// AuditFileConsistency implements GET /operations/audit-files.
+func (h *Handler) AuditFileConsistency(c *gin.Context) {
+	if h.store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	result, err := sweep.AuditFileConsistency(s.Store())
+	result, err := sweep.AuditFileConsistency(h.store)
 	if err != nil {
 		httputil.InternalError(c, "failed to audit file consistency", err)
 		return
@@ -359,15 +470,17 @@ func (s *Server) auditFileConsistency(c *gin.Context) {
 	httputil.RespondWithOK(c, result)
 }
 
-// listActiveOperations returns a snapshot of currently queued/running operations with basic progress
-func (s *Server) listOperations(c *gin.Context) {
+// --- Operation listing / logs / result / changes ---
+
+// ListOperations returns a snapshot of currently queued/running operations with
+// basic progress. Implements GET /operations.
+func (h *Handler) ListOperations(c *gin.Context) {
 	params := httputil.ParsePaginationParams(c)
-	store := s.Store()
-	if store == nil {
+	if h.store == nil {
 		httputil.RespondWithOK(c, gin.H{"items": []database.Operation{}, "total": 0, "limit": params.Limit, "offset": params.Offset})
 		return
 	}
-	ops, total, err := store.ListOperations(params.Limit, params.Offset)
+	ops, total, err := h.store.ListOperations(params.Limit, params.Offset)
 	if err != nil {
 		httputil.InternalError(c, "failed to list operations", err)
 		return
@@ -378,7 +491,8 @@ func (s *Server) listOperations(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"items": ops, "total": total, "limit": params.Limit, "offset": params.Offset})
 }
 
-func (s *Server) listStaleOperations(c *gin.Context) {
+// ListStaleOperations implements GET /operations/stale.
+func (h *Handler) ListStaleOperations(c *gin.Context) {
 	timeoutMinutes := config.AppConfig.OperationTimeoutMinutes
 	if timeoutMinutes <= 0 {
 		timeoutMinutes = 30
@@ -389,7 +503,7 @@ func (s *Server) listStaleOperations(c *gin.Context) {
 		}
 	}
 
-	stale, err := s.collectStaleOperations(time.Duration(timeoutMinutes) * time.Minute)
+	stale, err := h.collectStale(time.Duration(timeoutMinutes) * time.Minute)
 	if err != nil {
 		httputil.RespondWithInternalError(c, "failed to list stale operations")
 		return
@@ -401,12 +515,13 @@ func (s *Server) listStaleOperations(c *gin.Context) {
 	})
 }
 
-// getOperationLogs returns logs for a given operation. UOS v2 ops persist
-// their log lines to op_logs_v2 via dbReporter; v1 ops used operation_logs.
-// We query v2 first (canonical for all currently-enqueued ops) and fall
-// back to v1 only if v2 has nothing — legacy rows from before the v2 cutover.
-func (s *Server) getOperationLogs(c *gin.Context) {
-	if s.Store() == nil {
+// GetOperationLogs returns logs for a given operation. UOS v2 ops persist their
+// log lines to op_logs_v2 via dbReporter; v1 ops used operation_logs. We query
+// v2 first (canonical for all currently-enqueued ops) and fall back to v1 only
+// if v2 has nothing — legacy rows from before the v2 cutover. Implements GET
+// /operations/:id/logs.
+func (h *Handler) GetOperationLogs(c *gin.Context) {
+	if h.store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
@@ -424,18 +539,16 @@ func (s *Server) getOperationLogs(c *gin.Context) {
 		CreatedAt time.Time `json:"created_at"`
 	}
 	var items []logItem
-	if v2, ok := s.Store().(database.OpsV2Store); ok {
-		v2Logs, err := v2.GetOpLogsV2(id, limit)
-		if err != nil {
-			httputil.InternalError(c, "failed to get operation logs", err)
-			return
-		}
-		for _, l := range v2Logs {
-			items = append(items, logItem{Level: l.Level, Message: l.Message, Attrs: l.Attrs, CreatedAt: l.CreatedAt})
-		}
+	v2Logs, err := h.store.GetOpLogsV2(id, limit)
+	if err != nil {
+		httputil.InternalError(c, "failed to get operation logs", err)
+		return
+	}
+	for _, l := range v2Logs {
+		items = append(items, logItem{Level: l.Level, Message: l.Message, Attrs: l.Attrs, CreatedAt: l.CreatedAt})
 	}
 	if len(items) == 0 {
-		v1Logs, err := s.Store().GetOperationLogs(id)
+		v1Logs, err := h.store.GetOperationLogs(id)
 		if err == nil {
 			for _, l := range v1Logs {
 				items = append(items, logItem{Level: l.Level, Message: l.Message, CreatedAt: l.CreatedAt})
@@ -448,10 +561,10 @@ func (s *Server) getOperationLogs(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"items": items, "count": len(items)})
 }
 
-func (s *Server) getOperationResult(c *gin.Context) {
+// GetOperationResult implements GET /operations/:id/result.
+func (h *Handler) GetOperationResult(c *gin.Context) {
 	id := c.Param("id")
-	store := s.Store()
-	op, err := store.GetOperationByID(id)
+	op, err := h.store.GetOperationByID(id)
 	if err != nil {
 		httputil.InternalError(c, "failed to get operation", err)
 		return
@@ -476,10 +589,11 @@ func (s *Server) getOperationResult(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"result_data": resultData})
 }
 
-// getOperationChanges returns change tracking records for an operation.
-func (s *Server) getOperationChanges(c *gin.Context) {
+// GetOperationChanges returns change tracking records for an operation.
+// Implements GET /operations/:id/changes.
+func (h *Handler) GetOperationChanges(c *gin.Context) {
 	id := c.Param("id")
-	changes, err := s.Store().GetOperationChanges(id)
+	changes, err := h.store.GetOperationChanges(id)
 	if err != nil {
 		httputil.InternalError(c, "failed to get operation changes", err)
 		return
@@ -487,11 +601,11 @@ func (s *Server) getOperationChanges(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"changes": changes})
 }
 
-// undoPreflightHandler checks for conflicts before executing an undo.
-// GET /api/v1/operations/:id/undo/preflight
-func (s *Server) undoPreflightHandler(c *gin.Context) {
+// UndoPreflightHandler checks for conflicts before executing an undo.
+// Implements GET /operations/:id/undo/preflight.
+func (h *Handler) UndoPreflightHandler(c *gin.Context) {
 	id := c.Param("id")
-	report, err := PreflightUndoConflicts(s.Store(), id)
+	report, err := h.preflightUndo(id)
 	if err != nil {
 		httputil.InternalError(c, "failed to check conflicts", err)
 		return
@@ -499,34 +613,39 @@ func (s *Server) undoPreflightHandler(c *gin.Context) {
 	httputil.RespondWithOK(c, report)
 }
 
-// revertOperation undoes all changes from a given operation.
-func (s *Server) revertOperation(c *gin.Context) {
+// RevertOperation undoes all changes from a given operation. Implements POST
+// /operations/:id/revert.
+func (h *Handler) RevertOperation(c *gin.Context) {
 	id := c.Param("id")
-	revertSvc := NewRevertService(s.Store())
-	if err := revertSvc.RevertOperation(id); err != nil {
+	if err := h.revert(id); err != nil {
 		httputil.InternalError(c, "failed to revert operation", err)
 		return
 	}
 	httputil.RespondWithOK(c, gin.H{"message": "operation reverted successfully"})
 }
 
-// listTasks returns all registered tasks with their status and schedule.
-func (s *Server) listTasks(c *gin.Context) {
-	if s.scheduler == nil {
+// --- Tasks ---
+
+// ListTasks returns all registered tasks with their status and schedule.
+// Implements GET /tasks.
+func (h *Handler) ListTasks(c *gin.Context) {
+	sched := h.resolveScheduler()
+	if sched == nil {
 		httputil.RespondWithInternalError(c, "scheduler not initialized")
 		return
 	}
-	httputil.RespondWithOK(c, s.scheduler.ListTasks())
+	httputil.RespondWithOK(c, sched.ListTasks())
 }
 
-// runTask triggers a task by name.
-func (s *Server) runTask(c *gin.Context) {
-	if s.scheduler == nil {
+// RunTask triggers a task by name. Implements POST /tasks/:name/run.
+func (h *Handler) RunTask(c *gin.Context) {
+	sched := h.resolveScheduler()
+	if sched == nil {
 		httputil.RespondWithInternalError(c, "scheduler not initialized")
 		return
 	}
 	name := c.Param("name")
-	op, err := s.scheduler.RunTaskManual(name)
+	op, err := sched.RunTaskManual(name)
 	if err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
@@ -538,8 +657,9 @@ func (s *Server) runTask(c *gin.Context) {
 	httputil.RespondWithSuccess(c, 202, op)
 }
 
-// updateTaskConfig updates schedule config for a task.
-func (s *Server) updateTaskConfig(c *gin.Context) {
+// UpdateTaskConfig updates schedule config for a task. Implements PUT
+// /tasks/:name.
+func (h *Handler) UpdateTaskConfig(c *gin.Context) {
 	name := c.Param("name")
 
 	var req struct {
@@ -663,8 +783,8 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 	}
 
 	// Persist to database
-	if s.Store() != nil {
-		if err := config.SaveConfigToDatabase(s.Store()); err != nil {
+	if h.store != nil {
+		if err := config.SaveConfigToDatabase(h.store); err != nil {
 			slog.Warn("Failed to save task config", "err", err)
 		}
 	}
@@ -672,23 +792,29 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"message": "task config updated"})
 }
 
-// runMaintenanceWindowNow triggers the full maintenance window sequence immediately.
-func (s *Server) runMaintenanceWindowNow(c *gin.Context) {
-	if s.scheduler == nil {
+// --- Maintenance window ---
+
+// RunMaintenanceWindowNow triggers the full maintenance window sequence
+// immediately. Implements POST /maintenance-window/run.
+func (h *Handler) RunMaintenanceWindowNow(c *gin.Context) {
+	sched := h.resolveScheduler()
+	if sched == nil {
 		httputil.RespondWithInternalError(c, "scheduler not initialized")
 		return
 	}
 	ctx := context.WithValue(c.Request.Context(), scheduler.IgnoreWindowKey, true)
-	if err := s.scheduler.RunMaintenanceWindow(ctx); err != nil {
+	if err := sched.RunMaintenanceWindow(ctx); err != nil {
 		httputil.InternalError(c, "failed to run maintenance", err)
 		return
 	}
 	httputil.RespondWithSuccess(c, 202, gin.H{"message": "maintenance window triggered"})
 }
 
-// getMaintenanceWindowStatus returns current schedule config and live running status.
-func (s *Server) getMaintenanceWindowStatus(c *gin.Context) {
-	if s.scheduler == nil {
+// GetMaintenanceWindowStatus returns current schedule config and live running
+// status. Implements GET /maintenance-window/status.
+func (h *Handler) GetMaintenanceWindowStatus(c *gin.Context) {
+	sched := h.resolveScheduler()
+	if sched == nil {
 		httputil.RespondWithInternalError(c, "scheduler not initialized")
 		return
 	}
@@ -697,13 +823,14 @@ func (s *Server) getMaintenanceWindowStatus(c *gin.Context) {
 		"enabled":           cfg.MaintenanceWindowEnabled,
 		"window_start":      cfg.MaintenanceWindowStart,
 		"window_end":        cfg.MaintenanceWindowEnd,
-		"last_run_date":     s.scheduler.GetLastMaintenanceRunDate(),
+		"last_run_date":     sched.GetLastMaintenanceRunDate(),
 		"next_run_estimate": calculateNextWindowRun(cfg.MaintenanceWindowStart),
-		"currently_running": s.scheduler.IsMaintenanceRunning(),
+		"currently_running": sched.IsMaintenanceRunning(),
 	})
 }
 
-// calculateNextWindowRun returns the next RFC3339 timestamp when startHour occurs locally.
+// calculateNextWindowRun returns the next RFC3339 timestamp when startHour
+// occurs locally.
 func calculateNextWindowRun(startHour int) string {
 	now := time.Now()
 	next := time.Date(now.Year(), now.Month(), now.Day(), startHour, 0, 0, 0, now.Location())
@@ -713,8 +840,9 @@ func calculateNextWindowRun(startHour int) string {
 	return next.Format(time.RFC3339)
 }
 
-// updateMaintenanceWindowConfig persists maintenance window schedule settings.
-func (s *Server) updateMaintenanceWindowConfig(c *gin.Context) {
+// UpdateMaintenanceWindowConfig persists maintenance window schedule settings.
+// Implements PUT /maintenance-window/config.
+func (h *Handler) UpdateMaintenanceWindowConfig(c *gin.Context) {
 	var req handlers.MaintenanceWindowConfigReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
@@ -727,8 +855,8 @@ func (s *Server) updateMaintenanceWindowConfig(c *gin.Context) {
 	config.AppConfig.MaintenanceWindowEnabled = req.Enabled
 	config.AppConfig.MaintenanceWindowStart = req.WindowStart
 	config.AppConfig.MaintenanceWindowEnd = req.WindowEnd
-	if s.Store() != nil {
-		if err := config.SaveConfigToDatabase(s.Store()); err != nil {
+	if h.store != nil {
+		if err := config.SaveConfigToDatabase(h.store); err != nil {
 			httputil.InternalError(c, "failed to save maintenance window config", err)
 			return
 		}
