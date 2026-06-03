@@ -1,13 +1,35 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.08.0 -->
+<!-- version: 3.09.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-31 -->
+<!-- last-edited: 2026-06-03 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Changes
+
+#### June 3, 2026 — Handler extraction Phase 3 (versions, operations_v2, itunes, ai, diagnostics)
+
+Continues the ADR-003 server handler refactor. Five medium HTTP handler
+domains were moved off the `*Server` receiver into dedicated struct handlers
+in `internal/server/handlers/`, each depending on narrow interfaces (only the
+methods actually used) rather than the full `*Server` — improving testability
+and making each domain's dependency surface explicit.
+
+- **versions** → `VersionsHandler` (7 routes)
+- **operations_v2** → `OperationsV2Handler` (7 routes)
+- **itunes** → `ITunesHandler` (12 routes; `rebuild`/`export-partial`/transfer
+  routes intentionally left on `*Server`)
+- **ai** → `AIHandler` (15 routes; review helpers relocated as package funcs)
+- **diagnostics** → `DiagnosticsHandler` (6 routes)
+
+Routes moved from `server_lifecycle.go` into `wire_handlers.go` with identical
+paths and permission guards (verified). The old `*_handlers.go` files were
+deleted. Mocks are mockery-generated. 107 new handler unit tests added. A
+review-caught typed-nil boxing bug (nil `opRegistry`/`opHub` defeating handler
+nil-guards) was fixed by guarding the interface assignment in `wireHandlers`.
+No API surface or behavior change.
 
 #### May 31, 2026 — Security workflow CodeQL + Go dependency submission fix
 
