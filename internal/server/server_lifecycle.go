@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.26.0
+// version: 1.27.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-06-03
 
@@ -1247,13 +1247,9 @@ func (s *Server) setupRoutes() {
 			protected.POST("/blocked-hashes", s.perm(auth.PermLibraryEditMetadata), s.addBlockedHash)
 			protected.DELETE("/blocked-hashes/:hash", s.perm(auth.PermLibraryDelete), s.removeBlockedHash)
 
-			// Diagnostics routes
-			protected.GET("/diagnostics/db-health", s.perm(auth.PermSettingsManage), s.getDBHealth)
-			protected.POST("/diagnostics/export", s.perm(auth.PermSettingsManage), s.startDiagnosticsExport)
-			protected.GET("/diagnostics/export/:operationId/download", s.perm(auth.PermSettingsManage), s.downloadDiagnosticsExport)
-			protected.POST("/diagnostics/submit-ai", s.perm(auth.PermSettingsManage), s.submitDiagnosticsAI)
-			protected.GET("/diagnostics/ai-results/:operationId", s.perm(auth.PermSettingsManage), s.getDiagnosticsAIResults)
-			protected.POST("/diagnostics/apply-suggestions", s.perm(auth.PermSettingsManage), s.applyDiagnosticsSuggestions)
+			// Diagnostics routes (db-health/export/submit-ai/ai-results/
+			// apply-suggestions migrated to DiagnosticsHandler in
+			// wire_handlers.go; fingerprint-failures stays here for now).
 			protected.GET("/diagnostics/fingerprint-failures", s.perm(auth.PermSettingsManage), s.getFingerprintFailures)
 
 			// AI Jobs observability route migrated to AIHandler (wire_handlers.go)
