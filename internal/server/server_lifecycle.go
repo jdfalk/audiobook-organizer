@@ -1,7 +1,7 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.25.0
+// version: 1.26.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
-// last-edited: 2026-06-01
+// last-edited: 2026-06-03
 
 package server
 
@@ -987,8 +987,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/authors/count", s.perm(auth.PermLibraryView), s.countAuthors)
 			protected.GET("/authors/duplicates", s.perm(auth.PermLibraryView), s.listDuplicateAuthors)
 			protected.POST("/authors/duplicates/refresh", s.perm(auth.PermLibraryEditMetadata), s.refreshDuplicateAuthors)
-			protected.POST("/authors/duplicates/ai-review", s.perm(auth.PermLibraryEditMetadata), s.aiReviewDuplicateAuthors)
-			protected.POST("/authors/duplicates/ai-review/apply", s.perm(auth.PermLibraryEditMetadata), s.applyAIAuthorReview)
+			// /authors/duplicates/ai-review[/apply] migrated to AIHandler (wire_handlers.go)
 			protected.POST("/authors/merge", s.perm(auth.PermLibraryEditMetadata), s.mergeAuthors)
 			protected.POST("/authors/:id/reclassify-as-narrator", s.perm(auth.PermLibraryEditMetadata), s.reclassifyAuthorAsNarrator)
 			protected.PUT("/authors/:id/name", s.perm(auth.PermLibraryEditMetadata), s.renameAuthor)
@@ -1213,22 +1212,8 @@ func (s *Server) setupRoutes() {
 			protected.POST("/audiobooks/:id/cow-versions/prune", s.perm(auth.PermLibraryEditMetadata), s.pruneBookCOWVersions)
 			protected.POST("/audiobooks/:id/write-back", s.perm(auth.PermLibraryEditMetadata), s.writeBackAudiobookMetadata)
 
-			// AI-powered parsing routes
-			protected.POST("/ai/parse-filename", s.perm(auth.PermLibraryEditMetadata), s.parseFilenameWithAI)
-			protected.POST("/ai/test-connection", s.perm(auth.PermLibraryEditMetadata), s.testAIConnection)
-
-			// AI Scan Pipeline
-			aiScans := protected.Group("/ai/scans")
-			aiScans.POST("", s.perm(auth.PermLibraryEditMetadata), s.startAIScan)
-			aiScans.GET("", s.perm(auth.PermLibraryView), s.listAIScans)
-			aiScans.GET("/compare", s.compareAIScans) // Must be before /:id to avoid conflict
-			aiScans.GET("/:id", s.perm(auth.PermLibraryView), s.getAIScan)
-			aiScans.GET("/:id/results", s.perm(auth.PermLibraryView), s.getAIScanResults)
-			aiScans.POST("/:id/apply", s.perm(auth.PermLibraryEditMetadata), s.applyAIScanResults)
-			aiScans.POST("/:id/cancel", s.perm(auth.PermLibraryEditMetadata), s.cancelAIScan)
-			aiScans.DELETE("/:id", s.perm(auth.PermLibraryDelete), s.deleteAIScan)
-			protected.POST("/metadata-sources/test", s.perm(auth.PermSettingsManage), s.testMetadataSource)
-			protected.POST("/audiobooks/:id/parse-with-ai", s.perm(auth.PermLibraryEditMetadata), s.parseAudiobookWithAI)
+			// AI parsing, scan-pipeline, metadata-source-test, and parse-with-ai
+			// routes migrated to AIHandler (wire_handlers.go).
 
 			// Open Library dump routes
 			protected.GET("/openlibrary/status", s.perm(auth.PermIntegrationsManage), s.getOLStatus)
@@ -1271,8 +1256,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/diagnostics/apply-suggestions", s.perm(auth.PermSettingsManage), s.applyDiagnosticsSuggestions)
 			protected.GET("/diagnostics/fingerprint-failures", s.perm(auth.PermSettingsManage), s.getFingerprintFailures)
 
-			// AI Jobs observability routes
-			protected.GET("/ai-jobs", s.perm(auth.PermSettingsManage), s.handleListAIJobs)
+			// AI Jobs observability route migrated to AIHandler (wire_handlers.go)
 
 			// Bench routes (only available with -tags bench)
 			s.setupUserTagRoutes(protected)

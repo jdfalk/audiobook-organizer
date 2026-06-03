@@ -1,6 +1,7 @@
 // file: internal/server/ai_ops.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
+// last-edited: 2026-06-03
 
 // ai_ops registers the ai.author-review and ai.author-merge-apply
 // OperationDefs that previously went through the legacy BridgeQueue.
@@ -19,6 +20,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 )
 
 // aiReviewOpParams holds the serializable parameters for the ai.author-review op.
@@ -81,9 +83,9 @@ func (s *Server) RegisterAIAuthorReviewOp(reg *opsregistry.Registry) error {
 
 			switch p.Mode {
 			case "groups":
-				return s.aiReviewGroupsMode(ctx, progress, parser, store, p.LegacyOpID, p.DedupGroups)
+				return handlers.AIReviewGroupsMode(ctx, progress, parser, store, p.LegacyOpID, p.DedupGroups)
 			case "full":
-				return s.aiReviewFullMode(ctx, progress, parser, store, p.LegacyOpID)
+				return handlers.AIReviewFullMode(ctx, progress, parser, store, p.LegacyOpID)
 			default:
 				return fmt.Errorf("ai.author-review: unknown mode: %s", p.Mode)
 			}
