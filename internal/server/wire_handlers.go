@@ -88,6 +88,22 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 	pluginsH := handlers.NewPluginsHandler(s.pluginRegistry, config.AppConfig.Plugins)
 	versionsH := handlers.NewVersionsHandler(s.Store())
 
+	// Guard typed-nil boxing of the operations registry and event hub. Both are
+	// concrete pointers on Server (*opsregistry.Registry / *opsregistry.EventHub)
+	// that can legitimately be nil (e.g. container without an opregistry entry;
+	// see server_queue_test.go). Boxing a nil pointer into an interface yields a
+	// non-nil interface, which would defeat the handlers' `h.registry == nil` /
+	// `h.hub == nil` guards (they mirror the old `s.opRegistry == nil` checks on
+	// the concrete pointers) and panic instead of returning a clean 500/503.
+	var opReg handlers.OperationsRegistry
+	if s.opRegistry != nil {
+		opReg = s.opRegistry
+	}
+	var opEventHub handlers.OperationsEventHub
+	if s.opHub != nil {
+		opEventHub = s.opHub
+	}
+
 	// Resolve the opsV2 store from the composite store (nil if unsupported).
 	var opsV2 database.OpsV2Store
 	if st := s.Store(); st != nil {
@@ -95,7 +111,7 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 			opsV2 = v2
 		}
 	}
-	opsV2H := handlers.NewOperationsV2Handler(opsV2, s.opRegistry, s.opHub)
+	opsV2H := handlers.NewOperationsV2Handler(opsV2, opReg, opEventHub)
 
 	// iTunes handlers. Guard the service/importer wiring: s.itunesSvc is set
 	// from the service registry and may be nil (iTunes disabled / not
@@ -108,7 +124,7 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 		itSvc = s.itunesSvc
 		itImporter = s.itunesSvc.Importer
 	}
-	itunesH := handlers.NewITunesHandler(itSvc, itImporter, s.opRegistry, s.Store())
+	itunesH := handlers.NewITunesHandler(itSvc, itImporter, opReg, s.Store())
 
 	// AI handlers. Guard each concrete dependency so a typed-nil pointer is not
 	// boxed into the handler's interface fields — that would defeat the
@@ -132,7 +148,7 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 		aiPipeline,
 		aiUpdater,
 		s.dedupCache,
-		s.opRegistry,
+		opReg,
 		func(b *database.Book) any { return s.enrichBookForResponseSingle(b) },
 	)
 
@@ -159,7 +175,7 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 		diagMergeSvc,
 		s.embeddingStore,
 		s.aiScanStore,
-		s.opRegistry,
+		opReg,
 		diagParser,
 	)
 
