@@ -14,6 +14,7 @@ import (
 	dedupengine "github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
+	audiobookshandler "github.com/jdfalk/audiobook-organizer/internal/server/handlers/audiobooks"
 	deduphandler "github.com/jdfalk/audiobook-organizer/internal/server/handlers/dedup"
 	duplicates "github.com/jdfalk/audiobook-organizer/internal/server/handlers/duplicates"
 	entities "github.com/jdfalk/audiobook-organizer/internal/server/handlers/entities"
@@ -455,6 +456,90 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 		diagParser,
 	)
 
+	// Audiobooks domain handler (main library list / CRUD: list, count, facets,
+	// soft-delete listing / restore / purge, rescan, cover, get, segments,
+	// book-file listing + patch, track-info extract, relocate, segment tags,
+	// metadata + path history, field states, undo, external IDs, user tags +
+	// detailed tags, alternative titles CRUD, batch tag update, update / delete /
+	// batch update / batch operations, changelog, changes; 36 handlers).
+	//
+	// Guard typed-nil boxing for each interface-typed concrete-pointer dep so the
+	// handler's in-method nil guards (mirroring the old `s.audiobookService`/
+	// `s.writeBackBatcher`/`s.metadataFetchService` checks) hold. All of these are
+	// wired before setupRoutes and never swapped post-wire, so snapshotting them
+	// here is safe. The store is a LAZY provider closure (not a snapshot): the
+	// original handlers read s.Store() at request time and a router-integration
+	// test swaps server.store post-wire; s.Store() returns the database.Store
+	// interface (un-stripped) so the handlers' inline type assertions
+	// (Unwrap / ListBooksWithFileErrors / GetAllBookIDsForQuickQuery /
+	// GetBookFilesForIDs / InvalidateLibraryStats) still resolve against the
+	// dynamic type. The caches are concrete (*cache.Cache[T], the cache exception).
+	//
+	// buildListResponse wraps the relocated *Server.buildAudiobookListResponse
+	// (audiobooks_helpers.go), shared with the library list cache warmer.
+	// isProtectedPath / enrichBook / getFieldStates / getExternalIDStore /
+	// publishEvent wrap helpers / behavior that STAY in package server (and in two
+	// cases reference server- or metafetch-private types); the closures let the
+	// sub-package call them without importing package server.
+	var abSvc audiobookshandler.AudiobookService
+	if s.audiobookService != nil {
+		abSvc = s.audiobookService
+	}
+	var abUpdater audiobookshandler.AudiobookUpdater
+	if s.audiobookUpdateService != nil {
+		abUpdater = s.audiobookUpdateService
+	}
+	var abMetaState audiobookshandler.MetadataStateService
+	if s.metadataStateService != nil {
+		abMetaState = s.metadataStateService
+	}
+	var abMetaFetch audiobookshandler.MetadataFetchService
+	if s.metadataFetchService != nil {
+		abMetaFetch = s.metadataFetchService
+	}
+	var abBatch audiobookshandler.BatchService
+	if s.batchService != nil {
+		abBatch = s.batchService
+	}
+	var abChangelog audiobookshandler.ChangelogService
+	if s.changelogService != nil {
+		abChangelog = s.changelogService
+	}
+	audiobooksH := audiobookshandler.New(
+		func() audiobookshandler.AudiobooksStore { return s.Store() },
+		abSvc,
+		abUpdater,
+		// Lazy provider: server.writeBackBatcher is swapped post-wire by
+		// integration tests and the original handlers read it at request time, so
+		// snapshotting would capture the pre-swap value. Nil stays a nil interface.
+		func() audiobookshandler.WriteBackEnqueuer {
+			if s.writeBackBatcher == nil {
+				return nil
+			}
+			return s.writeBackBatcher
+		},
+		abMetaState,
+		abMetaFetch,
+		abBatch,
+		abChangelog,
+		s.listCache,
+		s.facetsCache,
+		s.authorsCache,
+		s.seriesCache,
+		s.buildAudiobookListResponse,
+		s.isProtectedPath,
+		func(b *database.Book) any { return s.enrichBookForResponseSingle(b) },
+		func(id string) (any, error) { return s.metadataStateService.LoadMetadataState(id) },
+		func() audiobookshandler.ExternalIDStore {
+			eid := asExternalIDStore(s.Store())
+			if eid == nil {
+				return nil
+			}
+			return eid
+		},
+		s.publishEvent,
+	)
+
 	// ── Public cache routes (no auth) ────────────────────────────────────────
 	api.GET("/cache/stats", cacheH.HandleCacheStats)
 	api.GET("/cache/stats/history", cacheH.HandleCacheStatsHistory)
@@ -739,6 +824,48 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 	protected.GET("/series/normalize/preview", s.perm(auth.PermLibraryView), duplicatesH.SeriesNormalizePreview)
 	protected.POST("/series/normalize", s.perm(auth.PermLibraryEditMetadata), duplicatesH.SeriesNormalize)
 	protected.POST("/dedup/validate", s.perm(auth.PermLibraryEditMetadata), duplicatesH.ValidateDedupEntry)
+
+	// Audiobooks domain (main library list / CRUD; migrated from
+	// server_lifecycle.go). Paths + permission guards copied verbatim. Sibling
+	// /audiobooks/:id/* routes owned by OTHER domains (quarantine, rating,
+	// sample, organize/rename, versions, metadata, itunes, parse-with-ai, the
+	// batch-write-back/bulk-write-back endpoints) stay in server_lifecycle.go.
+	protected.GET("/audiobooks", s.perm(auth.PermLibraryView), audiobooksH.ListAudiobooks)
+	protected.GET("/audiobooks/count", s.perm(auth.PermLibraryView), audiobooksH.CountAudiobooks)
+	protected.GET("/audiobooks/facets", s.perm(auth.PermLibraryView), audiobooksH.AudiobookFacets)
+	protected.GET("/audiobooks/soft-deleted", s.perm(auth.PermLibraryView), audiobooksH.ListSoftDeletedAudiobooks)
+	protected.DELETE("/audiobooks/purge-soft-deleted", s.perm(auth.PermLibraryDelete), audiobooksH.PurgeSoftDeletedAudiobooks)
+	protected.POST("/audiobooks/:id/restore", s.perm(auth.PermLibraryOrganize), audiobooksH.RestoreAudiobook)
+	protected.POST("/audiobooks/:id/rescan", s.perm(auth.PermLibraryEditMetadata), audiobooksH.RescanAudiobook)
+	protected.GET("/audiobooks/:id", s.perm(auth.PermLibraryView), audiobooksH.GetAudiobook)
+	protected.GET("/audiobooks/:id/tags", s.perm(auth.PermLibraryView), audiobooksH.GetAudiobookTags)
+	protected.PUT("/audiobooks/:id", s.perm(auth.PermLibraryEditMetadata), audiobooksH.UpdateAudiobook)
+	protected.DELETE("/audiobooks/:id", s.perm(auth.PermLibraryDelete), audiobooksH.DeleteAudiobook)
+	protected.GET("/audiobooks/:id/cover", s.perm(auth.PermLibraryView), audiobooksH.ServeAudiobookCover)
+	protected.GET("/audiobooks/:id/segments", s.perm(auth.PermLibraryView), audiobooksH.ListAudiobookSegments)
+	protected.GET("/audiobooks/:id/segments/:segmentId/tags", s.perm(auth.PermLibraryView), audiobooksH.GetSegmentTags)
+	protected.GET("/audiobooks/:id/files", s.perm(auth.PermLibraryView), audiobooksH.ListBookFiles)
+	protected.PATCH("/audiobooks/:id/files/:file_id", s.perm(auth.PermLibraryEditMetadata), audiobooksH.PatchBookFile)
+	protected.GET("/audiobooks/:id/changelog", s.perm(auth.PermLibraryView), audiobooksH.GetBookChangelog)
+	protected.GET("/audiobooks/:id/path-history", s.perm(auth.PermLibraryView), audiobooksH.GetBookPathHistory)
+	protected.GET("/audiobooks/:id/external-ids", s.perm(auth.PermLibraryView), audiobooksH.GetAudiobookExternalIDs)
+	protected.POST("/audiobooks/:id/extract-track-info", s.perm(auth.PermLibraryEditMetadata), audiobooksH.ExtractTrackInfo)
+	protected.POST("/audiobooks/:id/relocate", s.perm(auth.PermLibraryOrganize), audiobooksH.RelocateBookFiles)
+	protected.POST("/audiobooks/batch", s.perm(auth.PermLibraryEditMetadata), audiobooksH.BatchUpdateAudiobooks)
+	protected.POST("/audiobooks/batch-operations", s.perm(auth.PermLibraryEditMetadata), audiobooksH.BatchOperations)
+	protected.GET("/tags", s.perm(auth.PermLibraryView), audiobooksH.ListAllUserTags)
+	protected.GET("/audiobooks/:id/user-tags", s.perm(auth.PermLibraryView), audiobooksH.GetBookUserTags)
+	protected.GET("/audiobooks/:id/tags-detailed", s.perm(auth.PermLibraryView), audiobooksH.GetBookTagsDetailed)
+	protected.POST("/audiobooks/batch-tags", s.perm(auth.PermLibraryEditMetadata), audiobooksH.BatchUpdateTags)
+	protected.GET("/audiobooks/:id/alternative-titles", s.perm(auth.PermLibraryView), audiobooksH.GetBookAlternativeTitles)
+	protected.POST("/audiobooks/:id/alternative-titles", s.perm(auth.PermLibraryEditMetadata), audiobooksH.AddBookAlternativeTitle)
+	protected.DELETE("/audiobooks/:id/alternative-titles", s.perm(auth.PermLibraryDelete), audiobooksH.RemoveBookAlternativeTitle)
+	protected.GET("/audiobooks/:id/metadata-history", s.perm(auth.PermLibraryView), audiobooksH.GetBookMetadataHistory)
+	protected.GET("/audiobooks/:id/metadata-history/:field", s.perm(auth.PermLibraryView), audiobooksH.GetFieldMetadataHistory)
+	protected.POST("/audiobooks/:id/metadata-history/:field/undo", s.perm(auth.PermLibraryEditMetadata), audiobooksH.UndoMetadataChange)
+	protected.POST("/audiobooks/:id/undo-last-apply", s.perm(auth.PermLibraryEditMetadata), audiobooksH.UndoLastApply)
+	protected.GET("/audiobooks/:id/field-states", s.perm(auth.PermLibraryView), audiobooksH.GetAudiobookFieldStates)
+	protected.GET("/audiobooks/:id/changes", s.perm(auth.PermLibraryView), audiobooksH.GetBookChanges)
 
 	// Plugins
 	plugins := protected.Group("/plugins")

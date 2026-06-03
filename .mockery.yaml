@@ -225,3 +225,18 @@ packages:
       MetadataFetchService:
       AudiobookService:
       OperationsRegistry:
+  github.com/jdfalk/audiobook-organizer/internal/server/handlers/audiobooks:
+    config:
+      dir: internal/server/handlers/audiobooks/mocks
+      filename: "mock_{{.InterfaceName | snakecase}}.go"
+      pkgname: audiobooksmocks
+    interfaces:
+      AudiobooksStore:
+      AudiobookService:
+      AudiobookUpdater:
+      WriteBackEnqueuer:
+      MetadataStateService:
+      MetadataFetchService:
+      BatchService:
+      ChangelogService:
+      ExternalIDStore:

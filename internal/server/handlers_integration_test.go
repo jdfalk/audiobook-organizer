@@ -1,5 +1,5 @@
 // file: internal/server/handlers_integration_test.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 package server
@@ -19,6 +19,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
+	audiobookshandler "github.com/jdfalk/audiobook-organizer/internal/server/handlers/audiobooks"
 	entities "github.com/jdfalk/audiobook-organizer/internal/server/handlers/entities"
 	operations "github.com/jdfalk/audiobook-organizer/internal/server/handlers/operations"
 	system "github.com/jdfalk/audiobook-organizer/internal/server/handlers/system"
@@ -115,6 +116,71 @@ func newSystemHandler(s *Server) *system.Handler {
 		resetLibrarySizeCache,
 		func() string { return appVersion },
 		s.filterReviewedAuthorGroups,
+	)
+}
+
+// newAudiobooksHandler constructs an audiobookshandler.Handler from the test
+// server's store + injected deps. The audiobooks domain handlers (main library
+// list / CRUD) were extracted into the handlers/audiobooks sub-package; the
+// whitebox handler tests in handlers_unit_test.go + handlers_integration_test.go
+// still exercise the real store → JSON-envelope path through this constructor.
+// The service/cache deps are wired from the real Server fields; the store is a
+// lazy provider closure (mirroring wireHandlers).
+func newAudiobooksHandler(s *Server) *audiobookshandler.Handler {
+	var abSvc audiobookshandler.AudiobookService
+	if s.audiobookService != nil {
+		abSvc = s.audiobookService
+	}
+	var abUpdater audiobookshandler.AudiobookUpdater
+	if s.audiobookUpdateService != nil {
+		abUpdater = s.audiobookUpdateService
+	}
+	var abMetaState audiobookshandler.MetadataStateService
+	if s.metadataStateService != nil {
+		abMetaState = s.metadataStateService
+	}
+	var abMetaFetch audiobookshandler.MetadataFetchService
+	if s.metadataFetchService != nil {
+		abMetaFetch = s.metadataFetchService
+	}
+	var abBatch audiobookshandler.BatchService
+	if s.batchService != nil {
+		abBatch = s.batchService
+	}
+	var abChangelog audiobookshandler.ChangelogService
+	if s.changelogService != nil {
+		abChangelog = s.changelogService
+	}
+	return audiobookshandler.New(
+		func() audiobookshandler.AudiobooksStore { return s.Store() },
+		abSvc,
+		abUpdater,
+		func() audiobookshandler.WriteBackEnqueuer {
+			if s.writeBackBatcher == nil {
+				return nil
+			}
+			return s.writeBackBatcher
+		},
+		abMetaState,
+		abMetaFetch,
+		abBatch,
+		abChangelog,
+		s.listCache,
+		s.facetsCache,
+		s.authorsCache,
+		s.seriesCache,
+		s.buildAudiobookListResponse,
+		s.isProtectedPath,
+		func(b *database.Book) any { return s.enrichBookForResponseSingle(b) },
+		func(id string) (any, error) { return s.metadataStateService.LoadMetadataState(id) },
+		func() audiobookshandler.ExternalIDStore {
+			eid := asExternalIDStore(s.Store())
+			if eid == nil {
+				return nil
+			}
+			return eid
+		},
+		s.publishEvent,
 	)
 }
 
@@ -381,7 +447,7 @@ func TestBatchUpdateAudiobooks_Empty(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httpReq
 
-	server.batchUpdateAudiobooks(c)
+	newAudiobooksHandler(server).BatchUpdateAudiobooks(c)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", w.Code)
