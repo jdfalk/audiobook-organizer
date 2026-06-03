@@ -17,26 +17,9 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
-// TestCalculatePercent tests percentage calculation.
-func TestCalculatePercent(t *testing.T) {
-	tests := []struct {
-		current, total, want int
-	}{
-		{0, 0, 0},
-		{0, 100, 0},
-		{50, 100, 50},
-		{100, 100, 100},
-		{200, 100, 100}, // capped at 100
-		{-1, 100, 0},    // negative capped at 0
-		{5, 0, 0},       // zero total
-	}
-	for _, tt := range tests {
-		got := calculatePercent(tt.current, tt.total)
-		if got != tt.want {
-			t.Errorf("calculatePercent(%d, %d) = %d, want %d", tt.current, tt.total, got, tt.want)
-		}
-	}
-}
+// NOTE: TestCalculatePercent moved to the handlers package alongside the
+// calculatePercent helper (now unexported in internal/server/handlers/itunes.go).
+// Its behavior is covered there via ITunesHandler.ImportStatus progress assertions.
 
 // TestValidateITunesLibrary tests library validation endpoint.
 func TestValidateITunesLibrary(t *testing.T) {

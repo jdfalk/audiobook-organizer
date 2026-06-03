@@ -96,6 +96,19 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 	}
 	opsV2H := handlers.NewOperationsV2Handler(opsV2, s.opRegistry, s.opHub)
 
+	// iTunes handlers. Guard the service/importer wiring: s.itunesSvc is set
+	// from the service registry and may be nil (iTunes disabled / not
+	// configured). Boxing a typed-nil *Service into the interface would make
+	// the handler's `h.svc == nil` guard read false, so only assign when the
+	// concrete service is non-nil.
+	var itSvc handlers.ITunesService
+	var itImporter handlers.ITunesImporter
+	if s.itunesSvc != nil {
+		itSvc = s.itunesSvc
+		itImporter = s.itunesSvc.Importer
+	}
+	itunesH := handlers.NewITunesHandler(itSvc, itImporter, s.opRegistry, s.Store())
+
 	// ── Public cache routes (no auth) ────────────────────────────────────────
 	api.GET("/cache/stats", cacheH.HandleCacheStats)
 	api.GET("/cache/stats/history", cacheH.HandleCacheStatsHistory)
@@ -174,6 +187,25 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 	protected.POST("/audiobooks/:id/split-to-books", s.perm(auth.PermLibraryEditMetadata), versionsH.SplitSegmentsToBooks)
 	protected.POST("/audiobooks/:id/move-segments", s.perm(auth.PermLibraryEditMetadata), versionsH.MoveSegments)
 	protected.GET("/version-groups/:id", s.perm(auth.PermLibraryView), versionsH.GetVersionGroup)
+
+	// iTunes (12 migrated routes; survivors stay in server_lifecycle.go).
+	// Two protected.Group("/itunes") blocks (here + survivors) is fine in Gin
+	// since there is no duplicate method+path.
+	itunesG := protected.Group("/itunes")
+	{
+		itunesG.POST("/validate", s.perm(auth.PermLibraryEditMetadata), itunesH.Validate)
+		itunesG.POST("/test-mapping", s.perm(auth.PermLibraryEditMetadata), itunesH.TestMapping)
+		itunesG.POST("/import", s.perm(auth.PermLibraryEditMetadata), itunesH.Import)
+		itunesG.POST("/write-back", s.perm(auth.PermLibraryEditMetadata), itunesH.WriteBack)
+		itunesG.POST("/write-back-all", s.perm(auth.PermLibraryEditMetadata), itunesH.WriteBackAll)
+		itunesG.GET("/library-stats", s.perm(auth.PermLibraryView), itunesH.LibraryStats)
+		itunesG.POST("/write-back/preview", s.perm(auth.PermLibraryEditMetadata), itunesH.WriteBackPreview)
+		itunesG.GET("/books", s.perm(auth.PermLibraryView), itunesH.ListBooks)
+		itunesG.GET("/import-status/:id", s.perm(auth.PermLibraryView), itunesH.ImportStatus)
+		itunesG.POST("/import-status/bulk", s.perm(auth.PermLibraryEditMetadata), itunesH.ImportStatusBulk)
+		itunesG.GET("/library-status", s.perm(auth.PermLibraryView), itunesH.LibraryStatus)
+		itunesG.POST("/sync", s.perm(auth.PermLibraryEditMetadata), itunesH.Sync)
+	}
 
 	// Operations v2 (UOS-06)
 	protected.GET("/operations/timeline", s.perm(auth.PermLibraryView), opsV2H.GetOperationTimeline)
