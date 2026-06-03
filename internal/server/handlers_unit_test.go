@@ -1,5 +1,5 @@
 // file: internal/server/handlers_unit_test.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: f8a2d1c3-4b5e-6789-abcd-ef0123456789
 //
 // Unit tests for HTTP handlers using MockStore + httptest.
@@ -890,7 +890,7 @@ func TestHandler_ListWorkBooks_Success(t *testing.T) {
 	}
 	mockStore.EXPECT().GetBooksByWorkID("w1").Return(books, nil)
 
-	router.GET("/works/:id/books", srv.listWorkBooks)
+	router.GET("/works/:id/books", newEntitiesHandler(srv).ListWorkBooks)
 
 	req := httptest.NewRequest("GET", "/works/w1/books", nil)
 	w := httptest.NewRecorder()
@@ -909,7 +909,7 @@ func TestHandler_ListWorkBooks_Empty(t *testing.T) {
 
 	mockStore.EXPECT().GetBooksByWorkID("w2").Return(nil, nil)
 
-	router.GET("/works/:id/books", srv.listWorkBooks)
+	router.GET("/works/:id/books", newEntitiesHandler(srv).ListWorkBooks)
 
 	req := httptest.NewRequest("GET", "/works/w2/books", nil)
 	w := httptest.NewRecorder()
@@ -931,7 +931,7 @@ func TestHandler_CountAuthors_Success(t *testing.T) {
 
 	mockStore.EXPECT().CountAuthors().Return(150, nil)
 
-	router.GET("/authors/count", srv.countAuthors)
+	router.GET("/authors/count", newEntitiesHandler(srv).CountAuthors)
 
 	req := httptest.NewRequest("GET", "/authors/count", nil)
 	w := httptest.NewRecorder()
@@ -950,7 +950,7 @@ func TestHandler_CountAuthors_StoreError(t *testing.T) {
 
 	mockStore.EXPECT().CountAuthors().Return(0, errors.New("db error"))
 
-	router.GET("/authors/count", srv.countAuthors)
+	router.GET("/authors/count", newEntitiesHandler(srv).CountAuthors)
 
 	req := httptest.NewRequest("GET", "/authors/count", nil)
 	w := httptest.NewRecorder()
@@ -980,7 +980,7 @@ func TestHandler_RenameAuthor_Success(t *testing.T) {
 
 	mockStore.EXPECT().UpdateAuthorName(42, "New Name").Return(nil)
 
-	router.PUT("/authors/:id/rename", srv.renameAuthor)
+	router.PUT("/authors/:id/rename", newEntitiesHandler(srv).RenameAuthor)
 
 	body, _ := json.Marshal(map[string]string{"name": "New Name"})
 	req := httptest.NewRequest("PUT", "/authors/42/rename", bytes.NewReader(body))
@@ -1000,7 +1000,7 @@ func TestHandler_RenameAuthor_Success(t *testing.T) {
 func TestHandler_RenameAuthor_InvalidID(t *testing.T) {
 	srv, _, router := setupHandlerTest(t)
 
-	router.PUT("/authors/:id/rename", srv.renameAuthor)
+	router.PUT("/authors/:id/rename", newEntitiesHandler(srv).RenameAuthor)
 
 	body, _ := json.Marshal(map[string]string{"name": "Test"})
 	req := httptest.NewRequest("PUT", "/authors/abc/rename", bytes.NewReader(body))
@@ -1014,7 +1014,7 @@ func TestHandler_RenameAuthor_InvalidID(t *testing.T) {
 func TestHandler_RenameAuthor_EmptyName(t *testing.T) {
 	srv, _, router := setupHandlerTest(t)
 
-	router.PUT("/authors/:id/rename", srv.renameAuthor)
+	router.PUT("/authors/:id/rename", newEntitiesHandler(srv).RenameAuthor)
 
 	body, _ := json.Marshal(map[string]string{"name": "  "})
 	req := httptest.NewRequest("PUT", "/authors/42/rename", bytes.NewReader(body))
@@ -1035,7 +1035,7 @@ func TestHandler_GetAuthorAliases_Success(t *testing.T) {
 	}
 	mockStore.EXPECT().GetAuthorAliases(5).Return(aliases, nil)
 
-	router.GET("/authors/:id/aliases", srv.getAuthorAliases)
+	router.GET("/authors/:id/aliases", newEntitiesHandler(srv).GetAuthorAliases)
 
 	req := httptest.NewRequest("GET", "/authors/5/aliases", nil)
 	w := httptest.NewRecorder()
@@ -1052,7 +1052,7 @@ func TestHandler_GetAuthorAliases_Success(t *testing.T) {
 func TestHandler_GetAuthorAliases_InvalidID(t *testing.T) {
 	srv, _, router := setupHandlerTest(t)
 
-	router.GET("/authors/:id/aliases", srv.getAuthorAliases)
+	router.GET("/authors/:id/aliases", newEntitiesHandler(srv).GetAuthorAliases)
 
 	req := httptest.NewRequest("GET", "/authors/notanumber/aliases", nil)
 	w := httptest.NewRecorder()
@@ -1069,7 +1069,7 @@ func TestHandler_CreateAuthorAlias_Success(t *testing.T) {
 	alias := &database.AuthorAlias{ID: 1, AuthorID: 5, AliasName: "Alt Name", AliasType: "alias"}
 	mockStore.EXPECT().CreateAuthorAlias(5, "Alt Name", "alias").Return(alias, nil)
 
-	router.POST("/authors/:id/aliases", srv.createAuthorAlias)
+	router.POST("/authors/:id/aliases", newEntitiesHandler(srv).CreateAuthorAlias)
 
 	body, _ := json.Marshal(map[string]string{"alias_name": "Alt Name"})
 	req := httptest.NewRequest("POST", "/authors/5/aliases", bytes.NewReader(body))
@@ -1083,7 +1083,7 @@ func TestHandler_CreateAuthorAlias_Success(t *testing.T) {
 func TestHandler_CreateAuthorAlias_MissingName(t *testing.T) {
 	srv, _, router := setupHandlerTest(t)
 
-	router.POST("/authors/:id/aliases", srv.createAuthorAlias)
+	router.POST("/authors/:id/aliases", newEntitiesHandler(srv).CreateAuthorAlias)
 
 	body, _ := json.Marshal(map[string]string{"alias_type": "pen_name"})
 	req := httptest.NewRequest("POST", "/authors/5/aliases", bytes.NewReader(body))
@@ -1101,7 +1101,7 @@ func TestHandler_DeleteAuthorAlias_Success(t *testing.T) {
 
 	mockStore.EXPECT().DeleteAuthorAlias(10).Return(nil)
 
-	router.DELETE("/authors/:id/aliases/:aliasId", srv.deleteAuthorAlias)
+	router.DELETE("/authors/:id/aliases/:aliasId", newEntitiesHandler(srv).DeleteAuthorAlias)
 
 	req := httptest.NewRequest("DELETE", "/authors/5/aliases/10", nil)
 	w := httptest.NewRecorder()
@@ -1113,7 +1113,7 @@ func TestHandler_DeleteAuthorAlias_Success(t *testing.T) {
 func TestHandler_DeleteAuthorAlias_InvalidID(t *testing.T) {
 	srv, _, router := setupHandlerTest(t)
 
-	router.DELETE("/authors/:id/aliases/:aliasId", srv.deleteAuthorAlias)
+	router.DELETE("/authors/:id/aliases/:aliasId", newEntitiesHandler(srv).DeleteAuthorAlias)
 
 	req := httptest.NewRequest("DELETE", "/authors/5/aliases/bad", nil)
 	w := httptest.NewRecorder()
@@ -1130,7 +1130,7 @@ func TestHandler_DeleteAuthor_Success(t *testing.T) {
 	mockStore.EXPECT().GetBooksByAuthorID(42).Return([]database.Book{}, nil)
 	mockStore.EXPECT().DeleteAuthor(42).Return(nil)
 
-	router.DELETE("/authors/:id", srv.deleteAuthorHandler)
+	router.DELETE("/authors/:id", newEntitiesHandler(srv).DeleteAuthor)
 
 	req := httptest.NewRequest("DELETE", "/authors/42", nil)
 	w := httptest.NewRecorder()
@@ -1144,7 +1144,7 @@ func TestHandler_DeleteAuthor_HasBooks(t *testing.T) {
 
 	mockStore.EXPECT().GetBooksByAuthorID(42).Return([]database.Book{{ID: "b1"}}, nil)
 
-	router.DELETE("/authors/:id", srv.deleteAuthorHandler)
+	router.DELETE("/authors/:id", newEntitiesHandler(srv).DeleteAuthor)
 
 	req := httptest.NewRequest("DELETE", "/authors/42", nil)
 	w := httptest.NewRecorder()
@@ -1156,7 +1156,7 @@ func TestHandler_DeleteAuthor_HasBooks(t *testing.T) {
 func TestHandler_DeleteAuthor_InvalidID(t *testing.T) {
 	srv, _, router := setupHandlerTest(t)
 
-	router.DELETE("/authors/:id", srv.deleteAuthorHandler)
+	router.DELETE("/authors/:id", newEntitiesHandler(srv).DeleteAuthor)
 
 	req := httptest.NewRequest("DELETE", "/authors/abc", nil)
 	w := httptest.NewRecorder()
@@ -1172,7 +1172,7 @@ func TestHandler_CountSeries_Success(t *testing.T) {
 
 	mockStore.EXPECT().CountSeries().Return(75, nil)
 
-	router.GET("/series/count", srv.countSeries)
+	router.GET("/series/count", newEntitiesHandler(srv).CountSeries)
 
 	req := httptest.NewRequest("GET", "/series/count", nil)
 	w := httptest.NewRecorder()
@@ -1194,7 +1194,7 @@ func TestHandler_RenameSeries_Success(t *testing.T) {
 	mockStore.EXPECT().UpdateSeriesName(10, "New Series Name").Return(nil)
 	mockStore.EXPECT().GetSeriesByID(10).Return(&database.Series{ID: 10, Name: "New Series Name"}, nil)
 
-	router.PUT("/series/:id/rename", srv.renameSeriesHandler)
+	router.PUT("/series/:id/rename", newEntitiesHandler(srv).RenameSeries)
 
 	body, _ := json.Marshal(map[string]string{"name": "New Series Name"})
 	req := httptest.NewRequest("PUT", "/series/10/rename", bytes.NewReader(body))
@@ -1208,7 +1208,7 @@ func TestHandler_RenameSeries_Success(t *testing.T) {
 func TestHandler_RenameSeries_InvalidID(t *testing.T) {
 	srv, _, router := setupHandlerTest(t)
 
-	router.PUT("/series/:id/rename", srv.renameSeriesHandler)
+	router.PUT("/series/:id/rename", newEntitiesHandler(srv).RenameSeries)
 
 	body, _ := json.Marshal(map[string]string{"name": "Test"})
 	req := httptest.NewRequest("PUT", "/series/abc/rename", bytes.NewReader(body))
@@ -1222,7 +1222,7 @@ func TestHandler_RenameSeries_InvalidID(t *testing.T) {
 func TestHandler_RenameSeries_EmptyName(t *testing.T) {
 	srv, _, router := setupHandlerTest(t)
 
-	router.PUT("/series/:id/rename", srv.renameSeriesHandler)
+	router.PUT("/series/:id/rename", newEntitiesHandler(srv).RenameSeries)
 
 	body, _ := json.Marshal(map[string]string{"name": "   "})
 	req := httptest.NewRequest("PUT", "/series/10/rename", bytes.NewReader(body))
@@ -1241,7 +1241,7 @@ func TestHandler_UpdateSeriesName_Success(t *testing.T) {
 	mockStore.EXPECT().UpdateSeriesName(10, "Updated Name").Return(nil)
 	mockStore.EXPECT().GetSeriesByID(10).Return(&database.Series{ID: 10, Name: "Updated Name"}, nil)
 
-	router.PATCH("/series/:id/name", srv.updateSeriesName)
+	router.PATCH("/series/:id/name", newEntitiesHandler(srv).UpdateSeriesName)
 
 	body, _ := json.Marshal(map[string]string{"name": "Updated Name"})
 	req := httptest.NewRequest("PATCH", "/series/10/name", bytes.NewReader(body))
@@ -1255,7 +1255,7 @@ func TestHandler_UpdateSeriesName_Success(t *testing.T) {
 func TestHandler_UpdateSeriesName_InvalidID(t *testing.T) {
 	srv, _, router := setupHandlerTest(t)
 
-	router.PATCH("/series/:id/name", srv.updateSeriesName)
+	router.PATCH("/series/:id/name", newEntitiesHandler(srv).UpdateSeriesName)
 
 	body, _ := json.Marshal(map[string]string{"name": "Test"})
 	req := httptest.NewRequest("PATCH", "/series/bad/name", bytes.NewReader(body))
@@ -1274,7 +1274,7 @@ func TestHandler_DeleteEmptySeries_Success(t *testing.T) {
 	mockStore.EXPECT().GetBooksBySeriesID(10).Return([]database.Book{}, nil)
 	mockStore.EXPECT().DeleteSeries(10).Return(nil)
 
-	router.DELETE("/series/:id", srv.deleteEmptySeries)
+	router.DELETE("/series/:id", newEntitiesHandler(srv).DeleteEmptySeries)
 
 	req := httptest.NewRequest("DELETE", "/series/10", nil)
 	w := httptest.NewRecorder()
@@ -1288,7 +1288,7 @@ func TestHandler_DeleteEmptySeries_HasBooks(t *testing.T) {
 
 	mockStore.EXPECT().GetBooksBySeriesID(10).Return([]database.Book{{ID: "b1"}}, nil)
 
-	router.DELETE("/series/:id", srv.deleteEmptySeries)
+	router.DELETE("/series/:id", newEntitiesHandler(srv).DeleteEmptySeries)
 
 	req := httptest.NewRequest("DELETE", "/series/10", nil)
 	w := httptest.NewRecorder()
@@ -1300,7 +1300,7 @@ func TestHandler_DeleteEmptySeries_HasBooks(t *testing.T) {
 func TestHandler_DeleteEmptySeries_InvalidID(t *testing.T) {
 	srv, _, router := setupHandlerTest(t)
 
-	router.DELETE("/series/:id", srv.deleteEmptySeries)
+	router.DELETE("/series/:id", newEntitiesHandler(srv).DeleteEmptySeries)
 
 	req := httptest.NewRequest("DELETE", "/series/0", nil)
 	w := httptest.NewRecorder()
@@ -1320,7 +1320,7 @@ func TestHandler_ListNarrators_Success(t *testing.T) {
 	}
 	mockStore.EXPECT().ListNarrators().Return(narrators, nil)
 
-	router.GET("/narrators", srv.listNarrators)
+	router.GET("/narrators", newEntitiesHandler(srv).ListNarrators)
 
 	req := httptest.NewRequest("GET", "/narrators", nil)
 	w := httptest.NewRecorder()
@@ -1334,7 +1334,7 @@ func TestHandler_ListNarrators_StoreError(t *testing.T) {
 
 	mockStore.EXPECT().ListNarrators().Return(nil, errors.New("db error"))
 
-	router.GET("/narrators", srv.listNarrators)
+	router.GET("/narrators", newEntitiesHandler(srv).ListNarrators)
 
 	req := httptest.NewRequest("GET", "/narrators", nil)
 	w := httptest.NewRecorder()
@@ -1351,7 +1351,7 @@ func TestHandler_CountNarrators_Success(t *testing.T) {
 	narrators := []database.Narrator{{ID: 1}, {ID: 2}, {ID: 3}}
 	mockStore.EXPECT().ListNarrators().Return(narrators, nil)
 
-	router.GET("/narrators/count", srv.countNarrators)
+	router.GET("/narrators/count", newEntitiesHandler(srv).CountNarrators)
 
 	req := httptest.NewRequest("GET", "/narrators/count", nil)
 	w := httptest.NewRecorder()
@@ -1375,7 +1375,7 @@ func TestHandler_ListAudiobookNarrators_Success(t *testing.T) {
 	}
 	mockStore.EXPECT().GetBookNarrators("b1").Return(narrators, nil)
 
-	router.GET("/audiobooks/:id/narrators", srv.listAudiobookNarrators)
+	router.GET("/audiobooks/:id/narrators", newEntitiesHandler(srv).ListAudiobookNarrators)
 
 	req := httptest.NewRequest("GET", "/audiobooks/b1/narrators", nil)
 	w := httptest.NewRecorder()
@@ -1389,7 +1389,7 @@ func TestHandler_ListAudiobookNarrators_Empty(t *testing.T) {
 
 	mockStore.EXPECT().GetBookNarrators("b2").Return(nil, nil)
 
-	router.GET("/audiobooks/:id/narrators", srv.listAudiobookNarrators)
+	router.GET("/audiobooks/:id/narrators", newEntitiesHandler(srv).ListAudiobookNarrators)
 
 	req := httptest.NewRequest("GET", "/audiobooks/b2/narrators", nil)
 	w := httptest.NewRecorder()
@@ -1408,7 +1408,7 @@ func TestHandler_SetAudiobookNarrators_Success(t *testing.T) {
 	}
 	mockStore.EXPECT().SetBookNarrators("b1", narrators).Return(nil)
 
-	router.PUT("/audiobooks/:id/narrators", srv.setAudiobookNarrators)
+	router.PUT("/audiobooks/:id/narrators", newEntitiesHandler(srv).SetAudiobookNarrators)
 
 	body, _ := json.Marshal(narrators)
 	req := httptest.NewRequest("PUT", "/audiobooks/b1/narrators", bytes.NewReader(body))

@@ -1,5 +1,5 @@
 // file: internal/server/wire_handlers.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: f7a8b9c0-d1e2-3456-7890-abcdef012345
 // last-edited: 2026-06-03
 
@@ -13,6 +13,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	dedupengine "github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
+	entities "github.com/jdfalk/audiobook-organizer/internal/server/handlers/entities"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
 )
 
@@ -87,6 +88,50 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 	playlistH := handlers.NewPlaylistHandlerWithGetter(s.Store(), s.SearchIndex)
 	pluginsH := handlers.NewPluginsHandler(s.pluginRegistry, config.AppConfig.Plugins)
 	versionsH := handlers.NewVersionsHandler(s.Store())
+
+	// Entities domain handler (authors/series/narrators/works). Guard typed-nil
+	// boxing for each interface-typed dep so the handler's nil checks (and the
+	// concrete pointers' own nil semantics) are preserved. workService and
+	// authorSeriesService are concrete *struct pointers on Server that are
+	// always constructed in NewServer, but the guards keep parity with the
+	// established wiring pattern and are harmless.
+	var entWorkSvc entities.WorkService
+	if s.workService != nil {
+		entWorkSvc = s.workService
+	}
+	var entAuthorSeriesSvc entities.AuthorSeriesService
+	if s.authorSeriesService != nil {
+		entAuthorSeriesSvc = s.authorSeriesService
+	}
+	var entOpReg entities.OperationsRegistry
+	if s.opRegistry != nil {
+		entOpReg = s.opRegistry
+	}
+	// enrichBooks mirrors the original getAuthorBooks/getSeriesBooks loop: one
+	// batch fetch, then per-book enrichment in order. Returns a non-nil slice so
+	// the JSON "items" field is [] (never null) for an empty book list.
+	enrichBooks := func(books []database.Book) []any {
+		bookIDs := make([]string, len(books))
+		for i, b := range books {
+			bookIDs[i] = b.ID
+		}
+		bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID := s.batchFetchBookAuthorsAndNarrators(bookIDs)
+		out := make([]any, len(books))
+		for i := range books {
+			out[i] = s.enrichBookForResponse(&books[i], bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID)
+		}
+		return out
+	}
+	entitiesH := entities.New(
+		s.Store(),
+		entWorkSvc,
+		entAuthorSeriesSvc,
+		entOpReg,
+		s.authorsCache,
+		s.seriesCache,
+		s.dedupCache,
+		enrichBooks,
+	)
 
 	// Guard typed-nil boxing of the operations registry and event hub. Both are
 	// concrete pointers on Server (*opsregistry.Registry / *opsregistry.EventHub)
@@ -296,6 +341,47 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 	protected.POST("/metadata-sources/test", s.perm(auth.PermSettingsManage), aiH.TestMetadataSource)
 	protected.POST("/audiobooks/:id/parse-with-ai", s.perm(auth.PermLibraryEditMetadata), aiH.ParseAudiobook)
 	protected.GET("/ai-jobs", s.perm(auth.PermSettingsManage), aiH.ListAIJobs)
+
+	// Entities domain (migrated from server_lifecycle.go): authors, narrators,
+	// series, and works. Paths + permission guards copied verbatim. Sibling
+	// /authors/duplicates*, /series/duplicates*, /authors/duplicates/ai-review*
+	// (now aiH.*) and the entity-tag routes stay on *Server / their own handlers.
+	protected.GET("/authors", s.perm(auth.PermLibraryView), entitiesH.ListAuthors)
+	protected.GET("/authors/count", s.perm(auth.PermLibraryView), entitiesH.CountAuthors)
+	protected.POST("/authors/merge", s.perm(auth.PermLibraryEditMetadata), entitiesH.MergeAuthors)
+	protected.POST("/authors/:id/reclassify-as-narrator", s.perm(auth.PermLibraryEditMetadata), entitiesH.ReclassifyAuthorAsNarrator)
+	protected.PUT("/authors/:id/name", s.perm(auth.PermLibraryEditMetadata), entitiesH.RenameAuthor)
+	protected.POST("/authors/:id/split", s.perm(auth.PermLibraryEditMetadata), entitiesH.SplitCompositeAuthor)
+	protected.POST("/authors/:id/resolve-production", s.perm(auth.PermLibraryEditMetadata), entitiesH.ResolveProductionAuthor)
+	protected.GET("/authors/:id/aliases", s.perm(auth.PermLibraryView), entitiesH.GetAuthorAliases)
+	protected.POST("/authors/:id/aliases", s.perm(auth.PermLibraryEditMetadata), entitiesH.CreateAuthorAlias)
+	protected.DELETE("/authors/:id/aliases/:aliasId", s.perm(auth.PermLibraryDelete), entitiesH.DeleteAuthorAlias)
+	protected.GET("/authors/:id/books", s.perm(auth.PermLibraryView), entitiesH.GetAuthorBooks)
+	protected.DELETE("/authors/:id", s.perm(auth.PermLibraryDelete), entitiesH.DeleteAuthor)
+	protected.POST("/authors/bulk-delete", s.perm(auth.PermLibraryDelete), entitiesH.BulkDeleteAuthors)
+
+	protected.GET("/narrators", s.perm(auth.PermLibraryView), entitiesH.ListNarrators)
+	protected.GET("/narrators/count", s.perm(auth.PermLibraryView), entitiesH.CountNarrators)
+	protected.GET("/audiobooks/:id/narrators", s.perm(auth.PermLibraryView), entitiesH.ListAudiobookNarrators)
+	protected.PUT("/audiobooks/:id/narrators", s.perm(auth.PermLibraryEditMetadata), entitiesH.SetAudiobookNarrators)
+
+	protected.GET("/series", s.perm(auth.PermLibraryView), entitiesH.ListSeries)
+	protected.GET("/series/count", s.perm(auth.PermLibraryView), entitiesH.CountSeries)
+	protected.PATCH("/series/:id", s.perm(auth.PermLibraryEditMetadata), entitiesH.UpdateSeriesName)
+	protected.GET("/series/:id/books", s.perm(auth.PermLibraryView), entitiesH.GetSeriesBooks)
+	protected.PUT("/series/:id/name", s.perm(auth.PermLibraryEditMetadata), entitiesH.RenameSeries)
+	protected.POST("/series/:id/split", s.perm(auth.PermLibraryEditMetadata), entitiesH.SplitSeries)
+	protected.DELETE("/series/:id", s.perm(auth.PermLibraryDelete), entitiesH.DeleteEmptySeries)
+	protected.POST("/series/bulk-delete", s.perm(auth.PermLibraryDelete), entitiesH.BulkDeleteSeries)
+
+	protected.GET("/works", s.perm(auth.PermLibraryView), entitiesH.ListWorks)
+	protected.POST("/works", s.perm(auth.PermLibraryEditMetadata), entitiesH.CreateWork)
+	protected.GET("/works/:id", s.perm(auth.PermLibraryView), entitiesH.GetWork)
+	protected.PUT("/works/:id", s.perm(auth.PermLibraryEditMetadata), entitiesH.UpdateWork)
+	protected.DELETE("/works/:id", s.perm(auth.PermLibraryDelete), entitiesH.DeleteWork)
+	protected.GET("/works/:id/books", s.perm(auth.PermLibraryView), entitiesH.ListWorkBooks)
+	protected.GET("/work", s.perm(auth.PermLibraryView), entitiesH.ListWork)
+	protected.GET("/work/stats", s.perm(auth.PermLibraryView), entitiesH.GetWorkStats)
 
 	// Diagnostics (migrated from server_lifecycle.go).
 	protected.GET("/diagnostics/db-health", s.perm(auth.PermSettingsManage), diagH.GetDBHealth)

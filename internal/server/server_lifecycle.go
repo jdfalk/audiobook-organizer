@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.27.0
+// version: 1.28.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-06-03
 
@@ -982,27 +982,19 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/:id/field-states", s.perm(auth.PermLibraryView), s.getAudiobookFieldStates)
 			protected.GET("/audiobooks/:id/changes", s.perm(auth.PermLibraryView), s.getBookChanges)
 
-			// Author, narrator, and series routes
-			protected.GET("/authors", s.perm(auth.PermLibraryView), s.listAuthors)
-			protected.GET("/authors/count", s.perm(auth.PermLibraryView), s.countAuthors)
+			// Author, narrator, and series routes.
+			// NOTE: /authors, /authors/count, /authors/merge,
+			// /authors/:id/{reclassify-as-narrator,name,split,resolve-production,
+			// aliases,books}, /authors/:id/aliases/:aliasId, /authors/bulk-delete,
+			// /authors/:id, /narrators[/count], /audiobooks/:id/narrators,
+			// /series[/count], /series/:id[/books,/name,/split], PATCH /series/:id,
+			// /series/bulk-delete, and the work routes migrated to the
+			// handlers/entities sub-package (wire_handlers.go). The duplicate /
+			// dedup / merge / prune / normalize sibling routes stay here.
 			protected.GET("/authors/duplicates", s.perm(auth.PermLibraryView), s.listDuplicateAuthors)
 			protected.POST("/authors/duplicates/refresh", s.perm(auth.PermLibraryEditMetadata), s.refreshDuplicateAuthors)
 			// /authors/duplicates/ai-review[/apply] migrated to AIHandler (wire_handlers.go)
-			protected.POST("/authors/merge", s.perm(auth.PermLibraryEditMetadata), s.mergeAuthors)
-			protected.POST("/authors/:id/reclassify-as-narrator", s.perm(auth.PermLibraryEditMetadata), s.reclassifyAuthorAsNarrator)
-			protected.PUT("/authors/:id/name", s.perm(auth.PermLibraryEditMetadata), s.renameAuthor)
-			protected.POST("/authors/:id/split", s.perm(auth.PermLibraryEditMetadata), s.splitCompositeAuthor)
-			protected.POST("/authors/:id/resolve-production", s.perm(auth.PermLibraryEditMetadata), s.resolveProductionAuthor)
-			protected.GET("/authors/:id/aliases", s.perm(auth.PermLibraryView), s.getAuthorAliases)
-			protected.POST("/authors/:id/aliases", s.perm(auth.PermLibraryEditMetadata), s.createAuthorAlias)
-			protected.DELETE("/authors/:id/aliases/:aliasId", s.perm(auth.PermLibraryDelete), s.deleteAuthorAlias)
 			protected.POST("/audiobooks/merge", s.perm(auth.PermLibraryEditMetadata), s.mergeBooks)
-			protected.GET("/narrators", s.perm(auth.PermLibraryView), s.listNarrators)
-			protected.GET("/narrators/count", s.perm(auth.PermLibraryView), s.countNarrators)
-			protected.GET("/audiobooks/:id/narrators", s.perm(auth.PermLibraryView), s.listAudiobookNarrators)
-			protected.PUT("/audiobooks/:id/narrators", s.perm(auth.PermLibraryEditMetadata), s.setAudiobookNarrators)
-			protected.GET("/series", s.perm(auth.PermLibraryView), s.listSeries)
-			protected.GET("/series/count", s.perm(auth.PermLibraryView), s.countSeries)
 			protected.GET("/series/duplicates", s.perm(auth.PermLibraryView), s.listSeriesDuplicates)
 			protected.POST("/series/duplicates/refresh", s.perm(auth.PermLibraryEditMetadata), s.refreshSeriesDuplicates)
 			protected.POST("/series/deduplicate", s.perm(auth.PermLibraryEditMetadata), s.deduplicateSeriesHandler)
@@ -1011,15 +1003,6 @@ func (s *Server) setupRoutes() {
 			protected.POST("/series/prune", s.perm(auth.PermLibraryEditMetadata), s.seriesPrune)
 			protected.GET("/series/normalize/preview", s.perm(auth.PermLibraryView), s.seriesNormalizePreview)
 			protected.POST("/series/normalize", s.perm(auth.PermLibraryEditMetadata), s.seriesNormalize)
-			protected.PATCH("/series/:id", s.perm(auth.PermLibraryEditMetadata), s.updateSeriesName)
-			protected.GET("/series/:id/books", s.perm(auth.PermLibraryView), s.getSeriesBooks)
-			protected.PUT("/series/:id/name", s.perm(auth.PermLibraryEditMetadata), s.renameSeriesHandler)
-			protected.POST("/series/:id/split", s.perm(auth.PermLibraryEditMetadata), s.splitSeriesHandler)
-			protected.DELETE("/series/:id", s.perm(auth.PermLibraryDelete), s.deleteEmptySeries)
-			protected.GET("/authors/:id/books", s.perm(auth.PermLibraryView), s.getAuthorBooks)
-			protected.DELETE("/authors/:id", s.perm(auth.PermLibraryDelete), s.deleteAuthorHandler)
-			protected.POST("/authors/bulk-delete", s.perm(auth.PermLibraryDelete), s.bulkDeleteAuthors)
-			protected.POST("/series/bulk-delete", s.perm(auth.PermLibraryDelete), s.bulkDeleteSeries)
 			protected.POST("/dedup/validate", s.perm(auth.PermLibraryEditMetadata), s.validateDedupEntry)
 
 			// Embedding-based dedup
@@ -1222,20 +1205,12 @@ func (s *Server) setupRoutes() {
 			protected.POST("/openlibrary/upload", s.perm(auth.PermIntegrationsManage), s.uploadOLDump)
 			protected.DELETE("/openlibrary/data", s.perm(auth.PermIntegrationsManage), s.deleteOLData)
 
-			// Work routes (logical title-level grouping)
-			protected.GET("/works", s.perm(auth.PermLibraryView), s.listWorks)
-			protected.POST("/works", s.perm(auth.PermLibraryEditMetadata), s.createWork)
-			protected.GET("/works/:id", s.perm(auth.PermLibraryView), s.getWork)
-			protected.PUT("/works/:id", s.perm(auth.PermLibraryEditMetadata), s.updateWork)
-			protected.DELETE("/works/:id", s.perm(auth.PermLibraryDelete), s.deleteWork)
-			protected.GET("/works/:id/books", s.perm(auth.PermLibraryView), s.listWorkBooks)
+			// Work routes (logical title-level grouping) and the singular /work
+			// compatibility routes migrated to the handlers/entities sub-package
+			// (wire_handlers.go).
 
 			// Version management routes are registered in wireHandlers
 			// (VersionsHandler).
-
-			// Work queue routes (alternative singular form for compatibility)
-			protected.GET("/work", s.perm(auth.PermLibraryView), s.listWork)
-			protected.GET("/work/stats", s.perm(auth.PermLibraryView), s.getWorkStats)
 
 			// Update routes
 			protected.GET("/update/status", s.perm(auth.PermSettingsManage), s.getUpdateStatus)

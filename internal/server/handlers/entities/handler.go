@@ -1,28 +1,99 @@
-// file: internal/server/entities_handlers.go
-// version: 2.5.0
-// guid: 52cb6f75-cb3e-44e3-bf36-a8bba8a24d21
-//
-// Entity HTTP handlers split out of server.go: works, authors, series,
-// and narrators — CRUD plus merges and listing. Grouped here so the
-// per-entity plumbing stays close to related code.
+// file: internal/server/handlers/entities/handler.go
+// version: 1.0.0
+// guid: b02a07d8-1806-4c86-bb72-f0688d6caff3
+// last-edited: 2026-06-03
 
-package server
+// Package entities hosts the entity-domain HTTP handlers extracted from the
+// server package: works, authors, series, and narrators — CRUD plus merges,
+// splits, reclassification, and listing. Business logic that depended on the
+// *Server receiver is reached through narrow interfaces (EntitiesStore,
+// WorkService, AuthorSeriesService, OperationsRegistry) and an injected
+// enrichBooks function, so package entities never imports package server.
+
+package entities
 
 import (
 	"fmt"
-	"log/slog"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/audiobooks"
+	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	ulid "github.com/oklog/ulid/v2"
 )
 
-func (s *Server) listWorks(c *gin.Context) {
-	resp, err := s.workService.ListWorks()
+// authorMergeOpParams holds the parameters for the entities.author-merge op. It
+// mirrors the server-package type of the same shape; EnqueueOp json.Marshals
+// params immediately, so the server-side Run func unmarshals by these json
+// tags. The tags MUST stay identical to the server-package definition.
+type authorMergeOpParams struct {
+	LegacyOpID string `json:"legacy_op_id"`
+	KeepID     int    `json:"keep_id"`
+	MergeIDs   []int  `json:"merge_ids"`
+	KeepName   string `json:"keep_name"`
+}
+
+// resolveProductionAuthorOpParams holds the parameters for the
+// entities.resolve-production-author op. Mirrors the server-package type.
+type resolveProductionAuthorOpParams struct {
+	LegacyOpID     string `json:"legacy_op_id"`
+	AuthorID       int    `json:"author_id"`
+	ProdAuthorName string `json:"prod_author_name"`
+}
+
+// Handler hosts the entities-domain HTTP endpoints.
+type Handler struct {
+	store               EntitiesStore
+	workService         WorkService
+	authorSeriesService AuthorSeriesService
+	registry            OperationsRegistry
+
+	// Concrete caches (spec cache exception): the exact T matches the
+	// server-package field types.
+	authorsCache *cache.Cache[*audiobooks.AuthorWithCountListResponse]
+	seriesCache  *cache.Cache[*audiobooks.SeriesWithCountsResponse]
+	dedupCache   *cache.Cache[gin.H]
+
+	// enrichBooks resolves author/series/narrator names for a list of books and
+	// returns JSON-ready values (one per input book, in order). It wraps the
+	// server-private batchFetchBookAuthorsAndNarrators + enrichBookForResponse
+	// pair, whose return type (enrichedBookResponse) is server-private. The
+	// controller (wire_handlers.go, package server) implements it.
+	enrichBooks func(books []database.Book) []any
+}
+
+// New constructs an entities Handler from its dependencies.
+func New(
+	store EntitiesStore,
+	workService WorkService,
+	authorSeriesService AuthorSeriesService,
+	registry OperationsRegistry,
+	authorsCache *cache.Cache[*audiobooks.AuthorWithCountListResponse],
+	seriesCache *cache.Cache[*audiobooks.SeriesWithCountsResponse],
+	dedupCache *cache.Cache[gin.H],
+	enrichBooks func(books []database.Book) []any,
+) *Handler {
+	return &Handler{
+		store:               store,
+		workService:         workService,
+		authorSeriesService: authorSeriesService,
+		registry:            registry,
+		authorsCache:        authorsCache,
+		seriesCache:         seriesCache,
+		dedupCache:          dedupCache,
+		enrichBooks:         enrichBooks,
+	}
+}
+
+// --- Works ---
+
+// ListWorks implements GET /works.
+func (h *Handler) ListWorks(c *gin.Context) {
+	resp, err := h.workService.ListWorks()
 	if err != nil {
 		httputil.InternalError(c, "failed to list works", err)
 		return
@@ -30,13 +101,14 @@ func (s *Server) listWorks(c *gin.Context) {
 	httputil.RespondWithOK(c, resp)
 }
 
-func (s *Server) createWork(c *gin.Context) {
+// CreateWork implements POST /works.
+func (h *Handler) CreateWork(c *gin.Context) {
 	var work database.Work
 	if err := c.ShouldBindJSON(&work); err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
-	created, err := s.workService.CreateWork(&work)
+	created, err := h.workService.CreateWork(&work)
 	if err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
@@ -44,9 +116,10 @@ func (s *Server) createWork(c *gin.Context) {
 	httputil.RespondWithCreated(c, created)
 }
 
-func (s *Server) getWork(c *gin.Context) {
+// GetWork implements GET /works/:id.
+func (h *Handler) GetWork(c *gin.Context) {
 	id := c.Param("id")
-	work, err := s.workService.GetWork(id)
+	work, err := h.workService.GetWork(id)
 	if err != nil {
 		httputil.RespondWithNotFound(c, "work", id)
 		return
@@ -54,7 +127,8 @@ func (s *Server) getWork(c *gin.Context) {
 	httputil.RespondWithOK(c, work)
 }
 
-func (s *Server) updateWork(c *gin.Context) {
+// UpdateWork implements PUT /works/:id.
+func (h *Handler) UpdateWork(c *gin.Context) {
 	id := c.Param("id")
 	var work database.Work
 	if err := c.ShouldBindJSON(&work); err != nil {
@@ -65,7 +139,7 @@ func (s *Server) updateWork(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, "title is required")
 		return
 	}
-	updated, err := s.workService.UpdateWork(id, &work)
+	updated, err := h.workService.UpdateWork(id, &work)
 	if err != nil {
 		if err.Error() == "work not found" {
 			httputil.RespondWithNotFound(c, "work", id)
@@ -77,9 +151,10 @@ func (s *Server) updateWork(c *gin.Context) {
 	httputil.RespondWithOK(c, updated)
 }
 
-func (s *Server) deleteWork(c *gin.Context) {
+// DeleteWork implements DELETE /works/:id.
+func (h *Handler) DeleteWork(c *gin.Context) {
 	id := c.Param("id")
-	if err := s.workService.DeleteWork(id); err != nil {
+	if err := h.workService.DeleteWork(id); err != nil {
 		if err.Error() == "work not found" {
 			httputil.RespondWithNotFound(c, "work", id)
 			return
@@ -90,13 +165,14 @@ func (s *Server) deleteWork(c *gin.Context) {
 	httputil.RespondWithNoContent(c)
 }
 
-func (s *Server) listWorkBooks(c *gin.Context) {
-	if s.Store() == nil {
+// ListWorkBooks implements GET /works/:id/books.
+func (h *Handler) ListWorkBooks(c *gin.Context) {
+	if h.store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	id := c.Param("id")
-	books, err := s.Store().GetBooksByWorkID(id)
+	books, err := h.store.GetBooksByWorkID(id)
 	if err != nil {
 		httputil.InternalError(c, "failed to list work books", err)
 		return
@@ -107,26 +183,27 @@ func (s *Server) listWorkBooks(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"items": books, "count": len(books)})
 }
 
-// listWork returns work items (audiobooks grouped by work entity), paginated.
+// ListWork returns work items (audiobooks grouped by work entity), paginated.
 // Uses GetAllWorkBookCounts to compute book counts in a single pass instead of
 // per-work GetBooksByWorkID calls (N+1 on a 50K-work corpus). Books for each
 // work in the page are still fetched individually so callers that need the
 // books slice continue to work; pagination bounds the per-request cost.
-func (s *Server) listWork(c *gin.Context) {
-	if s.Store() == nil {
+// Implements GET /work.
+func (h *Handler) ListWork(c *gin.Context) {
+	if h.store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	params := httputil.ParsePaginationParams(c)
 
-	works, err := s.Store().GetAllWorks()
+	works, err := h.store.GetAllWorks()
 	if err != nil {
 		httputil.RespondWithInternalError(c, "failed to retrieve works")
 		return
 	}
 
-	counts, err := s.Store().GetAllWorkBookCounts()
+	counts, err := h.store.GetAllWorkBookCounts()
 	if err != nil {
 		httputil.RespondWithInternalError(c, "failed to retrieve work book counts")
 		return
@@ -145,7 +222,7 @@ func (s *Server) listWork(c *gin.Context) {
 
 	items := make([]map[string]any, 0, len(page))
 	for _, work := range page {
-		books, err := s.Store().GetBooksByWorkID(work.ID)
+		books, err := h.store.GetBooksByWorkID(work.ID)
 		if err != nil {
 			books = []database.Book{}
 		}
@@ -167,22 +244,22 @@ func (s *Server) listWork(c *gin.Context) {
 	})
 }
 
-// getWorkStats returns statistics about work items. Uses GetAllWorkBookCounts
+// GetWorkStats returns statistics about work items. Uses GetAllWorkBookCounts
 // to compute per-work counts in a single store call instead of N+1
-// GetBooksByWorkID lookups.
-func (s *Server) getWorkStats(c *gin.Context) {
-	if s.Store() == nil {
+// GetBooksByWorkID lookups. Implements GET /work/stats.
+func (h *Handler) GetWorkStats(c *gin.Context) {
+	if h.store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
-	works, err := s.Store().GetAllWorks()
+	works, err := h.store.GetAllWorks()
 	if err != nil {
 		httputil.RespondWithInternalError(c, "failed to retrieve works")
 		return
 	}
 
-	counts, err := s.Store().GetAllWorkBookCounts()
+	counts, err := h.store.GetAllWorkBookCounts()
 	if err != nil {
 		httputil.RespondWithInternalError(c, "failed to retrieve work book counts")
 		return
@@ -208,22 +285,26 @@ func (s *Server) getWorkStats(c *gin.Context) {
 	})
 }
 
-func (s *Server) listAuthors(c *gin.Context) {
-	if cached, ok := s.authorsCache.Get("all"); ok {
+// --- Authors ---
+
+// ListAuthors implements GET /authors.
+func (h *Handler) ListAuthors(c *gin.Context) {
+	if cached, ok := h.authorsCache.Get("all"); ok {
 		httputil.RespondWithOK(c, cached)
 		return
 	}
-	resp, err := s.authorSeriesService.ListAuthorsWithCounts()
+	resp, err := h.authorSeriesService.ListAuthorsWithCounts()
 	if err != nil {
 		httputil.InternalError(c, "failed to list authors", err)
 		return
 	}
-	s.authorsCache.Set("all", resp)
+	h.authorsCache.Set("all", resp)
 	httputil.RespondWithOK(c, resp)
 }
 
-func (s *Server) countAuthors(c *gin.Context) {
-	count, err := s.Store().CountAuthors()
+// CountAuthors implements GET /authors/count.
+func (h *Handler) CountAuthors(c *gin.Context) {
+	count, err := h.store.CountAuthors()
 	if err != nil {
 		httputil.InternalError(c, "failed to count authors", err)
 		return
@@ -231,7 +312,8 @@ func (s *Server) countAuthors(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"count": count})
 }
 
-func (s *Server) renameAuthor(c *gin.Context) {
+// RenameAuthor implements PUT /authors/:id/name.
+func (h *Handler) RenameAuthor(c *gin.Context) {
 	authorID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		httputil.RespondWithBadRequest(c, "invalid author ID")
@@ -252,28 +334,27 @@ func (s *Server) renameAuthor(c *gin.Context) {
 		return
 	}
 
-	store := s.Store()
-	if err := store.UpdateAuthorName(authorID, name); err != nil {
+	if err := h.store.UpdateAuthorName(authorID, name); err != nil {
 		httputil.InternalError(c, "failed to rename author", err)
 		return
 	}
 
-	s.dedupCache.Invalidate("author-duplicates")
-	s.authorsCache.InvalidateAll()
+	h.dedupCache.Invalidate("author-duplicates")
+	h.authorsCache.InvalidateAll()
 	httputil.RespondWithOK(c, gin.H{"id": authorID, "name": name})
 }
 
-// splitCompositeAuthor splits an author like "Author1 / Author2" or "Author1, Author2"
+// SplitCompositeAuthor splits an author like "Author1 / Author2" or "Author1, Author2"
 // into individual author records, relinking all books to each new author.
-func (s *Server) splitCompositeAuthor(c *gin.Context) {
+// Implements POST /authors/:id/split.
+func (h *Handler) SplitCompositeAuthor(c *gin.Context) {
 	authorID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		httputil.RespondWithBadRequest(c, "invalid author ID")
 		return
 	}
 
-	store := s.Store()
-	author, err := store.GetAuthorByID(authorID)
+	author, err := h.store.GetAuthorByID(authorID)
 	if err != nil || author == nil {
 		httputil.RespondWithNotFound(c, "author", "")
 		return
@@ -302,12 +383,12 @@ func (s *Server) splitCompositeAuthor(c *gin.Context) {
 		if name == "" {
 			continue
 		}
-		existing, err := store.GetAuthorByName(name)
+		existing, err := h.store.GetAuthorByName(name)
 		if err == nil && existing != nil {
 			newAuthors = append(newAuthors, *existing)
 			continue
 		}
-		created, err := store.CreateAuthor(name)
+		created, err := h.store.CreateAuthor(name)
 		if err != nil {
 			httputil.InternalError(c, "failed to create author", err)
 			return
@@ -316,7 +397,7 @@ func (s *Server) splitCompositeAuthor(c *gin.Context) {
 	}
 
 	// Get all books linked to the composite author
-	books, err := store.GetBooksByAuthorIDWithRole(authorID)
+	books, err := h.store.GetBooksByAuthorIDWithRole(authorID)
 	if err != nil {
 		httputil.InternalError(c, "failed to get author books", err)
 		return
@@ -324,7 +405,7 @@ func (s *Server) splitCompositeAuthor(c *gin.Context) {
 
 	booksUpdated := 0
 	for _, book := range books {
-		bookAuthors, err := store.GetBookAuthors(book.ID)
+		bookAuthors, err := h.store.GetBookAuthors(book.ID)
 		if err != nil {
 			continue
 		}
@@ -363,14 +444,14 @@ func (s *Server) splitCompositeAuthor(c *gin.Context) {
 				})
 			}
 		}
-		if err := store.SetBookAuthors(book.ID, updated); err != nil {
+		if err := h.store.SetBookAuthors(book.ID, updated); err != nil {
 			continue
 		}
 		booksUpdated++
 	}
 
 	// Delete the composite author
-	if err := store.DeleteAuthor(authorID); err != nil {
+	if err := h.store.DeleteAuthor(authorID); err != nil {
 		httputil.InternalError(c, "failed to delete author", err)
 		return
 	}
@@ -380,12 +461,13 @@ func (s *Server) splitCompositeAuthor(c *gin.Context) {
 		result[i] = gin.H{"id": a.ID, "name": a.Name}
 	}
 
-	s.dedupCache.Invalidate("author-duplicates")
-	s.authorsCache.InvalidateAll()
+	h.dedupCache.Invalidate("author-duplicates")
+	h.authorsCache.InvalidateAll()
 	httputil.RespondWithOK(c, gin.H{"authors": result, "books_updated": booksUpdated})
 }
 
-func (s *Server) mergeAuthors(c *gin.Context) {
+// MergeAuthors implements POST /authors/merge.
+func (h *Handler) MergeAuthors(c *gin.Context) {
 	var req struct {
 		KeepID   int   `json:"keep_id" binding:"required"`
 		MergeIDs []int `json:"merge_ids" binding:"required"`
@@ -400,8 +482,7 @@ func (s *Server) mergeAuthors(c *gin.Context) {
 		return
 	}
 
-	store := s.Store()
-	keepAuthor, err := store.GetAuthorByID(req.KeepID)
+	keepAuthor, err := h.store.GetAuthorByID(req.KeepID)
 	if err != nil || keepAuthor == nil {
 		httputil.RespondWithNotFound(c, "author", "")
 		return
@@ -409,7 +490,7 @@ func (s *Server) mergeAuthors(c *gin.Context) {
 
 	opID := ulid.Make().String()
 	detail := fmt.Sprintf("merge-authors:keep=%d,merge=%v", req.KeepID, req.MergeIDs)
-	op, err := store.CreateOperation(opID, "author-merge", &detail)
+	op, err := h.store.CreateOperation(opID, "author-merge", &detail)
 	if err != nil {
 		httputil.InternalError(c, "failed to create operation", err)
 		return
@@ -421,21 +502,21 @@ func (s *Server) mergeAuthors(c *gin.Context) {
 		MergeIDs:   req.MergeIDs,
 		KeepName:   keepAuthor.Name,
 	}
-	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "entities.author-merge", params); enqErr != nil {
+	if _, enqErr := h.registry.EnqueueOp(c.Request.Context(), "entities.author-merge", params); enqErr != nil {
 		httputil.InternalError(c, "failed to enqueue operation", enqErr)
 		return
 	}
 	httputil.RespondWithSuccess(c, 202, op)
 }
 
-func (s *Server) deleteAuthorHandler(c *gin.Context) {
+// DeleteAuthor implements DELETE /authors/:id.
+func (h *Handler) DeleteAuthor(c *gin.Context) {
 	authorID, err := strconv.Atoi(c.Param("id"))
 	if err != nil || authorID <= 0 {
 		httputil.RespondWithBadRequest(c, "invalid author ID")
 		return
 	}
-	store := s.Store()
-	books, err := store.GetBooksByAuthorID(authorID)
+	books, err := h.store.GetBooksByAuthorID(authorID)
 	if err != nil {
 		httputil.InternalError(c, "failed to get author books", err)
 		return
@@ -444,16 +525,17 @@ func (s *Server) deleteAuthorHandler(c *gin.Context) {
 		httputil.RespondWithConflict(c, "cannot delete author with books")
 		return
 	}
-	if err := store.DeleteAuthor(authorID); err != nil {
+	if err := h.store.DeleteAuthor(authorID); err != nil {
 		httputil.InternalError(c, "failed to delete author", err)
 		return
 	}
-	s.authorsCache.InvalidateAll()
+	h.authorsCache.InvalidateAll()
 	httputil.RespondWithOK(c, gin.H{"message": "author deleted"})
 }
 
-// bulkDeleteAuthors deletes multiple zero-book authors at once.
-func (s *Server) bulkDeleteAuthors(c *gin.Context) {
+// BulkDeleteAuthors deletes multiple zero-book authors at once.
+// Implements POST /authors/bulk-delete.
+func (h *Handler) BulkDeleteAuthors(c *gin.Context) {
 	var req struct {
 		IDs []int `json:"ids" binding:"required"`
 	}
@@ -461,12 +543,11 @@ func (s *Server) bulkDeleteAuthors(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
-	store := s.Store()
 	deleted := 0
 	skipped := 0
 	var errors []string
 	for _, id := range req.IDs {
-		books, err := store.GetBooksByAuthorID(id)
+		books, err := h.store.GetBooksByAuthorID(id)
 		if err != nil {
 			errors = append(errors, fmt.Sprintf("author %d: %v", id, err))
 			continue
@@ -475,14 +556,14 @@ func (s *Server) bulkDeleteAuthors(c *gin.Context) {
 			skipped++
 			continue
 		}
-		if err := store.DeleteAuthor(id); err != nil {
+		if err := h.store.DeleteAuthor(id); err != nil {
 			errors = append(errors, fmt.Sprintf("author %d: %v", id, err))
 			continue
 		}
 		deleted++
 	}
 	if deleted > 0 {
-		s.authorsCache.InvalidateAll()
+		h.authorsCache.InvalidateAll()
 	}
 	httputil.RespondWithOK(c, gin.H{
 		"deleted": deleted,
@@ -492,40 +573,31 @@ func (s *Server) bulkDeleteAuthors(c *gin.Context) {
 	})
 }
 
-func (s *Server) getAuthorBooks(c *gin.Context) {
+// GetAuthorBooks implements GET /authors/:id/books.
+func (h *Handler) GetAuthorBooks(c *gin.Context) {
 	authorID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		httputil.RespondWithBadRequest(c, "invalid author ID")
 		return
 	}
-	store := s.Store()
-	books, err := store.GetBooksByAuthorID(authorID)
+	books, err := h.store.GetBooksByAuthorID(authorID)
 	if err != nil {
 		httputil.InternalError(c, "failed to get author books", err)
 		return
 	}
 
-	// Pre-fetch authors and narrators for all books
-	bookIDs := make([]string, len(books))
-	for i, b := range books {
-		bookIDs[i] = b.ID
-	}
-	bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID := s.batchFetchBookAuthorsAndNarrators(bookIDs)
-
-	enriched := make([]enrichedBookResponse, len(books))
-	for i := range books {
-		enriched[i] = s.enrichBookForResponse(&books[i], bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID)
-	}
+	enriched := h.enrichBooks(books)
 	httputil.RespondWithOK(c, gin.H{"items": enriched, "count": len(enriched)})
 }
 
-func (s *Server) getAuthorAliases(c *gin.Context) {
+// GetAuthorAliases implements GET /authors/:id/aliases.
+func (h *Handler) GetAuthorAliases(c *gin.Context) {
 	authorID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		httputil.RespondWithBadRequest(c, "invalid author ID")
 		return
 	}
-	aliases, err := s.Store().GetAuthorAliases(authorID)
+	aliases, err := h.store.GetAuthorAliases(authorID)
 	if err != nil {
 		httputil.InternalError(c, "failed to get author aliases", err)
 		return
@@ -533,7 +605,8 @@ func (s *Server) getAuthorAliases(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"aliases": aliases})
 }
 
-func (s *Server) createAuthorAlias(c *gin.Context) {
+// CreateAuthorAlias implements POST /authors/:id/aliases.
+func (h *Handler) CreateAuthorAlias(c *gin.Context) {
 	authorID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		httputil.RespondWithBadRequest(c, "invalid author ID")
@@ -554,47 +627,48 @@ func (s *Server) createAuthorAlias(c *gin.Context) {
 	if req.AliasType == "" {
 		req.AliasType = "alias"
 	}
-	alias, err := s.Store().CreateAuthorAlias(authorID, req.AliasName, req.AliasType)
+	alias, err := h.store.CreateAuthorAlias(authorID, req.AliasName, req.AliasType)
 	if err != nil {
 		httputil.InternalError(c, "failed to create author alias", err)
 		return
 	}
-	s.authorsCache.InvalidateAll()
+	h.authorsCache.InvalidateAll()
 	httputil.RespondWithCreated(c, alias)
 }
 
-func (s *Server) deleteAuthorAlias(c *gin.Context) {
+// DeleteAuthorAlias implements DELETE /authors/:id/aliases/:aliasId.
+func (h *Handler) DeleteAuthorAlias(c *gin.Context) {
 	aliasID, err := strconv.Atoi(c.Param("aliasId"))
 	if err != nil {
 		httputil.RespondWithBadRequest(c, "invalid alias ID")
 		return
 	}
-	if err := s.Store().DeleteAuthorAlias(aliasID); err != nil {
+	if err := h.store.DeleteAuthorAlias(aliasID); err != nil {
 		httputil.InternalError(c, "failed to delete author alias", err)
 		return
 	}
-	s.authorsCache.InvalidateAll()
+	h.authorsCache.InvalidateAll()
 	httputil.RespondWithOK(c, gin.H{"status": "deleted"})
 }
 
-func (s *Server) reclassifyAuthorAsNarrator(c *gin.Context) {
+// ReclassifyAuthorAsNarrator implements POST /authors/:id/reclassify-as-narrator.
+func (h *Handler) ReclassifyAuthorAsNarrator(c *gin.Context) {
 	authorID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		httputil.RespondWithBadRequest(c, "invalid author ID")
 		return
 	}
 
-	store := s.Store()
-	author, err := store.GetAuthorByID(authorID)
+	author, err := h.store.GetAuthorByID(authorID)
 	if err != nil || author == nil {
 		httputil.RespondWithNotFound(c, "author", "")
 		return
 	}
 
 	// Create or find narrator with same name
-	narrator, err := store.GetNarratorByName(author.Name)
+	narrator, err := h.store.GetNarratorByName(author.Name)
 	if err != nil || narrator == nil {
-		narrator, err = store.CreateNarrator(author.Name)
+		narrator, err = h.store.CreateNarrator(author.Name)
 		if err != nil {
 			httputil.InternalError(c, "failed to create narrator", err)
 			return
@@ -602,7 +676,7 @@ func (s *Server) reclassifyAuthorAsNarrator(c *gin.Context) {
 	}
 
 	// Get all books linked to this author
-	books, err := store.GetBooksByAuthorIDWithRole(authorID)
+	books, err := h.store.GetBooksByAuthorIDWithRole(authorID)
 	if err != nil {
 		httputil.InternalError(c, "failed to get author books", err)
 		return
@@ -611,7 +685,7 @@ func (s *Server) reclassifyAuthorAsNarrator(c *gin.Context) {
 	booksUpdated := 0
 	for _, book := range books {
 		// Remove author link
-		bookAuthors, err := store.GetBookAuthors(book.ID)
+		bookAuthors, err := h.store.GetBookAuthors(book.ID)
 		if err != nil {
 			continue
 		}
@@ -621,12 +695,12 @@ func (s *Server) reclassifyAuthorAsNarrator(c *gin.Context) {
 				newAuthors = append(newAuthors, ba)
 			}
 		}
-		if err := store.SetBookAuthors(book.ID, newAuthors); err != nil {
+		if err := h.store.SetBookAuthors(book.ID, newAuthors); err != nil {
 			continue
 		}
 
 		// Add narrator link if not already present
-		bookNarrators, err := store.GetBookNarrators(book.ID)
+		bookNarrators, err := h.store.GetBookNarrators(book.ID)
 		if err != nil {
 			continue
 		}
@@ -644,7 +718,7 @@ func (s *Server) reclassifyAuthorAsNarrator(c *gin.Context) {
 				Role:       "narrator",
 				Position:   len(bookNarrators),
 			})
-			if err := store.SetBookNarrators(book.ID, bookNarrators); err != nil {
+			if err := h.store.SetBookNarrators(book.ID, bookNarrators); err != nil {
 				continue
 			}
 		}
@@ -652,28 +726,27 @@ func (s *Server) reclassifyAuthorAsNarrator(c *gin.Context) {
 	}
 
 	// Delete the author record
-	if err := store.DeleteAuthor(authorID); err != nil {
+	if err := h.store.DeleteAuthor(authorID); err != nil {
 		httputil.InternalError(c, "failed to delete author", err)
 		return
 	}
 
-	s.dedupCache.Invalidate("author-duplicates")
-	s.authorsCache.InvalidateAll()
+	h.dedupCache.Invalidate("author-duplicates")
+	h.authorsCache.InvalidateAll()
 	httputil.RespondWithOK(c, gin.H{"narrator_id": narrator.ID, "books_updated": booksUpdated})
 }
 
-// resolveProductionAuthor attempts to find real authors for books attributed to
+// ResolveProductionAuthor attempts to find real authors for books attributed to
 // a production company by searching metadata sources by title only and optionally
-// using AI cover art analysis.
-func (s *Server) resolveProductionAuthor(c *gin.Context) {
+// using AI cover art analysis. Implements POST /authors/:id/resolve-production.
+func (h *Handler) ResolveProductionAuthor(c *gin.Context) {
 	authorID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		httputil.RespondWithBadRequest(c, "invalid author ID")
 		return
 	}
 
-	store := s.Store()
-	author, err := store.GetAuthorByID(authorID)
+	author, err := h.store.GetAuthorByID(authorID)
 	if err != nil || author == nil {
 		httputil.RespondWithNotFound(c, "author", "")
 		return
@@ -685,7 +758,7 @@ func (s *Server) resolveProductionAuthor(c *gin.Context) {
 	}
 
 	opID := ulid.Make().String()
-	op, err := store.CreateOperation(opID, "resolve-production-author", nil)
+	op, err := h.store.CreateOperation(opID, "resolve-production-author", nil)
 	if err != nil {
 		httputil.InternalError(c, "failed to create operation", err)
 		return
@@ -696,15 +769,18 @@ func (s *Server) resolveProductionAuthor(c *gin.Context) {
 		AuthorID:       authorID,
 		ProdAuthorName: author.Name,
 	}
-	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "entities.resolve-production-author", params); enqErr != nil {
+	if _, enqErr := h.registry.EnqueueOp(c.Request.Context(), "entities.resolve-production-author", params); enqErr != nil {
 		httputil.InternalError(c, "failed to enqueue operation", enqErr)
 		return
 	}
 	httputil.RespondWithSuccess(c, 202, gin.H{"operation": op})
 }
 
-func (s *Server) countSeries(c *gin.Context) {
-	count, err := s.Store().CountSeries()
+// --- Series ---
+
+// CountSeries implements GET /series/count.
+func (h *Handler) CountSeries(c *gin.Context) {
+	count, err := h.store.CountSeries()
 	if err != nil {
 		httputil.InternalError(c, "failed to count series", err)
 		return
@@ -712,48 +788,40 @@ func (s *Server) countSeries(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"count": count})
 }
 
-func (s *Server) listSeries(c *gin.Context) {
-	if cached, ok := s.seriesCache.Get("all"); ok {
+// ListSeries implements GET /series.
+func (h *Handler) ListSeries(c *gin.Context) {
+	if cached, ok := h.seriesCache.Get("all"); ok {
 		httputil.RespondWithOK(c, cached)
 		return
 	}
-	resp, err := s.authorSeriesService.ListSeriesWithCounts()
+	resp, err := h.authorSeriesService.ListSeriesWithCounts()
 	if err != nil {
 		httputil.InternalError(c, "failed to list series", err)
 		return
 	}
-	s.seriesCache.Set("all", resp)
+	h.seriesCache.Set("all", resp)
 	httputil.RespondWithOK(c, resp)
 }
 
-func (s *Server) getSeriesBooks(c *gin.Context) {
+// GetSeriesBooks implements GET /series/:id/books.
+func (h *Handler) GetSeriesBooks(c *gin.Context) {
 	seriesID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		httputil.RespondWithBadRequest(c, "invalid series ID")
 		return
 	}
-	store := s.Store()
-	books, err := store.GetBooksBySeriesID(seriesID)
+	books, err := h.store.GetBooksBySeriesID(seriesID)
 	if err != nil {
 		httputil.InternalError(c, "failed to get series books", err)
 		return
 	}
 
-	// Pre-fetch authors and narrators for all books
-	bookIDs := make([]string, len(books))
-	for i, b := range books {
-		bookIDs[i] = b.ID
-	}
-	bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID := s.batchFetchBookAuthorsAndNarrators(bookIDs)
-
-	enriched := make([]enrichedBookResponse, len(books))
-	for i := range books {
-		enriched[i] = s.enrichBookForResponse(&books[i], bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID)
-	}
+	enriched := h.enrichBooks(books)
 	httputil.RespondWithOK(c, gin.H{"items": enriched, "count": len(enriched)})
 }
 
-func (s *Server) renameSeriesHandler(c *gin.Context) {
+// RenameSeries implements PUT /series/:id/name.
+func (h *Handler) RenameSeries(c *gin.Context) {
 	seriesID, err := strconv.Atoi(c.Param("id"))
 	if err != nil || seriesID <= 0 {
 		httputil.RespondWithBadRequest(c, "invalid series ID")
@@ -771,20 +839,20 @@ func (s *Server) renameSeriesHandler(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, "name must not be empty")
 		return
 	}
-	store := s.Store()
-	if err := store.UpdateSeriesName(seriesID, name); err != nil {
+	if err := h.store.UpdateSeriesName(seriesID, name); err != nil {
 		httputil.InternalError(c, "failed to rename series", err)
 		return
 	}
-	if s.dedupCache != nil {
-		s.dedupCache.Invalidate("series-duplicates")
+	if h.dedupCache != nil {
+		h.dedupCache.Invalidate("series-duplicates")
 	}
-	s.seriesCache.InvalidateAll()
-	series, _ := store.GetSeriesByID(seriesID)
+	h.seriesCache.InvalidateAll()
+	series, _ := h.store.GetSeriesByID(seriesID)
 	httputil.RespondWithOK(c, series)
 }
 
-func (s *Server) splitSeriesHandler(c *gin.Context) {
+// SplitSeries implements POST /series/:id/split.
+func (h *Handler) SplitSeries(c *gin.Context) {
 	seriesID, err := strconv.Atoi(c.Param("id"))
 	if err != nil || seriesID <= 0 {
 		httputil.RespondWithBadRequest(c, "invalid series ID")
@@ -801,20 +869,19 @@ func (s *Server) splitSeriesHandler(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, "book_ids must not be empty")
 		return
 	}
-	store := s.Store()
-	oldSeries, err := store.GetSeriesByID(seriesID)
+	oldSeries, err := h.store.GetSeriesByID(seriesID)
 	if err != nil || oldSeries == nil {
 		httputil.RespondWithNotFound(c, "series", "")
 		return
 	}
-	newSeries, err := store.CreateSeries(oldSeries.Name+" (Split)", oldSeries.AuthorID)
+	newSeries, err := h.store.CreateSeries(oldSeries.Name+" (Split)", oldSeries.AuthorID)
 	if err != nil {
 		httputil.InternalError(c, "failed to create new series", err)
 		return
 	}
 	moved := 0
 	for _, bookID := range req.BookIDs {
-		book, err := store.GetBookByID(bookID)
+		book, err := h.store.GetBookByID(bookID)
 		if err != nil || book == nil {
 			continue
 		}
@@ -822,26 +889,26 @@ func (s *Server) splitSeriesHandler(c *gin.Context) {
 			continue
 		}
 		book.SeriesID = &newSeries.ID
-		if _, err := store.UpdateBook(book.ID, book); err != nil {
+		if _, err := h.store.UpdateBook(book.ID, book); err != nil {
 			continue
 		}
 		moved++
 	}
-	if s.dedupCache != nil {
-		s.dedupCache.Invalidate("series-duplicates")
+	if h.dedupCache != nil {
+		h.dedupCache.Invalidate("series-duplicates")
 	}
-	s.seriesCache.InvalidateAll()
+	h.seriesCache.InvalidateAll()
 	httputil.RespondWithOK(c, gin.H{"new_series": newSeries, "books_moved": moved})
 }
 
-func (s *Server) deleteEmptySeries(c *gin.Context) {
+// DeleteEmptySeries implements DELETE /series/:id.
+func (h *Handler) DeleteEmptySeries(c *gin.Context) {
 	seriesID, err := strconv.Atoi(c.Param("id"))
 	if err != nil || seriesID <= 0 {
 		httputil.RespondWithBadRequest(c, "invalid series ID")
 		return
 	}
-	store := s.Store()
-	books, err := store.GetBooksBySeriesID(seriesID)
+	books, err := h.store.GetBooksBySeriesID(seriesID)
 	if err != nil {
 		httputil.InternalError(c, "failed to get series books", err)
 		return
@@ -850,16 +917,17 @@ func (s *Server) deleteEmptySeries(c *gin.Context) {
 		httputil.RespondWithConflict(c, "cannot delete series with books")
 		return
 	}
-	if err := store.DeleteSeries(seriesID); err != nil {
+	if err := h.store.DeleteSeries(seriesID); err != nil {
 		httputil.InternalError(c, "failed to delete series", err)
 		return
 	}
-	s.seriesCache.InvalidateAll()
+	h.seriesCache.InvalidateAll()
 	httputil.RespondWithOK(c, gin.H{"message": "series deleted"})
 }
 
-// bulkDeleteSeries deletes multiple empty series at once.
-func (s *Server) bulkDeleteSeries(c *gin.Context) {
+// BulkDeleteSeries deletes multiple empty series at once.
+// Implements POST /series/bulk-delete.
+func (h *Handler) BulkDeleteSeries(c *gin.Context) {
 	var req struct {
 		IDs []int `json:"ids" binding:"required"`
 	}
@@ -867,12 +935,11 @@ func (s *Server) bulkDeleteSeries(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
-	store := s.Store()
 	deleted := 0
 	skipped := 0
 	var errors []string
 	for _, id := range req.IDs {
-		books, err := store.GetBooksBySeriesID(id)
+		books, err := h.store.GetBooksBySeriesID(id)
 		if err != nil {
 			errors = append(errors, fmt.Sprintf("series %d: %v", id, err))
 			continue
@@ -881,14 +948,14 @@ func (s *Server) bulkDeleteSeries(c *gin.Context) {
 			skipped++
 			continue
 		}
-		if err := store.DeleteSeries(id); err != nil {
+		if err := h.store.DeleteSeries(id); err != nil {
 			errors = append(errors, fmt.Sprintf("series %d: %v", id, err))
 			continue
 		}
 		deleted++
 	}
 	if deleted > 0 {
-		s.seriesCache.InvalidateAll()
+		h.seriesCache.InvalidateAll()
 	}
 	httputil.RespondWithOK(c, gin.H{
 		"deleted": deleted,
@@ -898,7 +965,8 @@ func (s *Server) bulkDeleteSeries(c *gin.Context) {
 	})
 }
 
-func (s *Server) updateSeriesName(c *gin.Context) {
+// UpdateSeriesName implements PATCH /series/:id.
+func (h *Handler) UpdateSeriesName(c *gin.Context) {
 	idStr := c.Param("id")
 	id := 0
 	if _, err := fmt.Sscanf(idStr, "%d", &id); err != nil || id <= 0 {
@@ -917,23 +985,25 @@ func (s *Server) updateSeriesName(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, "name cannot be empty")
 		return
 	}
-	store := s.Store()
-	if err := store.UpdateSeriesName(id, name); err != nil {
+	if err := h.store.UpdateSeriesName(id, name); err != nil {
 		httputil.InternalError(c, "failed to update series", err)
 		return
 	}
-	s.dedupCache.Invalidate("series-duplicates")
-	s.seriesCache.InvalidateAll()
-	series, _ := store.GetSeriesByID(id)
+	h.dedupCache.Invalidate("series-duplicates")
+	h.seriesCache.InvalidateAll()
+	series, _ := h.store.GetSeriesByID(id)
 	httputil.RespondWithOK(c, series)
 }
 
-func (s *Server) listNarrators(c *gin.Context) {
-	if s.Store() == nil {
+// --- Narrators ---
+
+// ListNarrators implements GET /narrators.
+func (h *Handler) ListNarrators(c *gin.Context) {
+	if h.store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	narrators, err := s.Store().ListNarrators()
+	narrators, err := h.store.ListNarrators()
 	if err != nil {
 		httputil.InternalError(c, "failed to list narrators", err)
 		return
@@ -941,12 +1011,13 @@ func (s *Server) listNarrators(c *gin.Context) {
 	httputil.RespondWithOK(c, narrators)
 }
 
-func (s *Server) countNarrators(c *gin.Context) {
-	if s.Store() == nil {
+// CountNarrators implements GET /narrators/count.
+func (h *Handler) CountNarrators(c *gin.Context) {
+	if h.store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	narrators, err := s.Store().ListNarrators()
+	narrators, err := h.store.ListNarrators()
 	if err != nil {
 		httputil.InternalError(c, "failed to count narrators", err)
 		return
@@ -954,13 +1025,14 @@ func (s *Server) countNarrators(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"count": len(narrators)})
 }
 
-func (s *Server) listAudiobookNarrators(c *gin.Context) {
+// ListAudiobookNarrators implements GET /audiobooks/:id/narrators.
+func (h *Handler) ListAudiobookNarrators(c *gin.Context) {
 	id := c.Param("id")
-	if s.Store() == nil {
+	if h.store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	narrators, err := s.Store().GetBookNarrators(id)
+	narrators, err := h.store.GetBookNarrators(id)
 	if err != nil {
 		httputil.InternalError(c, "failed to list audiobook narrators", err)
 		return
@@ -971,9 +1043,10 @@ func (s *Server) listAudiobookNarrators(c *gin.Context) {
 	httputil.RespondWithOK(c, narrators)
 }
 
-func (s *Server) setAudiobookNarrators(c *gin.Context) {
+// SetAudiobookNarrators implements PUT /audiobooks/:id/narrators.
+func (h *Handler) SetAudiobookNarrators(c *gin.Context) {
 	id := c.Param("id")
-	if s.Store() == nil {
+	if h.store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
@@ -982,41 +1055,13 @@ func (s *Server) setAudiobookNarrators(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
-	if err := s.Store().SetBookNarrators(id, narrators); err != nil {
+	if err := h.store.SetBookNarrators(id, narrators); err != nil {
 		httputil.InternalError(c, "failed to set audiobook narrators", err)
 		return
 	}
 
 	// Invalidate caches since narrators may have changed
-	s.authorsCache.InvalidateAll()
+	h.authorsCache.InvalidateAll()
 
 	httputil.RespondWithOK(c, gin.H{"status": "ok"})
-}
-
-func (s *Server) warmAuthorsCache() {
-	if s.Store() == nil {
-		return
-	}
-	slog.Info("authors pre-warming cache")
-	result, err := s.authorSeriesService.ListAuthorsWithCounts()
-	if err != nil {
-		slog.Info("authors warm-up failed", "err", err)
-		return
-	}
-	s.authorsCache.Set("all", result)
-	slog.Info("authors cache warmed", "count", result.Count)
-}
-
-func (s *Server) warmSeriesCache() {
-	if s.Store() == nil {
-		return
-	}
-	slog.Info("series pre-warming cache")
-	result, err := s.authorSeriesService.ListSeriesWithCounts()
-	if err != nil {
-		slog.Info("series warm-up failed", "err", err)
-		return
-	}
-	s.seriesCache.Set("all", result)
-	slog.Info("series cache warmed", "count", result.Count)
 }
