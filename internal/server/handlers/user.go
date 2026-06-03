@@ -1,5 +1,5 @@
 // file: internal/server/handlers/user.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b2c3d4e5-f6a7-8901-bcde-ef0123456789
 // last-edited: 2026-06-02
 
@@ -158,7 +158,9 @@ func (h *UserHandler) AcceptInvite(c *gin.Context) {
 	// SetSessionCookie is exported from handlers/auth.go; user.go is in the
 	// same package so we can call it directly.
 	SetSessionCookie(c, sess.ID, sess.ExpiresAt)
-	httputil.RespondWithCreated(c, gin.H{"user": user, "session": sess})
+	// Session token is delivered via the HttpOnly cookie only — never in the
+	// JSON body (would expose the bearer token to page JS, defeating HttpOnly).
+	httputil.RespondWithCreated(c, gin.H{"user": user, "expires_at": sess.ExpiresAt})
 }
 
 // DeactivateUser handles POST /api/v1/users/:id/deactivate — soft-deactivates a user.

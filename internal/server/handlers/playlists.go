@@ -1,5 +1,5 @@
 // file: internal/server/handlers/playlists.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: a7b8c9d0-e1f2-3456-abcd-456789012345
 // last-edited: 2026-06-02
 
@@ -92,6 +92,15 @@ func NewPlaylistHandlerWithGetter(store PlaylistStore, indexFn func() *search.Bl
 	return &PlaylistHandler{store: store, indexFn: indexFn}
 }
 
+// ownedByCaller reports whether pl belongs to the calling user. Playlists are
+// per-user; without this check any authenticated user could read or mutate
+// another user's playlist by guessing its ID (IDOR). A nil playlist is treated
+// as not-owned. Callers respond 404 (not 403) on failure so the existence of
+// another user's playlist is not disclosed.
+func ownedByCaller(c *gin.Context, pl *database.UserPlaylist) bool {
+	return pl != nil && pl.CreatedByUserID == CallingUserID(c)
+}
+
 // -----------------------------------------------------------------------
 // HTTP handlers
 // -----------------------------------------------------------------------
@@ -141,7 +150,8 @@ func (h *PlaylistHandler) ListPlaylists(c *gin.Context) {
 		return
 	}
 	p := httputil.ParsePaginationParams(c)
-	lists, total, err := h.store.ListUserPlaylists(plType, p.Limit, p.Offset)
+	// Scope to the calling user — a user must not see another user's playlists.
+	lists, total, err := h.store.ListUserPlaylistsForUser(CallingUserID(c), plType, p.Limit, p.Offset)
 	if err != nil {
 		httputil.InternalError(c, "failed to list playlists", err)
 		return
@@ -162,6 +172,11 @@ func (h *PlaylistHandler) GetPlaylist(c *gin.Context) {
 		return
 	}
 	if pl == nil {
+		httputil.RespondWithNotFound(c, "playlist", id)
+		return
+	}
+
+	if !ownedByCaller(c, pl) {
 		httputil.RespondWithNotFound(c, "playlist", id)
 		return
 	}
@@ -206,6 +221,10 @@ func (h *PlaylistHandler) UpdatePlaylist(c *gin.Context) {
 		return
 	}
 	if pl == nil {
+		httputil.RespondWithNotFound(c, "playlist", id)
+		return
+	}
+	if !ownedByCaller(c, pl) {
 		httputil.RespondWithNotFound(c, "playlist", id)
 		return
 	}
@@ -256,6 +275,17 @@ func (h *PlaylistHandler) UpdatePlaylist(c *gin.Context) {
 // DeletePlaylist — DELETE /api/v1/playlists/:id
 func (h *PlaylistHandler) DeletePlaylist(c *gin.Context) {
 	id := c.Param("id")
+	// Load first to enforce ownership — without this any user could delete
+	// another user's playlist by ID (IDOR).
+	pl, err := h.store.GetUserPlaylist(id)
+	if err != nil {
+		httputil.InternalError(c, "failed to load playlist", err)
+		return
+	}
+	if !ownedByCaller(c, pl) {
+		httputil.RespondWithNotFound(c, "playlist", id)
+		return
+	}
 	if err := h.store.DeleteUserPlaylist(id); err != nil {
 		httputil.InternalError(c, "failed to delete playlist", err)
 		return
@@ -279,6 +309,10 @@ func (h *PlaylistHandler) AddBooksToPlaylist(c *gin.Context) {
 		return
 	}
 	if pl == nil {
+		httputil.RespondWithNotFound(c, "playlist", id)
+		return
+	}
+	if !ownedByCaller(c, pl) {
 		httputil.RespondWithNotFound(c, "playlist", id)
 		return
 	}
@@ -315,6 +349,10 @@ func (h *PlaylistHandler) RemoveBookFromPlaylist(c *gin.Context) {
 		return
 	}
 	if pl == nil {
+		httputil.RespondWithNotFound(c, "playlist", id)
+		return
+	}
+	if !ownedByCaller(c, pl) {
 		httputil.RespondWithNotFound(c, "playlist", id)
 		return
 	}
@@ -356,6 +394,10 @@ func (h *PlaylistHandler) ReorderPlaylist(c *gin.Context) {
 		httputil.RespondWithNotFound(c, "playlist", id)
 		return
 	}
+	if !ownedByCaller(c, pl) {
+		httputil.RespondWithNotFound(c, "playlist", id)
+		return
+	}
 	if pl.Type != database.UserPlaylistTypeStatic {
 		httputil.RespondWithBadRequest(c, "cannot reorder smart playlist")
 		return
@@ -384,6 +426,10 @@ func (h *PlaylistHandler) MaterializePlaylist(c *gin.Context) {
 		return
 	}
 	if src == nil {
+		httputil.RespondWithNotFound(c, "playlist", id)
+		return
+	}
+	if !ownedByCaller(c, src) {
 		httputil.RespondWithNotFound(c, "playlist", id)
 		return
 	}

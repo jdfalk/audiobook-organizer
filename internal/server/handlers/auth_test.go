@@ -1,5 +1,5 @@
 // file: internal/server/handlers/auth_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: d5e6f7a8-b9c0-1234-5678-90abcdef0123
 // last-edited: 2026-06-01
 
@@ -133,7 +133,9 @@ func TestAuthHandler_Login_Success(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	data := resp["data"].(map[string]any)
 	assert.NotNil(t, data["user"])
-	assert.NotNil(t, data["session"])
+	// Session token must NOT be exposed in the body (HttpOnly cookie only).
+	assert.Nil(t, data["session"])
+	assert.NotNil(t, data["expires_at"])
 }
 
 func TestAuthHandler_Login_WrongPassword(t *testing.T) {

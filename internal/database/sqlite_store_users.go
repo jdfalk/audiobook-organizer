@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store_users.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: c3d4e5f6-a7b8-9012-cdef-g34567890123
 // last-edited: 2026-05-01
 
@@ -243,6 +243,9 @@ func (s *SQLiteStore) GetUserPlaylistByITunesPID(pid string) (*UserPlaylist, err
 	return nil, nil
 }
 func (s *SQLiteStore) ListUserPlaylists(playlistType string, limit, offset int) ([]UserPlaylist, int, error) {
+	return nil, 0, nil
+}
+func (s *SQLiteStore) ListUserPlaylistsForUser(userID, playlistType string, limit, offset int) ([]UserPlaylist, int, error) {
 	return nil, 0, nil
 }
 func (s *SQLiteStore) UpdateUserPlaylist(pl *UserPlaylist) error       { return nil }

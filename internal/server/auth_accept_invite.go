@@ -1,5 +1,5 @@
 // file: internal/server/auth_accept_invite.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef0123456789
 // last-edited: 2026-06-02
 
@@ -53,5 +53,7 @@ func (s *Server) handleAcceptInvite(c *gin.Context) {
 	}
 
 	handlers.SetSessionCookie(c, sess.ID, sess.ExpiresAt)
-	httputil.RespondWithCreated(c, gin.H{"user": user, "session": sess})
+	// Session token is delivered via the HttpOnly cookie only — never in the
+	// JSON body (would expose the bearer token to page JS, defeating HttpOnly).
+	httputil.RespondWithCreated(c, gin.H{"user": user, "expires_at": sess.ExpiresAt})
 }
