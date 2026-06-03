@@ -60,6 +60,7 @@ packages:
       MaintenanceStore:
       RejectedMetadataStore:
       SystemActivityStore:
+      OpsV2Store:
   github.com/jdfalk/audiobook-organizer/internal/operations:
     config:
       dir: internal/operations/mocks
@@ -159,3 +160,5 @@ packages:
       FilesystemStore:
       PlaylistStore:
       VersionsStore:
+      OperationsRegistry:
+      OperationsEventHub:

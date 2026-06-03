@@ -1063,14 +1063,8 @@ func (s *Server) setupRoutes() {
 			protected.POST("/operations/transcode", s.perm(auth.PermScanTrigger), s.startTranscode)
 			protected.POST("/operations/optimize", s.perm(auth.PermScanTrigger), s.startOptimize)
 
-			// UOS-06: operations v2 SSE + timeline + introspection endpoints
-			protected.GET("/operations/timeline", s.perm(auth.PermLibraryView), s.handleGetOperationTimeline)
-			protected.GET("/operations/events", s.perm(auth.PermLibraryView), s.handleOperationsSSE)
-			protected.GET("/operations/v2/:id", s.perm(auth.PermLibraryView), s.handleGetOperationV2)
-			protected.DELETE("/operations/v2/:id", s.perm(auth.PermSettingsManage), s.handleCancelOperationV2)
-			protected.POST("/operations/v2", s.perm(auth.PermScanTrigger), s.handleTriggerOperationV2)
-			protected.GET("/op-defs", s.perm(auth.PermLibraryView), s.handleListOpDefs)
-			protected.GET("/op-defs/:id", s.perm(auth.PermLibraryView), s.handleGetOpDef)
+			// UOS-06 operations v2 routes (timeline, events, v2/:id, op-defs)
+			// are registered in wireHandlers via OperationsV2Handler.
 
 			protected.GET("/file-ops/pending", s.perm(auth.PermLibraryView), s.handleListPendingFileOps)
 			protected.GET("/operations/:id/results", s.perm(auth.PermLibraryView), s.handleGetOperationResults)
