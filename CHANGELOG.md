@@ -9,33 +9,42 @@
 
 ### Changes
 
-#### June 3, 2026 — Handler extraction Phase 4 (system domain)
+#### June 3, 2026 — Handler extraction Phase 4 (7 large domains → sub-packages)
 
-Continues the ADR-003 server handler refactor. The **system** domain (24 HTTP
-handlers: health, status, announcements, storage, logs, activity-log,
-reset/factory-reset, config get/update, SSE events, backup CRUD, dashboard,
-blocked-hash CRUD, user-preference CRUD, policy-tags, quick-queries) was moved
-out of `internal/server/system_handlers.go` into a new
-`internal/server/handlers/system` sub-package (`package system`) with
-`handler.go` + `interfaces.go`.
+Completes the ADR-003 server handler refactor. The seven largest HTTP handler
+domains were moved off the `*Server` receiver into dedicated **sub-packages**
+under `internal/server/handlers/<domain>/` (each with `handler.go` +
+`interfaces.go`), depending on narrow interfaces rather than the full `*Server`:
 
-- Dependencies reached via narrow interfaces (`SystemStore` listing the exact
-  `database.Store` methods used + embedding `database.SettingsStore` for
-  `config.SaveConfigToDatabase`; `SystemService`; `ConfigUpdateService`;
-  `PluginHealthChecker`; `EventStreamer`; `OperationLogsProvider`), the concrete
-  `*metafetch.OpenLibraryService` (factoryReset reaches its `.Mu`/`.OLStore`
-  fields, which an interface cannot abstract), and four injected funcs
-  (`getDiskStats`, `resetLibrarySizeCache`, `appVersion`,
-  `filterReviewedAuthorGroups`) that wrap server-package helpers / build-tagged
-  functions / mutable package vars staying in package `server`.
-- 22 protected routes moved into `wire_handlers.go` with identical paths +
-  permission guards. The 4 public, unguarded routes (`/health`, `/api/health`,
-  `/api/v1/health`, `/api/events`) stay in `setupRoutes` — registered on
-  `s.router` *before* the `/api/*` redirect middleware — and delegate to the
-  migrated handler via closures, preserving their pre-middleware ordering.
-- `system_handlers.go` deleted; mocks are mockery-generated (`systemmocks`); 39
-  new handler unit tests added. Existing server whitebox tests rewired through a
-  `newSystemHandler(srv)` test constructor.
+- **entities** → `handlers/entities` (33 routes — authors/series/narrators/works)
+- **operations** → `handlers/operations` (25 routes — scan/organize triggers,
+  operation status/logs/result, tasks, maintenance-window)
+- **system** → `handlers/system` (24 routes — health, config, backups, dashboard,
+  blocked-hashes, user-preferences; public `/health` + `/api/events` preserved
+  pre-middleware)
+- **dedup** → `handlers/dedup` (21 routes — dedup candidates/clusters + scan triggers)
+- **duplicates** → `handlers/duplicates` (17 routes — duplicate books/authors/series,
+  series prune/normalize)
+- **audiobooks** → `handlers/audiobooks` (36 routes — the main library list/CRUD,
+  files, tags, metadata history)
+- **metadata** → `handlers/metadata` (19 routes — fetch/search/apply/write-back,
+  bulk operations, ratings)
+
+Non-HTTP helpers shared with server-resident files were relocated to new
+package-`server` files (`entity_cache_warmers.go`, `duplicates_helpers.go`,
+`audiobooks_helpers.go`, `metadata_ops.go` — the latter holding the bulk-fetch/
+write-back/ISBN-enrichment op executors and the widely-shared
+`registryProgressAdapter`) with unchanged signatures, so all existing callers
+compile unchanged. Server-private helpers with private return types are injected
+into handlers as func fields (`enrichBook`, `buildListResponse`,
+`filterReviewedAuthorGroups`, `loadMetadataState`, …); dependencies assigned
+after wiring or swapped by tests (store, scheduler, writeBackBatcher, hub,
+embeddingStore) use lazy provider closures to preserve request-time semantics.
+
+Route-table parity verified exact: **380 (method, path, permission) tuples
+identical** before and after. Mocks are mockery-generated per sub-package. 277
+new handler unit tests added. The old `*_handlers.go` domain files were deleted.
+No API surface or behavior change.
 
 #### June 3, 2026 — Handler extraction Phase 3 (versions, operations_v2, itunes, ai, diagnostics)
 
