@@ -1,5 +1,5 @@
 // file: internal/operations/registry/registry.go
-// version: 2.5.0
+// version: 2.6.0
 // guid: f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c
 // last-edited: 2026-06-01
 
@@ -333,7 +333,7 @@ func (r *Registry) Cancel(opID string) error {
 
 	if running {
 		r.logger.Info("registry: canceling running op", "op_id", opID)
-		h.cancel()
+		h.cancelIfActive()
 		return nil
 	}
 
@@ -406,7 +406,7 @@ func (r *Registry) Shutdown(ctx context.Context) error {
 
 	// Cancel all running ops.
 	for _, h := range handles {
-		h.cancel()
+		h.cancelIfActive()
 	}
 
 	// Wait until context expires or all workers drain.
