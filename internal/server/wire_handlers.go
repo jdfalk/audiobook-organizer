@@ -12,8 +12,10 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	dedupengine "github.com/jdfalk/audiobook-organizer/internal/dedup"
+	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	deduphandler "github.com/jdfalk/audiobook-organizer/internal/server/handlers/dedup"
+	duplicates "github.com/jdfalk/audiobook-organizer/internal/server/handlers/duplicates"
 	entities "github.com/jdfalk/audiobook-organizer/internal/server/handlers/entities"
 	operations "github.com/jdfalk/audiobook-organizer/internal/server/handlers/operations"
 	system "github.com/jdfalk/audiobook-organizer/internal/server/handlers/system"
@@ -320,6 +322,71 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 		dedupEng,
 		s.publishEvent,
 		s.markDuplicatesFlaggedDirty,
+	)
+
+	// Duplicates domain handler (SQL-backed book/author/series duplicate listing,
+	// async scan/merge/dismiss/refresh/dedup/prune/normalize triggers, series
+	// prune + normalize preview, and dedup-entry metadata validation; 17 handlers).
+	// Guard typed-nil boxing for each interface-typed concrete-pointer dep so the
+	// handler's in-method nil guards (mirroring the old `s.opRegistry == nil`,
+	// `s.audiobookService`/`s.metadataFetchService` checks) hold. s.opRegistry,
+	// s.audiobookService and s.metadataFetchService are all wired before
+	// setupRoutes and never swapped post-wire, so snapshotting them here is safe.
+	// The store is a LAZY provider closure (not a snapshot): the original handlers
+	// read s.Store() at request time and a router-integration test swaps
+	// server.store post-wire; s.Store() returns the database.Store interface so a
+	// nil store stays a nil interface. s.dedupCache is the concrete
+	// *cache.Cache[gin.H] (the cache exception), passed as-is.
+	//
+	// The merge service is reached through getMergeService, which reproduces the
+	// original nil-fallback (s.mergeService when set, else merge.NewService(s.Store())).
+	// dismissDedupGroup / computeSeriesPrunePreview / seriesNormalizePreview wrap
+	// helpers that STAY in package server (server_middleware.go, server_title_helpers.go,
+	// duplicates_helpers.go) because they are shared with files that did not move;
+	// the closures let the sub-package call them without importing package server.
+	var dupOpReg duplicates.OperationsRegistry
+	if s.opRegistry != nil {
+		dupOpReg = s.opRegistry
+	}
+	var dupAudiobookSvc duplicates.AudiobookService
+	if s.audiobookService != nil {
+		dupAudiobookSvc = s.audiobookService
+	}
+	var dupMetadataSvc duplicates.MetadataFetchService
+	if s.metadataFetchService != nil {
+		dupMetadataSvc = s.metadataFetchService
+	}
+	duplicatesH := duplicates.New(
+		func() duplicates.DuplicatesStore { return s.Store() },
+		s.dedupCache,
+		dupOpReg,
+		dupAudiobookSvc,
+		dupMetadataSvc,
+		func() duplicates.MergeService {
+			if s.mergeService != nil {
+				return s.mergeService
+			}
+			return merge.NewService(s.Store())
+		},
+		func(groupKey string) {
+			store := s.Store()
+			if store == nil {
+				return
+			}
+			dismissed := loadDismissedDedupGroups(store)
+			dismissed[groupKey] = true
+			saveDismissedDedupGroups(store, dismissed)
+		},
+		func() (any, error) {
+			store := s.Store()
+			if store == nil {
+				return nil, nil
+			}
+			return computeSeriesPrunePreview(store)
+		},
+		func() any {
+			return buildSeriesNormalizePreview(s.Store())
+		},
 	)
 
 	// iTunes handlers. Guard the service/importer wiring: s.itunesSvc is set
@@ -648,6 +715,30 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 	protected.POST("/dedup/reset-acoustid", s.perm(auth.PermScanTrigger), dedupH.ResetAcoustIDFingerprints)
 	protected.POST("/dedup/embed", s.perm(auth.PermScanTrigger), dedupH.TriggerEmbedScan)
 	protected.POST("/dedup/embed-async", s.perm(auth.PermScanTrigger), dedupH.TriggerEmbedAsync)
+
+	// Duplicates domain (SQL-backed dup detection, series prune/normalize,
+	// dedup-entry validation; migrated from server_lifecycle.go). Paths + permission
+	// guards copied verbatim. The /authors/duplicates(/refresh), /series/duplicates(/refresh)
+	// sibling routes were intentionally left here by the entities phase and are now
+	// owned by this handler; /dedup/validate is the dedup-entry validator (distinct
+	// from the embedding-based /dedup/* routes above and the split-book /dedup/* routes).
+	protected.GET("/audiobooks/duplicates", s.perm(auth.PermLibraryView), duplicatesH.ListDuplicateAudiobooks)
+	protected.GET("/audiobooks/duplicates/scan-results", s.perm(auth.PermLibraryView), duplicatesH.ListBookDuplicateScanResults)
+	protected.POST("/audiobooks/duplicates/scan", s.perm(auth.PermLibraryEditMetadata), duplicatesH.ScanBookDuplicates)
+	protected.POST("/audiobooks/duplicates/merge", s.perm(auth.PermLibraryEditMetadata), duplicatesH.MergeBookDuplicatesAsVersions)
+	protected.POST("/audiobooks/duplicates/dismiss", s.perm(auth.PermLibraryEditMetadata), duplicatesH.DismissBookDuplicateGroup)
+	protected.GET("/authors/duplicates", s.perm(auth.PermLibraryView), duplicatesH.ListDuplicateAuthors)
+	protected.POST("/authors/duplicates/refresh", s.perm(auth.PermLibraryEditMetadata), duplicatesH.RefreshDuplicateAuthors)
+	protected.POST("/audiobooks/merge", s.perm(auth.PermLibraryEditMetadata), duplicatesH.MergeBooks)
+	protected.GET("/series/duplicates", s.perm(auth.PermLibraryView), duplicatesH.ListSeriesDuplicates)
+	protected.POST("/series/duplicates/refresh", s.perm(auth.PermLibraryEditMetadata), duplicatesH.RefreshSeriesDuplicates)
+	protected.POST("/series/deduplicate", s.perm(auth.PermLibraryEditMetadata), duplicatesH.DeduplicateSeriesHandler)
+	protected.POST("/series/merge", s.perm(auth.PermLibraryEditMetadata), duplicatesH.MergeSeriesGroup)
+	protected.GET("/series/prune/preview", s.perm(auth.PermLibraryView), duplicatesH.SeriesPrunePreview)
+	protected.POST("/series/prune", s.perm(auth.PermLibraryEditMetadata), duplicatesH.SeriesPrune)
+	protected.GET("/series/normalize/preview", s.perm(auth.PermLibraryView), duplicatesH.SeriesNormalizePreview)
+	protected.POST("/series/normalize", s.perm(auth.PermLibraryEditMetadata), duplicatesH.SeriesNormalize)
+	protected.POST("/dedup/validate", s.perm(auth.PermLibraryEditMetadata), duplicatesH.ValidateDedupEntry)
 
 	// Plugins
 	plugins := protected.Group("/plugins")
