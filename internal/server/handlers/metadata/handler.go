@@ -1,14 +1,50 @@
-// file: internal/server/metadata_handlers.go
-// version: 3.8.0
-// guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
-// last-edited: 2026-06-01
-//
-// Metadata HTTP handlers split out of server.go: per-book fetch/
-// search/apply/revert/no-match, bulk fetch and bulk writeback, the
-// field-enumeration endpoint used by the editor, and the copy-on-
-// write version list and prune endpoints.
+// file: internal/server/handlers/metadata/handler.go
+// version: 1.0.0
+// guid: 54bb4ad0-cab0-41fc-b9cb-557c96beee44
+// last-edited: 2026-06-03
 
-package server
+// Package metadatahandler hosts the metadata-domain HTTP handlers extracted
+// from the server package's metadata_handlers.go: batch-update / validate /
+// export / import, external metadata search, per-book fetch / search / apply /
+// mark-no-match / revert, metadata-rejections, copy-on-write version list /
+// prune, write-back, bulk fetch + bulk write-back enqueue, batch write-back
+// enqueue, the field-enumeration endpoint, and the rating PATCH (19 handlers
+// total). Behavior is preserved byte-for-byte (status codes, JSON shapes, error
+// strings, cache keys, op-enqueue payloads).
+//
+// The package is named metadatahandler (dir handlers/metadata) to avoid
+// clashing with the existing internal/metadata package (imported here as
+// metadatapkg) and internal/metafetch.
+//
+// Dependencies that lived on the *Server receiver are reached through narrow
+// interfaces (MetadataStore, MetadataFetchService, WriteBackEnqueuer,
+// OperationsRegistry, FileIOPool) plus the concrete *cache.Cache[gin.H] (the
+// cache exception) and a set of INJECTED func fields that wrap helpers /
+// behavior that STAY in package server because they reference server- or
+// metafetch-private types or are shared with files that did not move:
+//
+//   - enrichBook — wraps *Server.enrichBookForResponseSingle, whose concrete
+//     return type (enrichedBookResponse) is server-private (surfaced as any).
+//   - isProtectedPath — wraps *Server.isProtectedPath (server_middleware.go).
+//   - loadMetadataState — wraps *Server.loadMetadataState (server_metadata.go);
+//     its return type map[string]metafetch.MetadataFieldState is EXPORTED and
+//     the bulk-fetch handler reads OverrideLocked / OverrideValue off it, so it
+//     is injected with the concrete type (not any).
+//   - updateFetchedMetadataState — wraps *Server.updateFetchedMetadataState
+//     (server_metadata.go).
+//   - publishEvent — wraps *Server.publishEvent (the shared plugin event bus).
+//
+// As a result package metadatahandler never imports package server.
+//
+// The store and the write-back batcher are reached through LAZY PROVIDER
+// CLOSURES (getStore / getWriteBack) so values swapped after wireHandlers (a
+// router-integration test swaps server.store / server.writeBackBatcher
+// post-wire) are still observed at request time, mirroring the audiobooks /
+// duplicates seams. The interface-typed service deps (metadataFetchService,
+// opRegistry, fileIOPool) are wire-time snapshots, each guarded against
+// typed-nil boxing by the controller in wire_handlers.go.
+
+package metadatahandler
 
 import (
 	"context"
@@ -19,39 +55,187 @@ import (
 	"math"
 	"net/http"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/logging"
-
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/activity"
-	"github.com/jdfalk/audiobook-organizer/internal/auth"
+	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
-	"github.com/jdfalk/audiobook-organizer/internal/metabatch"
-	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	metadatapkg "github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
-	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
-	"github.com/jdfalk/audiobook-organizer/internal/policy"
 	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	ulid "github.com/oklog/ulid/v2"
 )
 
+// Handler hosts the metadata-domain HTTP endpoints.
+type Handler struct {
+	// getStore resolves the database store lazily, at request time. The original
+	// handlers read s.Store() at call time (late binding), and a router
+	// integration test swaps server.store AFTER wiring to inject a mock — so
+	// snapshotting the store at wire time would capture the pre-swap store. The
+	// provider returns a value typed MetadataStore (which embeds
+	// database.BookStore) so the handler can pass it straight to
+	// metadata.BatchUpdateMetadata / metadata.ImportMetadata.
+	getStore func() MetadataStore
+
+	metadataFetchService MetadataFetchService
+
+	// getWriteBack resolves the iTunes write-back batcher LAZILY, at request
+	// time. server.writeBackBatcher is swapped AFTER wireHandlers by integration
+	// tests (and the original handlers read it at request time / late binding),
+	// so a wire-time snapshot would capture the pre-swap value and miss the
+	// enqueue. The provider performs the typed-nil guard so the in-method
+	// `!= nil` checks (mirroring the old `s.writeBackBatcher != nil` guards) hold.
+	getWriteBack func() WriteBackEnqueuer
+
+	// opRegistry backs handleBulkWriteBack / batchWriteBackAudiobooks. Interface
+	// snapshot, typed-nil guarded by the controller so the in-method
+	// `== nil` guard (mirroring `s.opRegistry == nil`) holds.
+	opRegistry OperationsRegistry
+
+	// fileIOPool backs applyAudiobookMetadata's background file-IO submission.
+	// Interface snapshot, typed-nil guarded by the controller so the in-method
+	// `pool != nil` guard (mirroring `if pool := s.fileIOPool; pool != nil`)
+	// holds.
+	fileIOPool FileIOPool
+
+	// listCache is the concrete *cache.Cache[gin.H] the original handlers read /
+	// wrote directly (the meta_search:* keys). Passed concrete (the cache
+	// exception) because it is a clean generic db-adjacent type under heavy
+	// multi-method use.
+	listCache *cache.Cache[gin.H]
+
+	// --- injected funcs wrapping behavior that stays in package server ---
+
+	// enrichBook wraps *Server.enrichBookForResponseSingle, whose concrete return
+	// type (enrichedBookResponse) is server-private, so it is surfaced as any.
+	enrichBook func(book *database.Book) any
+
+	// isProtectedPath wraps *Server.isProtectedPath (server_middleware.go), used
+	// by handleBulkWriteBack to skip write-back for protected paths.
+	isProtectedPath func(filePath string) bool
+
+	// loadMetadataState wraps *Server.loadMetadataState (server_metadata.go). Its
+	// return type is exported (map[string]metafetch.MetadataFieldState) and the
+	// bulk-fetch handler reads OverrideLocked / OverrideValue off it, so it is
+	// injected with the concrete type.
+	loadMetadataState func(bookID string) (map[string]metafetch.MetadataFieldState, error)
+
+	// updateFetchedMetadataState wraps *Server.updateFetchedMetadataState
+	// (server_metadata.go), used by bulkFetchMetadata to persist fetched-but-
+	// not-applied field values.
+	updateFetchedMetadataState func(bookID string, values map[string]any) error
+
+	// publishEvent wraps *Server.publishEvent (the shared plugin event bus), used
+	// by applyAudiobookMetadata.
+	publishEvent func(ctx context.Context, event plugin.Event)
+}
+
+// New constructs a metadata Handler from its dependencies.
+func New(
+	getStore func() MetadataStore,
+	metadataFetchService MetadataFetchService,
+	getWriteBack func() WriteBackEnqueuer,
+	opRegistry OperationsRegistry,
+	fileIOPool FileIOPool,
+	listCache *cache.Cache[gin.H],
+	enrichBook func(book *database.Book) any,
+	isProtectedPath func(filePath string) bool,
+	loadMetadataState func(bookID string) (map[string]metafetch.MetadataFieldState, error),
+	updateFetchedMetadataState func(bookID string, values map[string]any) error,
+	publishEvent func(ctx context.Context, event plugin.Event),
+) *Handler {
+	return &Handler{
+		getStore:                   getStore,
+		metadataFetchService:       metadataFetchService,
+		getWriteBack:               getWriteBack,
+		opRegistry:                 opRegistry,
+		fileIOPool:                 fileIOPool,
+		listCache:                  listCache,
+		enrichBook:                 enrichBook,
+		isProtectedPath:            isProtectedPath,
+		loadMetadataState:          loadMetadataState,
+		updateFetchedMetadataState: updateFetchedMetadataState,
+		publishEvent:               publishEvent,
+	}
+}
+
+// resolveStore returns the live store via the lazy provider, or nil if no
+// provider was supplied or the provider yields nil.
+func (h *Handler) resolveStore() MetadataStore {
+	if h.getStore == nil {
+		return nil
+	}
+	return h.getStore()
+}
+
+// resolveWriteBack returns the live write-back batcher via the lazy provider, or
+// nil if no provider was supplied or the provider yields nil.
+func (h *Handler) resolveWriteBack() WriteBackEnqueuer {
+	if h.getWriteBack == nil {
+		return nil
+	}
+	return h.getWriteBack()
+}
+
+// stringPtr is a local copy of the *string helper used by bulkFetchMetadata.
+// The server copy is package-private (server_helpers.go), so a local copy keeps
+// this package decoupled (mirrors the audiobooks ptrStr local copy).
+func stringPtr(s string) *string { return &s }
+
+// ratingPatchRequest aliases the canonical type from internal/server/handlers
+// (no import cycle — handlers is a leaf package).
+type ratingPatchRequest = handlers.RatingPatchRequest
+
+// bulkFetchMetadataRequest mirrors the server-private request struct (server.go)
+// byte-for-byte so the JSON binding (including the `binding:"required"` tag and
+// the `only_missing,omitempty` shape) is identical.
+type bulkFetchMetadataRequest struct {
+	BookIDs     []string `json:"book_ids" binding:"required"`
+	OnlyMissing *bool    `json:"only_missing,omitempty"`
+}
+
+// bulkFetchMetadataResult mirrors the server-private result struct (server.go)
+// byte-for-byte so the serialized per-book result shape is identical.
+type bulkFetchMetadataResult struct {
+	BookID        string   `json:"book_id"`
+	Status        string   `json:"status"`
+	Message       string   `json:"message,omitempty"`
+	AppliedFields []string `json:"applied_fields,omitempty"`
+	FetchedFields []string `json:"fetched_fields,omitempty"`
+}
+
+// bulkWriteBackOpParams mirrors the server-private op-param struct
+// (library_writeback_op.go) byte-for-byte so the JSON enqueued via
+// OperationsRegistry.EnqueueOp (generic json.Marshal) is identical.
+type bulkWriteBackOpParams struct {
+	BookIDs []string `json:"book_ids"`
+	Rename  bool     `json:"rename"`
+}
+
+// batchSaveOpParams mirrors the server-private op-param struct (batch_save_op.go)
+// byte-for-byte so the JSON enqueued via OperationsRegistry.EnqueueOp (generic
+// json.Marshal) is identical.
+type batchSaveOpParams struct {
+	LegacyOpID string   `json:"legacy_op_id"`
+	BookIDs    []string `json:"book_ids"`
+	Organize   bool     `json:"organize"`
+	Force      bool     `json:"force"`
+}
+
 // batchUpdateMetadata handles batch metadata updates with validation
-func (s *Server) batchUpdateMetadata(c *gin.Context) {
-	if s.Store() == nil {
+func (h *Handler) batchUpdateMetadataImpl(c *gin.Context) {
+	store := h.resolveStore()
+	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	var req struct {
-		Updates  []metadata.MetadataUpdate `json:"updates" binding:"required"`
-		Validate bool                      `json:"validate"`
+		Updates  []metadatapkg.MetadataUpdate `json:"updates" binding:"required"`
+		Validate bool                         `json:"validate"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -59,16 +243,16 @@ func (s *Server) batchUpdateMetadata(c *gin.Context) {
 		return
 	}
 
-	errors, successCount := metadata.BatchUpdateMetadata(req.Updates, s.Store(), req.Validate)
+	errs, successCount := metadatapkg.BatchUpdateMetadata(req.Updates, store, req.Validate)
 
 	response := gin.H{
 		"success_count": successCount,
 		"total_count":   len(req.Updates),
 	}
 
-	if len(errors) > 0 {
-		errorMessages := make([]string, len(errors))
-		for i, err := range errors {
+	if len(errs) > 0 {
+		errorMessages := make([]string, len(errs))
+		for i, err := range errs {
 			errorMessages[i] = err.Error()
 		}
 		response["errors"] = errorMessages
@@ -79,7 +263,7 @@ func (s *Server) batchUpdateMetadata(c *gin.Context) {
 }
 
 // validateMetadata validates metadata updates without applying them
-func (s *Server) validateMetadata(c *gin.Context) {
+func (h *Handler) validateMetadataImpl(c *gin.Context) {
 	var req struct {
 		Updates map[string]any `json:"updates" binding:"required"`
 	}
@@ -89,12 +273,12 @@ func (s *Server) validateMetadata(c *gin.Context) {
 		return
 	}
 
-	rules := metadata.DefaultValidationRules()
-	errors := metadata.ValidateMetadata(req.Updates, rules)
+	rules := metadatapkg.DefaultValidationRules()
+	errs := metadatapkg.ValidateMetadata(req.Updates, rules)
 
-	if len(errors) > 0 {
-		errorMessages := make([]string, len(errors))
-		for i, err := range errors {
+	if len(errs) > 0 {
+		errorMessages := make([]string, len(errs))
+		for i, err := range errs {
 			errorMessages[i] = err.Error()
 		}
 		httputil.RespondWithBadRequest(c, fmt.Sprintf("validation errors: %v", errorMessages))
@@ -107,21 +291,22 @@ func (s *Server) validateMetadata(c *gin.Context) {
 }
 
 // exportMetadata exports all audiobook metadata
-func (s *Server) exportMetadata(c *gin.Context) {
-	if s.Store() == nil {
+func (h *Handler) exportMetadataImpl(c *gin.Context) {
+	store := h.resolveStore()
+	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	// Get all books
-	books, err := s.Store().GetAllBooks(0, 0) // No limit/offset
+	books, err := store.GetAllBooks(0, 0) // No limit/offset
 	if err != nil {
 		httputil.InternalError(c, "failed to get audiobooks", err)
 		return
 	}
 
 	// Export metadata
-	exportData, err := metadata.ExportMetadata(books)
+	exportData, err := metadatapkg.ExportMetadata(books)
 	if err != nil {
 		httputil.InternalError(c, "failed to export metadata", err)
 		return
@@ -131,8 +316,9 @@ func (s *Server) exportMetadata(c *gin.Context) {
 }
 
 // importMetadata imports audiobook metadata
-func (s *Server) importMetadata(c *gin.Context) {
-	if s.Store() == nil {
+func (h *Handler) importMetadataImpl(c *gin.Context) {
+	store := h.resolveStore()
+	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
@@ -147,15 +333,15 @@ func (s *Server) importMetadata(c *gin.Context) {
 		return
 	}
 
-	importCount, errors := metadata.ImportMetadata(req.Data, s.Store(), req.Validate)
+	importCount, errs := metadatapkg.ImportMetadata(req.Data, store, req.Validate)
 
 	response := gin.H{
 		"import_count": importCount,
 	}
 
-	if len(errors) > 0 {
-		errorMessages := make([]string, len(errors))
-		for i, err := range errors {
+	if len(errs) > 0 {
+		errorMessages := make([]string, len(errs))
+		for i, err := range errs {
 			errorMessages[i] = err.Error()
 		}
 		response["errors"] = errorMessages
@@ -166,7 +352,7 @@ func (s *Server) importMetadata(c *gin.Context) {
 }
 
 // searchMetadata searches external metadata sources
-func (s *Server) searchMetadata(c *gin.Context) {
+func (h *Handler) searchMetadataImpl(c *gin.Context) {
 	title := c.Query("title")
 	author := c.Query("author")
 
@@ -176,9 +362,9 @@ func (s *Server) searchMetadata(c *gin.Context) {
 	}
 
 	// Use Open Library for now
-	client := metadata.NewOpenLibraryClient()
+	client := metadatapkg.NewOpenLibraryClient()
 
-	var results []metadata.BookMetadata
+	var results []metadatapkg.BookMetadata
 	var err error
 
 	ctx := c.Request.Context()
@@ -200,15 +386,16 @@ func (s *Server) searchMetadata(c *gin.Context) {
 }
 
 // fetchAudiobookMetadata fetches and applies metadata to an audiobook
-func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
+func (h *Handler) fetchAudiobookMetadataImpl(c *gin.Context) {
 	id := c.Param("id")
 
-	if s.Store() == nil {
+	store := h.resolveStore()
+	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
-	resp, err := s.metadataFetchService.FetchMetadataForBook(id)
+	resp, err := h.metadataFetchService.FetchMetadataForBook(id)
 	if err != nil {
 		httputil.RespondWithError(c, 404, err.Error(), "NOT_FOUND")
 		return
@@ -217,21 +404,21 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 	// METADATA-CACHED-MATCHER: fetch+apply rewrites book identity (title,
 	// author, etc), so the cached candidates are stale by definition.
 	// Invalidate so the next read fetches fresh.
-	_ = s.metadataFetchService.InvalidateCachedCandidates(id)
+	_ = h.metadataFetchService.InvalidateCachedCandidates(id)
 
 	// Enqueue for iTunes auto write-back if metadata was updated
-	if s.writeBackBatcher != nil {
-		s.writeBackBatcher.Enqueue(id)
+	if wb := h.resolveWriteBack(); wb != nil {
+		wb.Enqueue(id)
 	}
 
 	// Re-fetch to get fully enriched book with author/series/narrator names
 	enrichedBook := resp.Book
-	if fresh, err := s.Store().GetBookByID(id); err == nil && fresh != nil {
+	if fresh, err := store.GetBookByID(id); err == nil && fresh != nil {
 		enrichedBook = fresh
 	}
 	httputil.RespondWithOK(c, gin.H{
 		"message": resp.Message,
-		"book":    s.enrichBookForResponseSingle(enrichedBook),
+		"book":    h.enrichBook(enrichedBook),
 		"source":  resp.Source,
 	})
 }
@@ -243,9 +430,9 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 // forces a fresh fetch + cache replace. Explicit query/author/narrator/
 // series in the body always bypass the cache because they're an
 // alternative-search, not a re-read of the same query.
-func (s *Server) searchAudiobookMetadata(c *gin.Context) {
+func (h *Handler) searchAudiobookMetadataImpl(c *gin.Context) {
 	id := c.Param("id")
-	if s.Store() == nil {
+	if h.resolveStore() == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
@@ -264,8 +451,8 @@ func (s *Server) searchAudiobookMetadata(c *gin.Context) {
 	cacheKey := fmt.Sprintf("meta_search:%s:%s:%s:%s:%s:%t",
 		id, body.Query, body.Author, body.Narrator, body.Series, body.UseRerank)
 	plainFetch := body.Query == "" && body.Author == "" && body.Narrator == "" && body.Series == ""
-	if !refresh && plainFetch && s.metadataFetchService != nil {
-		if entry, fresh, err := s.metadataFetchService.GetCachedCandidates(id); err == nil && entry != nil {
+	if !refresh && plainFetch && h.metadataFetchService != nil {
+		if entry, fresh, err := h.metadataFetchService.GetCachedCandidates(id); err == nil && entry != nil {
 			results := decodeCachedCandidates(entry)
 			respH := gin.H{
 				"results":    results,
@@ -274,7 +461,7 @@ func (s *Server) searchAudiobookMetadata(c *gin.Context) {
 				"is_fresh":   fresh,
 				"fetched_at": entry.FetchedAt,
 			}
-			s.listCache.Set(cacheKey, respH)
+			h.listCache.Set(cacheKey, respH)
 			httputil.RespondWithOK(c, respH)
 			return
 		}
@@ -283,7 +470,7 @@ func (s *Server) searchAudiobookMetadata(c *gin.Context) {
 	// 60-second in-memory cache: still useful for back-to-back UI re-renders
 	// even after the persistent cache lands. Keyed identically.
 	if !refresh {
-		if cached, ok := s.listCache.Get(cacheKey); ok {
+		if cached, ok := h.listCache.Get(cacheKey); ok {
 			httputil.RespondWithOK(c, cached)
 			return
 		}
@@ -292,20 +479,20 @@ func (s *Server) searchAudiobookMetadata(c *gin.Context) {
 	// Plain per-book fetches go through FetchAndCache so the persistent
 	// cache stays warm. Alt-query searches use the bare search path
 	// because they're exploring outside the canonical fetch.
-	if plainFetch && s.metadataFetchService != nil {
-		entry, err := s.metadataFetchService.FetchAndCache(c.Request.Context(), id, body.Query, body.Author, body.Narrator, body.Series, metafetch.SearchOptions{UseRerank: body.UseRerank})
+	if plainFetch && h.metadataFetchService != nil {
+		entry, err := h.metadataFetchService.FetchAndCache(c.Request.Context(), id, body.Query, body.Author, body.Narrator, body.Series, metafetch.SearchOptions{UseRerank: body.UseRerank})
 		if err != nil {
 			httputil.RespondWithError(c, 404, err.Error(), "NOT_FOUND")
 			return
 		}
 		results := decodeCachedCandidates(entry)
 		respH := gin.H{"results": results, "query": body.Query, "from_cache": false, "is_fresh": true, "fetched_at": entry.FetchedAt}
-		s.listCache.Set(cacheKey, respH)
+		h.listCache.Set(cacheKey, respH)
 		httputil.RespondWithOK(c, respH)
 		return
 	}
 
-	resp, err := s.metadataFetchService.SearchMetadataForBookWithOptions(
+	resp, err := h.metadataFetchService.SearchMetadataForBookWithOptions(
 		id, body.Query, body.Author, body.Narrator, body.Series,
 		metafetch.SearchOptions{UseRerank: body.UseRerank},
 	)
@@ -314,13 +501,16 @@ func (s *Server) searchAudiobookMetadata(c *gin.Context) {
 		return
 	}
 	respH := gin.H{"results": resp.Results, "query": resp.Query, "sources_tried": resp.SourcesTried, "sources_failed": resp.SourcesFailed}
-	s.listCache.Set(cacheKey, respH)
+	h.listCache.Set(cacheKey, respH)
 	httputil.RespondWithOK(c, resp)
 }
 
 // decodeCachedCandidates unwraps the persisted []json.RawMessage into
 // []metafetch.MetadataCandidate. Drops candidates that don't parse so
 // a single corrupt cache entry doesn't poison the whole response.
+//
+// Used ONLY by searchAudiobookMetadata, so it moves into the sub-package (the
+// server-resident async-op machinery never touches it).
 func decodeCachedCandidates(entry *metafetch.MetadataCandidateCache) []metafetch.MetadataCandidate {
 	out := make([]metafetch.MetadataCandidate, 0, len(entry.Candidates))
 	for _, raw := range entry.Candidates {
@@ -333,9 +523,10 @@ func decodeCachedCandidates(entry *metafetch.MetadataCandidateCache) []metafetch
 }
 
 // applyAudiobookMetadata handles POST /api/v1/audiobooks/:id/apply-metadata.
-func (s *Server) applyAudiobookMetadata(c *gin.Context) {
+func (h *Handler) applyAudiobookMetadataImpl(c *gin.Context) {
 	id := c.Param("id")
-	if s.Store() == nil {
+	store := h.resolveStore()
+	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
@@ -348,7 +539,7 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, "invalid request body")
 		return
 	}
-	resp, err := s.metadataFetchService.ApplyMetadataCandidate(id, body.Candidate, body.Fields)
+	resp, err := h.metadataFetchService.ApplyMetadataCandidate(id, body.Candidate, body.Fields)
 	if err != nil {
 		httputil.InternalError(c, "failed to apply metadata", err)
 		return
@@ -357,8 +548,8 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 	// METADATA-CACHED-MATCHER: applying invalidates the cache so the
 	// next read goes through a fresh fetch chain that reflects the
 	// new title/author/etc.
-	if s.metadataFetchService != nil {
-		_ = s.metadataFetchService.InvalidateCachedCandidates(id)
+	if h.metadataFetchService != nil {
+		_ = h.metadataFetchService.InvalidateCachedCandidates(id)
 	}
 
 	// Kick off slow file I/O (cover embed, tags, rename) in background.
@@ -369,13 +560,13 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 	// so the batcher picks up the metadata change even if the background
 	// file-IO job panics on a malformed audio file. The DB metadata is
 	// already updated at this point, so early enqueueing is correct.
-	if shouldWriteBack && s.writeBackBatcher != nil {
-		s.writeBackBatcher.Enqueue(id)
+	if wb := h.resolveWriteBack(); shouldWriteBack && wb != nil {
+		wb.Enqueue(id)
 	}
 
-	if pool := s.fileIOPool; pool != nil {
+	if pool := h.fileIOPool; pool != nil {
 		bookID := id
-		mfs := s.metadataFetchService
+		mfs := h.metadataFetchService
 		pool.Submit(bookID, func() {
 			mfs.ApplyMetadataFileIO(bookID)
 			if shouldWriteBack {
@@ -386,31 +577,32 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 		})
 	}
 
-	s.publishEvent(c.Request.Context(), plugin.NewEvent(plugin.EventMetadataApplied, id, map[string]any{
+	h.publishEvent(c.Request.Context(), plugin.NewEvent(plugin.EventMetadataApplied, id, map[string]any{
 		"source":  resp.Source,
 		"message": resp.Message,
 	}))
 
 	// Re-fetch to get fully enriched book with author/series/narrator names
 	enrichedBook := resp.Book
-	if fresh, err := s.Store().GetBookByID(id); err == nil && fresh != nil {
+	if fresh, err := store.GetBookByID(id); err == nil && fresh != nil {
 		enrichedBook = fresh
 	}
 	httputil.RespondWithOK(c, gin.H{
 		"message": resp.Message,
-		"book":    s.enrichBookForResponseSingle(enrichedBook),
+		"book":    h.enrichBook(enrichedBook),
 		"source":  resp.Source,
 	})
 }
 
 // markAudiobookNoMatch handles POST /api/v1/audiobooks/:id/mark-no-match.
-func (s *Server) markAudiobookNoMatch(c *gin.Context) {
+func (h *Handler) markAudiobookNoMatchImpl(c *gin.Context) {
 	id := c.Param("id")
-	if s.Store() == nil {
+	store := h.resolveStore()
+	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	if err := s.metadataFetchService.MarkNoMatch(id); err != nil {
+	if err := h.metadataFetchService.MarkNoMatch(id); err != nil {
 		httputil.InternalError(c, "failed to mark no match", err)
 		return
 	}
@@ -421,20 +613,21 @@ func (s *Server) markAudiobookNoMatch(c *gin.Context) {
 		RejectionReason: "user_rejected",
 		RejectedAt:      time.Now(),
 	}
-	if rerr := s.Store().AddMetadataRejection(rejection); rerr != nil {
+	if rerr := store.AddMetadataRejection(rejection); rerr != nil {
 		slog.Warn("markAudiobookNoMatch could not record rejection for", "id", id, "rerr", rerr)
 	}
 	httputil.RespondWithOK(c, gin.H{"message": "Book marked as no match"})
 }
 
 // handleGetMetadataRejections handles GET /api/v1/audiobooks/:id/metadata-rejections.
-func (s *Server) handleGetMetadataRejections(c *gin.Context) {
+func (h *Handler) handleGetMetadataRejectionsImpl(c *gin.Context) {
 	id := c.Param("id")
-	if s.Store() == nil {
+	store := h.resolveStore()
+	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	rejections, err := s.Store().GetMetadataRejections(id)
+	rejections, err := store.GetMetadataRejections(id)
 	if err != nil {
 		httputil.InternalError(c, "failed to get metadata rejections", err)
 		return
@@ -447,9 +640,10 @@ func (s *Server) handleGetMetadataRejections(c *gin.Context) {
 
 // revertAudiobookMetadata handles POST /api/v1/audiobooks/:id/revert-metadata.
 // It restores a book to a previous CoW version snapshot via the store layer.
-func (s *Server) revertAudiobookMetadata(c *gin.Context) {
+func (h *Handler) revertAudiobookMetadataImpl(c *gin.Context) {
 	id := c.Param("id")
-	if s.Store() == nil {
+	store := h.resolveStore()
+	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
@@ -465,30 +659,31 @@ func (s *Server) revertAudiobookMetadata(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, "invalid timestamp format, use RFC3339Nano")
 		return
 	}
-	book, err := s.Store().RevertBookToVersion(id, ts)
+	book, err := store.RevertBookToVersion(id, ts)
 	if err != nil {
 		httputil.InternalError(c, "failed to revert metadata", err)
 		return
 	}
 	// METADATA-CACHED-MATCHER: revert changes book identity, so cached
 	// candidates may no longer match.
-	if s.metadataFetchService != nil {
-		_ = s.metadataFetchService.InvalidateCachedCandidates(id)
+	if h.metadataFetchService != nil {
+		_ = h.metadataFetchService.InvalidateCachedCandidates(id)
 	}
 	httputil.RespondWithOK(c, gin.H{"message": "Book reverted to version", "book": book})
 }
 
 // listBookCOWVersions handles GET /api/v1/audiobooks/:id/cow-versions.
 // Returns copy-on-write version snapshots from the store layer.
-func (s *Server) listBookCOWVersions(c *gin.Context) {
+func (h *Handler) listBookCOWVersionsImpl(c *gin.Context) {
 	id := c.Param("id")
-	if s.Store() == nil {
+	store := h.resolveStore()
+	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	p := httputil.ParsePaginationParams(c)
 	limit := p.Limit
-	versions, err := s.Store().GetBookSnapshots(id, limit)
+	versions, err := store.GetBookSnapshots(id, limit)
 	if err != nil {
 		httputil.InternalError(c, "failed to list versions", err)
 		return
@@ -498,9 +693,10 @@ func (s *Server) listBookCOWVersions(c *gin.Context) {
 
 // pruneBookCOWVersions handles POST /api/v1/audiobooks/:id/cow-versions/prune.
 // Prunes old copy-on-write version snapshots, keeping the most recent N.
-func (s *Server) pruneBookCOWVersions(c *gin.Context) {
+func (h *Handler) pruneBookCOWVersionsImpl(c *gin.Context) {
 	id := c.Param("id")
-	if s.Store() == nil {
+	store := h.resolveStore()
+	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
@@ -511,7 +707,7 @@ func (s *Server) pruneBookCOWVersions(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, "keep_count must be a positive integer")
 		return
 	}
-	pruned, err := s.Store().PruneBookSnapshots(id, body.KeepCount)
+	pruned, err := store.PruneBookSnapshots(id, body.KeepCount)
 	if err != nil {
 		httputil.InternalError(c, "failed to prune versions", err)
 		return
@@ -521,7 +717,7 @@ func (s *Server) pruneBookCOWVersions(c *gin.Context) {
 
 // writeBackAudiobookMetadata handles POST /api/v1/audiobooks/:id/write-back.
 // It writes current DB metadata to audio files AND renames files if AutoRenameOnApply is enabled.
-func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
+func (h *Handler) writeBackAudiobookMetadataImpl(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		httputil.RespondWithBadRequest(c, "book id is required")
@@ -535,7 +731,8 @@ func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 	}
 	_ = c.ShouldBindJSON(&body)
 
-	book, err := s.Store().GetBookByID(id)
+	store := h.resolveStore()
+	book, err := store.GetBookByID(id)
 	if err != nil || book == nil {
 		httputil.RespondWithNotFound(c, "audiobook", "")
 		return
@@ -545,7 +742,7 @@ func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 	renamed := 0
 	doRename := (body.Rename != nil && *body.Rename) || config.AppConfig.AutoRenameOnApply
 	if doRename && len(body.SegmentIDs) == 0 {
-		if err := s.metadataFetchService.RunApplyPipelineRenameOnly(id, book); err != nil {
+		if err := h.metadataFetchService.RunApplyPipelineRenameOnly(id, book); err != nil {
 			slog.Warn("rename failed for book", "id", id, "err", err)
 		} else {
 			renamed = 1
@@ -555,9 +752,9 @@ func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 	// Step 2: Write tags to files
 	var writtenCount int
 	if len(body.SegmentIDs) > 0 {
-		writtenCount, err = s.metadataFetchService.WriteBackMetadataForBook(id, body.SegmentIDs)
+		writtenCount, err = h.metadataFetchService.WriteBackMetadataForBook(id, body.SegmentIDs)
 	} else {
-		writtenCount, err = s.metadataFetchService.WriteBackMetadataForBook(id)
+		writtenCount, err = h.metadataFetchService.WriteBackMetadataForBook(id)
 	}
 	if err != nil {
 		httputil.InternalError(c, "failed to write back metadata", err)
@@ -581,8 +778,9 @@ func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 
 // bulkFetchMetadata fetches external metadata for multiple audiobooks and applies
 // fields only when they are missing and not manually overridden or locked.
-func (s *Server) bulkFetchMetadata(c *gin.Context) {
-	if s.Store() == nil {
+func (h *Handler) bulkFetchMetadataImpl(c *gin.Context) {
+	store := h.resolveStore()
+	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
@@ -611,7 +809,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 			Status: "skipped",
 		}
 
-		book, err := s.Store().GetBookByID(bookID)
+		book, err := store.GetBookByID(bookID)
 		if err != nil || book == nil {
 			result.Status = "not_found"
 			result.Message = "audiobook not found"
@@ -625,7 +823,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 			continue
 		}
 
-		state, err := s.loadMetadataState(bookID)
+		state, err := h.loadMetadataState(bookID)
 		if err != nil {
 			result.Status = "error"
 			result.Message = "failed to load metadata state"
@@ -638,7 +836,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 
 		// Delegate search to service using empty query (uses book's title).
 		// Service handles source chain, caching, and candidate scoring.
-		searchResp, searchErr := s.metadataFetchService.SearchMetadataForBookWithOptions(
+		searchResp, searchErr := h.metadataFetchService.SearchMetadataForBookWithOptions(
 			bookID, "", "", "", "",
 			metafetch.SearchOptions{},
 		)
@@ -658,7 +856,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		// Pick best match from service's scored candidates (first is already best)
 		candidate := searchResp.Results[0]
 		// Convert MetadataCandidate to BookMetadata for field mapping
-		meta := metadata.BookMetadata{
+		meta := metadatapkg.BookMetadata{
 			Title:                    candidate.Title,
 			Author:                   candidate.Author,
 			Narrator:                 candidate.Narrator,
@@ -741,7 +939,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		if meta.Author != "" && !metafetch.IsGarbageValue(meta.Author) {
 			addFetched("author_name", meta.Author)
 			if shouldApply("author_name", hasBookValue("author_name")) {
-				author, err := s.Store().GetAuthorByName(meta.Author)
+				author, err := store.GetAuthorByName(meta.Author)
 				if err != nil {
 					result.Status = "error"
 					result.Message = "failed to resolve author"
@@ -749,7 +947,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 					continue
 				}
 				if author == nil {
-					author, err = s.Store().CreateAuthor(meta.Author)
+					author, err = store.CreateAuthor(meta.Author)
 					if err != nil {
 						result.Status = "error"
 						result.Message = "failed to create author"
@@ -852,16 +1050,16 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		}
 
 		if len(fetchedValues) > 0 {
-			if err := s.updateFetchedMetadataState(bookID, fetchedValues); err != nil {
+			if err := h.updateFetchedMetadataState(bookID, fetchedValues); err != nil {
 				slog.Warn("bulkFetchMetadata failed to persist fetched metadata state for", "bookID", bookID, "err", err)
 			}
 		}
 
 		if didUpdate {
 			// Record change history before applying
-			s.metadataFetchService.RecordChangeHistory(book, meta, sourceName)
+			h.metadataFetchService.RecordChangeHistory(book, meta, sourceName)
 
-			if _, err := s.Store().UpdateBook(bookID, book); err != nil {
+			if _, err := store.UpdateBook(bookID, book); err != nil {
 				result.Status = "error"
 				result.Message = fmt.Sprintf("failed to update book: %v", err)
 				results = append(results, result)
@@ -872,7 +1070,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 
 			// System tag the source and language so the review UI
 			// and future upgrade jobs know where this came from.
-			s.metadataFetchService.ApplyMetadataSystemTags(bookID, sourceName, meta.Language)
+			h.metadataFetchService.ApplyMetadataSystemTags(bookID, sourceName, meta.Language)
 		} else if len(fetchedValues) > 0 {
 			result.Status = "fetched"
 		}
@@ -889,536 +1087,16 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 	})
 }
 
-// runBulkMetadataFetchAll is the resumable core of the full-library metadata
-// fetch. It ONLY fetches and caches — it never writes to book records.
-// Results land in PutCachedMetadataFetch so the per-book review UI can show
-// them immediately when the user clicks "apply". Idempotent: books with an
-// existing OperationResult row are skipped on resume.
-func (s *Server) runBulkMetadataFetchAll(
-	ctx context.Context,
-	opID string,
-	params operations.BulkMetadataFetchParams,
-	store database.Store,
-	progress operations.ProgressReporter,
-) error {
-	// Create operation context for structured logging
-	op := &logging.OpContext{
-		ID:     opID,
-		Type:   "metadata-fetch",
-		Status: "pending",
-	}
-	ctx = logging.WithOp(ctx, op)
-
-	// Total unknown until books load; use placeholder (0/1) to avoid 0/0.
-	_ = progress.UpdateProgress(0, 1, "loading books (0/1 0.00%)")
-
-	allBooks, err := store.GetAllBooks(0, 0)
-	if err != nil {
-		op.SetStatus("failed")
-		logging.Error(ctx, "failed to load all books", "err", err)
-		return fmt.Errorf("GetAllBooks: %w", err)
-	}
-
-	maxAge := time.Duration(config.AppConfig.MetadataFetchCacheTTLDays) * 24 * time.Hour
-
-	existingResults, _ := store.GetOperationResults(opID)
-	done := make(map[string]bool, len(existingResults))
-	for _, r := range existingResults {
-		done[r.BookID] = true
-	}
-
-	allAuthors, err := store.GetAllAuthors()
-	if err != nil {
-		return fmt.Errorf("GetAllAuthors: %w", err)
-	}
-	authorByID := make(map[int]string, len(allAuthors))
-	for _, a := range allAuthors {
-		authorByID[a.ID] = a.Name
-	}
-
-	type bookWork struct {
-		book       database.Book
-		authorName string
-	}
-	var work []bookWork
-	for i := range allBooks {
-		b := &allBooks[i]
-		if done[b.ID] || strings.TrimSpace(b.Title) == "" {
-			continue
-		}
-		// skip_cached: skip books that already have a valid (non-expired) cache entry
-		// from any source so we only hit the API for books with no cached data.
-		if params.SkipCached {
-			hasFreshCache := false
-			for _, src := range s.metadataFetchService.BuildSourceChain() {
-				if cached, _, cerr := database.GetCachedMetadataFetchWithMaxAge(store, b.ID, src.Name(), maxAge); cerr == nil && cached != nil {
-					hasFreshCache = true
-					break
-				}
-			}
-			if hasFreshCache {
-				continue
-			}
-		}
-		author := ""
-		if b.AuthorID != nil {
-			author = authorByID[*b.AuthorID]
-		}
-		work = append(work, bookWork{book: *b, authorName: author})
-	}
-
-	totalBooks := len(existingResults) + len(work)
-	alreadyDone := len(existingResults)
-	logging.Info(ctx, "bulk-metadata-fetch books total, already cached, to fetch", "totalBooks", totalBooks, "alreadyDone", alreadyDone, "work_count", len(work))
-
-	// Track affected books in operation context
-	for i := range work {
-		op.AddEntity("books", work[i].book.ID)
-	}
-	_ = progress.UpdateProgress(alreadyDone, totalBooks,
-		fmt.Sprintf("resuming: %d/%d already cached", alreadyDone, totalBooks))
-
-	if len(work) == 0 {
-		_ = progress.UpdateProgress(totalBooks, totalBooks, "all books already cached")
-		return nil
-	}
-
-	sourceChain := s.metadataFetchService.BuildSourceChain()
-	if len(sourceChain) == 0 {
-		sourceChain = []metadata.MetadataSource{metadata.NewAudibleClient()}
-	}
-	// Move Audible to front of chain when preferred.
-	if params.PreferAudible {
-		audible := metadata.NewAudibleClient()
-		var rest []metadata.MetadataSource
-		for _, src := range sourceChain {
-			if src.Name() != audible.Name() {
-				rest = append(rest, src)
-			}
-		}
-		sourceChain = append([]metadata.MetadataSource{audible}, rest...)
-	}
-
-	completed := int64(alreadyDone)
-	found := 0
-	notFound := 0
-
-	for i, w := range work {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-
-		bookID := w.book.ID
-		currentAuthor := w.authorName
-		searchTitle := stripChapterFromTitle(w.book.Title)
-
-		var metaResults []metadata.BookMetadata
-		var sourceName string
-		cacheHit := false
-
-		for _, src := range sourceChain {
-			if cached, _, cerr := database.GetCachedMetadataFetchWithMaxAge(store, bookID, src.Name(), maxAge); cerr == nil && cached != nil {
-				var cachedResults []metadata.BookMetadata
-				if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
-					metaResults = cachedResults
-					sourceName = src.Name()
-					cacheHit = true
-					break
-				}
-			}
-			var fetchErr error
-			if currentAuthor != "" {
-				metaResults, fetchErr = src.SearchByTitleAndAuthor(ctx, searchTitle, currentAuthor)
-				if fetchErr == nil && len(metaResults) > 0 {
-					sourceName = src.Name()
-					break
-				}
-			}
-			metaResults, fetchErr = src.SearchByTitle(ctx, searchTitle)
-			if fetchErr == nil && len(metaResults) > 0 {
-				sourceName = src.Name()
-				break
-			}
-			if searchTitle != w.book.Title {
-				if currentAuthor != "" {
-					metaResults, fetchErr = src.SearchByTitleAndAuthor(ctx, w.book.Title, currentAuthor)
-					if fetchErr == nil && len(metaResults) > 0 {
-						sourceName = src.Name()
-						break
-					}
-				}
-				metaResults, fetchErr = src.SearchByTitle(ctx, w.book.Title)
-				if fetchErr == nil && len(metaResults) > 0 {
-					sourceName = src.Name()
-					break
-				}
-			}
-		}
-
-		resultStatus := "not_found"
-		if len(metaResults) > 0 && sourceName != "" {
-			if !cacheHit {
-				if blob, merr := json.Marshal(metaResults); merr == nil {
-					_ = database.PutCachedMetadataFetch(store, bookID, sourceName, blob, 0)
-				}
-			}
-			found++
-			resultStatus = "cached"
-		} else {
-			notFound++
-		}
-
-		_ = store.CreateOperationResult(&database.OperationResult{
-			OperationID: opID,
-			BookID:      bookID,
-			ResultJSON:  fmt.Sprintf(`{"status":%q,"source":%q}`, resultStatus, sourceName),
-			Status:      resultStatus,
-		})
-
-		n := atomic.AddInt64(&completed, 1)
-		if i%50 == 0 || int(n) == totalBooks {
-			_ = progress.UpdateProgress(int(n), totalBooks,
-				fmt.Sprintf("fetched %d/%d — cached:%d not_found:%d", n, totalBooks, found, notFound))
-		}
-
-		// Rate-limit live API calls; cache hits are instant so skip the delay.
-		if !cacheHit && sourceName != "" && i < len(work)-1 {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(200 * time.Millisecond):
-			}
-		}
-	}
-
-	finalCount := atomic.LoadInt64(&completed)
-	_ = progress.UpdateProgress(int(finalCount), totalBooks,
-		fmt.Sprintf("complete — cached:%d not_found:%d", found, notFound))
-	op.SetStatus("success")
-	logging.Info(ctx, "bulk-metadata-fetch complete", "finalCount", finalCount, "found", found, "notFound", notFound)
-	return nil
-}
-
-// registryProgressAdapter bridges registry.Reporter → operations.ProgressReporter
-// so runBulkMetadataFetchAll can be called from a v2 op Run function without changes.
-//
-// TODO(ADR-003 Phase 2): registryProgressAdapter cannot move to internal/server/handlers
-// because it has methods and is used across 20+ *_ops.go files in internal/server.
-// Extract it to internal/operations/registry or a dedicated adapter package in Phase 2.
-type registryProgressAdapter struct{ r opsregistry.Reporter }
-
-func (a registryProgressAdapter) UpdateProgress(current, total int, message string) error {
-	return a.r.UpdateProgress(current, total, message)
-}
-func (a registryProgressAdapter) Log(level, message string, details *string) error {
-	l := slog.LevelInfo
-	switch level {
-	case "warn", "warning":
-		l = slog.LevelWarn
-	case "error":
-		l = slog.LevelError
-	case "debug":
-		l = slog.LevelDebug
-	}
-	var attrs []slog.Attr
-	if details != nil {
-		attrs = append(attrs, slog.String("details", *details))
-	}
-	return a.r.Log(l, message, attrs...)
-}
-func (a registryProgressAdapter) IsCanceled() bool { return a.r.IsCanceled() }
-
-// bulkMetadataFetchV2Params aliases the canonical type from internal/server/handlers.
-type bulkMetadataFetchV2Params = handlers.BulkMetadataFetchV2Params
-
-// resolveFilterToBookIDs translates a FilterSpec into a concrete list of primary-
-// version book IDs.  IsPrimaryVersion=true and quarantine exclusion are always
-// applied.  If f.OnlyUnmatched is set, books that already have a "matched"
-// candidate in the most-recent metadata_candidate_fetch result are removed.
-// Per-user FieldFilters are silently dropped (no user context in background ops).
-func (s *Server) resolveFilterToBookIDs(ctx context.Context, f operations.FilterSpec) ([]string, error) {
-	trueVal := true
-	filters := ListFilters{
-		IsPrimaryVersion: &trueVal,
-		LibraryState:     f.LibraryState,
-		Tag:              f.Tag,
-		Tags:             f.Tags,
-	}
-	for _, ff := range f.FieldFilters {
-		if IsPerUserField(ff.Field) {
-			continue
-		}
-		filters.FieldFilters = append(filters.FieldFilters, FieldFilter{
-			Field:   ff.Field,
-			Value:   ff.Value,
-			Negated: ff.Negated,
-		})
-	}
-	var authorID, seriesID *int
-	if f.AuthorID != nil {
-		v := int(*f.AuthorID)
-		authorID = &v
-	}
-	if f.SeriesID != nil {
-		v := int(*f.SeriesID)
-		seriesID = &v
-	}
-	books, err := s.audiobookService.GetAudiobooks(ctx, 100000, 0, f.Search, authorID, seriesID, filters)
-	if err != nil {
-		return nil, fmt.Errorf("resolve filter: %w", err)
-	}
-	ids := make([]string, 0, len(books))
-	for _, b := range books {
-		if b.QuarantinedAt != nil {
-			continue
-		}
-		ids = append(ids, b.ID)
-	}
-	if f.OnlyUnmatched {
-		matched := metabatch.LatestMatchedBookIDs(s.Store())
-		filtered := ids[:0]
-		for _, id := range ids {
-			if !matched[id] {
-				filtered = append(filtered, id)
-			}
-		}
-		ids = filtered
-	}
-	return ids, nil
-}
-
-// RegisterBulkMetadataFetchOp registers the "library.bulk-metadata-fetch" v2
-// OperationDef so that POST /api/v1/operations/v2 with def_id "bulk_metadata_fetch"
-// shows in the bell, is resumable, and can be cancelled.
-func (s *Server) RegisterBulkMetadataFetchOp(reg *opsregistry.Registry) error {
-	return reg.RegisterOp(opsregistry.OperationDef{
-		ID:              "library.bulk-metadata-fetch",
-		Plugin:          "library",
-		DisplayName:     "Bulk Metadata Fetch",
-		Description:     "Fetch and cache external metadata for a set of audiobooks. Nothing is written to book records — results appear in the per-book review UI.",
-		DefaultPriority: opsregistry.PriorityNormal,
-		Cancellable:     true,
-		Isolate:         false,
-		Timeout:         6 * time.Hour,
-		ResumePolicy:    opsregistry.ResumeRestart,
-		ConcurrencyKey:  "library.bulk-metadata-fetch",
-		Permissions:     []auth.Permission{auth.PermLibraryEditMetadata},
-		Capabilities:    []opsregistry.Capability{opsregistry.CapNetworkGeneric, opsregistry.CapLibraryRead},
-		Run: func(ctx context.Context, rawParams json.RawMessage, reporter opsregistry.Reporter) error {
-			var p bulkMetadataFetchV2Params
-			if len(rawParams) > 0 {
-				if err := json.Unmarshal(rawParams, &p); err != nil {
-					return fmt.Errorf("bulk_metadata_fetch: decode params: %w", err)
-				}
-			}
-			store := s.Store()
-			if store == nil {
-				return fmt.Errorf("bulk_metadata_fetch: database not initialized")
-			}
-
-			// Generate a stable opID for OperationResult rows (resume key).
-			// The registry assigns its own run ID; we derive a deterministic
-			// sub-ID so OperationResult rows survive restarts.
-			opID := ulid.Make().String()
-
-			fetchParams := operations.BulkMetadataFetchParams{
-				PreferAudible: p.PreferAudible,
-				SkipCached:    p.SkipCached,
-			}
-
-			progress := registryProgressAdapter{r: reporter}
-
-			bookIDs, err := operations.ResolveBookIDs(p.Selection, func(f operations.FilterSpec) ([]string, error) {
-				return s.resolveFilterToBookIDs(ctx, f)
-			})
-			if err != nil {
-				return fmt.Errorf("bulk_metadata_fetch: resolve selection: %w", err)
-			}
-
-			if len(bookIDs) > 0 {
-				return s.runBulkMetadataFetchForBookIDs(ctx, opID, bookIDs, fetchParams, store, progress)
-			}
-			return s.runBulkMetadataFetchAll(ctx, opID, fetchParams, store, progress)
-		},
-	})
-}
-
-func init() {
-	addOpRegistrar(func(s *Server, reg *opsregistry.Registry) error { return s.RegisterBulkMetadataFetchOp(reg) })
-}
-
-// runBulkMetadataFetchForBookIDs fetches and caches metadata for a specific set
-// of books identified by ID. It shares resume semantics with runBulkMetadataFetchAll:
-// books that already have an OperationResult row for this opID are skipped.
-func (s *Server) runBulkMetadataFetchForBookIDs(
-	ctx context.Context,
-	opID string,
-	bookIDs []string,
-	params operations.BulkMetadataFetchParams,
-	store database.Store,
-	progress operations.ProgressReporter,
-) error {
-	// Create operation context for structured logging
-	op := &logging.OpContext{
-		ID:     opID,
-		Type:   "metadata-fetch-ids",
-		Status: "pending",
-	}
-	ctx = logging.WithOp(ctx, op)
-	// Track requested books in operation context
-	op.AddEntity("books", bookIDs...)
-
-	_ = progress.UpdateProgress(0, len(bookIDs), "loading books")
-
-	maxAge := time.Duration(config.AppConfig.MetadataFetchCacheTTLDays) * 24 * time.Hour
-
-	existingResults, _ := store.GetOperationResults(opID)
-	done := make(map[string]bool, len(existingResults))
-	for _, r := range existingResults {
-		done[r.BookID] = true
-	}
-
-	allAuthors, _ := store.GetAllAuthors()
-	authorByID := make(map[int]string, len(allAuthors))
-	for _, a := range allAuthors {
-		authorByID[a.ID] = a.Name
-	}
-
-	type bookWork struct {
-		book       database.Book
-		authorName string
-	}
-	var work []bookWork
-	for _, id := range bookIDs {
-		if done[id] {
-			continue
-		}
-		b, err := store.GetBookByID(id)
-		if err != nil || b == nil || strings.TrimSpace(b.Title) == "" {
-			continue
-		}
-		if params.SkipCached {
-			hasFresh := false
-			for _, src := range s.metadataFetchService.BuildSourceChain() {
-				if cached, _, cerr := database.GetCachedMetadataFetchWithMaxAge(store, id, src.Name(), maxAge); cerr == nil && cached != nil {
-					hasFresh = true
-					break
-				}
-			}
-			if hasFresh {
-				continue
-			}
-		}
-		author := ""
-		if b.AuthorID != nil {
-			author = authorByID[*b.AuthorID]
-		}
-		work = append(work, bookWork{book: *b, authorName: author})
-	}
-
-	alreadyDone := len(existingResults)
-	totalBooks := alreadyDone + len(work)
-	logging.Info(ctx, "bulk-metadata-fetch-ids total, done, to fetch", "totalBooks", totalBooks, "alreadyDone", alreadyDone, "work_count", len(work))
-	_ = progress.UpdateProgress(alreadyDone, totalBooks,
-		fmt.Sprintf("resuming: %d/%d already done", alreadyDone, totalBooks))
-
-	sourceChain := s.metadataFetchService.BuildSourceChain()
-	if params.PreferAudible {
-		audible := metadata.NewAudibleClient()
-		var rest []metadata.MetadataSource
-		for _, src := range sourceChain {
-			if src.Name() != audible.Name() {
-				rest = append(rest, src)
-			}
-		}
-		sourceChain = append([]metadata.MetadataSource{audible}, rest...)
-	}
-
-	completed := int64(alreadyDone)
-	found, notFound := 0, 0
-	for i, w := range work {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		bookID := w.book.ID
-		searchTitle := stripChapterFromTitle(w.book.Title)
-
-		var metaResults []metadata.BookMetadata
-		var sourceName string
-		cacheHit := false
-		for _, src := range sourceChain {
-			if cached, _, cerr := database.GetCachedMetadataFetchWithMaxAge(store, bookID, src.Name(), maxAge); cerr == nil && cached != nil {
-				var cr []metadata.BookMetadata
-				if jerr := json.Unmarshal(cached.Results, &cr); jerr == nil && len(cr) > 0 {
-					metaResults, sourceName, cacheHit = cr, src.Name(), true
-					break
-				}
-			}
-			var ferr error
-			if w.authorName != "" {
-				metaResults, ferr = src.SearchByTitleAndAuthor(ctx, searchTitle, w.authorName)
-				if ferr == nil && len(metaResults) > 0 {
-					sourceName = src.Name()
-					break
-				}
-			}
-			metaResults, ferr = src.SearchByTitle(ctx, searchTitle)
-			if ferr == nil && len(metaResults) > 0 {
-				sourceName = src.Name()
-				break
-			}
-		}
-
-		resultStatus := "not_found"
-		if len(metaResults) > 0 && sourceName != "" {
-			if !cacheHit {
-				if blob, merr := json.Marshal(metaResults); merr == nil {
-					_ = database.PutCachedMetadataFetch(store, bookID, sourceName, blob, 0)
-				}
-			}
-			found++
-			resultStatus = "cached"
-		} else {
-			notFound++
-		}
-		_ = store.CreateOperationResult(&database.OperationResult{
-			OperationID: opID,
-			BookID:      bookID,
-			ResultJSON:  fmt.Sprintf(`{"status":%q,"source":%q}`, resultStatus, sourceName),
-			Status:      resultStatus,
-		})
-
-		n := atomic.AddInt64(&completed, 1)
-		if i%50 == 0 || int(n) == totalBooks {
-			_ = progress.UpdateProgress(int(n), totalBooks,
-				fmt.Sprintf("fetched %d/%d — cached:%d not_found:%d", n, totalBooks, found, notFound))
-		}
-		if !cacheHit && sourceName != "" && i < len(work)-1 {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(200 * time.Millisecond):
-			}
-		}
-	}
-
-	finalCount := atomic.LoadInt64(&completed)
-	_ = progress.UpdateProgress(int(finalCount), totalBooks,
-		fmt.Sprintf("complete — cached:%d not_found:%d", found, notFound))
-	op.SetStatus("success")
-	logging.Info(ctx, "bulk-metadata-fetch-ids complete", "finalCount", finalCount, "found", found, "notFound", notFound)
-	return nil
-}
-
 // handleBulkWriteBack handles POST /api/v1/audiobooks/bulk-write-back.
 // It creates an async operation that writes metadata tags and renames files
 // for all books matching the provided filters (or all organized/imported books).
-func (s *Server) handleBulkWriteBack(c *gin.Context) {
-	if s.Store() == nil {
+func (h *Handler) handleBulkWriteBackImpl(c *gin.Context) {
+	store := h.resolveStore()
+	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	if s.opRegistry == nil {
+	if h.opRegistry == nil {
 		httputil.RespondWithInternalError(c, "operations registry not initialized")
 		return
 	}
@@ -1433,8 +1111,6 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 		Rename bool `json:"rename"`
 	}
 	_ = c.ShouldBindJSON(&req)
-
-	store := s.Store()
 
 	// Gather matching books based on filters
 	var books []database.Book
@@ -1470,7 +1146,7 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 			continue
 		}
 		// Skip protected paths
-		if s.isProtectedPath(book.FilePath) {
+		if h.isProtectedPath(book.FilePath) {
 			continue
 		}
 		// Filter by library state (only when not filtering by author/series exclusively)
@@ -1511,7 +1187,7 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 	}
 
 	rawParams, _ := json.Marshal(bulkWriteBackOpParams{BookIDs: bookIDs, Rename: doRename})
-	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "library.bulk-write-back", rawParams)
+	opID, err := h.opRegistry.EnqueueOp(c.Request.Context(), "library.bulk-write-back", rawParams)
 	if err != nil {
 		httputil.InternalError(c, "enqueue failed", err)
 		return
@@ -1524,198 +1200,8 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 	})
 }
 
-// runBulkWriteBack writes tags (and optionally renames) for each book in bookIDs,
-// starting at startIdx. Uses a parallel worker pool — cover embedding and tag
-// writes both go through TagLib so there is no ffmpeg ordering constraint.
-// Checkpoints every 10 completions so a restart can resume near where it left off.
-func (s *Server) runBulkWriteBack(
-	ctx context.Context,
-	opID string,
-	bookIDs []string,
-	doRename bool,
-	startIdx int,
-	progress operations.ProgressReporter,
-) error {
-	const workers = 2
-
-	store := s.Store()
-	mfs := s.metadataFetchService
-	total := len(bookIDs)
-
-	if startIdx > 0 {
-		_ = progress.Log("info", fmt.Sprintf("resuming bulk write-back from index %d/%d", startIdx, total), nil)
-	}
-
-	type job struct {
-		id   string
-		book *database.Book
-	}
-
-	jobCh := make(chan job, workers*2)
-	var wg sync.WaitGroup
-	var written, failed atomic.Int64
-	var mu sync.Mutex
-
-	for range workers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := range jobCh {
-				if ctx.Err() != nil {
-					return
-				}
-				count, writeErr := mfs.WriteBackMetadataForBook(j.id)
-				if writeErr != nil {
-					failed.Add(1)
-					mu.Lock()
-					_ = progress.Log("warn", fmt.Sprintf("book %s: write-back failed: %v", j.id, writeErr), nil)
-					mu.Unlock()
-				} else {
-					written.Add(1)
-					if count > 0 && s.activityWriter != nil {
-						activity.LogBatch(s.activityWriter, opID, "metadata-apply", "write-back",
-							activity.BatchItem{Name: j.book.Title, Count: count})
-					}
-				}
-				done := written.Load() + failed.Load()
-				mu.Lock()
-				_ = progress.UpdateProgress(int(done), total, fmt.Sprintf("processing %d/%d (%d written, %d failed)", done, total, written.Load(), failed.Load()))
-				if done%10 == 0 {
-					_ = operations.SaveCheckpoint(store, opID, "bulk_write_back", "writing", int(done), total)
-				}
-				mu.Unlock()
-			}
-		}()
-	}
-
-	for i := startIdx; i < total; i++ {
-		if ctx.Err() != nil || progress.IsCanceled() {
-			mu.Lock()
-			_ = progress.Log("info", fmt.Sprintf("canceled after feeding %d/%d books", i-startIdx, total-startIdx), nil)
-			mu.Unlock()
-			break
-		}
-
-		bookID := bookIDs[i]
-		book, err := store.GetBookByID(bookID)
-		if err != nil || book == nil {
-			failed.Add(1)
-			mu.Lock()
-			_ = progress.Log("warn", fmt.Sprintf("book %s: not found", bookID), nil)
-			mu.Unlock()
-			continue
-		}
-		if s.isProtectedPath(book.FilePath) {
-			mu.Lock()
-			_ = progress.Log("info", fmt.Sprintf("book %s: skipping protected path", bookID), nil)
-			mu.Unlock()
-			continue
-		}
-		if tags, tagErr := store.GetBookTags(bookID); tagErr == nil {
-			if policy.EvaluatePolicy(tags).NoWriteback {
-				mu.Lock()
-				_ = progress.Log("info", fmt.Sprintf("book %s: skipping write-back (policy:no-writeback tag)", bookID), nil)
-				mu.Unlock()
-				continue
-			}
-		}
-		if doRename {
-			if renameErr := mfs.RunApplyPipelineRenameOnly(bookID, book); renameErr != nil {
-				mu.Lock()
-				_ = progress.Log("warn", fmt.Sprintf("book %s: rename failed: %v", bookID, renameErr), nil)
-				mu.Unlock()
-			}
-		}
-
-		select {
-		case jobCh <- job{id: bookID, book: book}:
-		case <-ctx.Done():
-		}
-	}
-	close(jobCh)
-	wg.Wait()
-
-	_ = operations.ClearState(store, opID)
-	summary := fmt.Sprintf("bulk write-back complete: %d written, %d failed out of %d", written.Load(), failed.Load(), total)
-	_ = progress.Log("info", summary, nil)
-	if s.activityWriter != nil {
-		activity.FlushOperation(s.activityWriter, opID)
-	}
-	return nil
-}
-
-// runIsbnEnrichment enriches missing ISBN identifiers from external sources.
-// Idempotent — books that already have an ISBN are skipped, so a restart
-// safely re-runs from scratch (no checkpoint needed).
-func (s *Server) runIsbnEnrichment(ctx context.Context, progress operations.ProgressReporter, opID string) error {
-	if s.metadataFetchService == nil || s.metadataFetchService.ISBNEnrichment() == nil {
-		_ = progress.Log("info", "ISBN enrichment service is not configured, skipping", nil)
-		return nil
-	}
-	startMsg := "Scanning for books missing ISBN identifiers"
-	_ = progress.Log("info", startMsg, nil)
-	if operations.IsManual(ctx) {
-		activity.EmitInfo(s.activityWriter, opID, "isbn-enrich", "isbn-enrichment", startMsg, activity.AlwaysShow)
-	}
-	checked, updated, err := s.metadataFetchService.ISBNEnrichment().EnrichMissingISBNs(ctx, 100, s.activityWriter, opID)
-	if err != nil {
-		return err
-	}
-	activity.FlushOperation(s.activityWriter, opID)
-	msg := fmt.Sprintf("ISBN enrichment complete: checked %d, updated %d", checked, updated)
-	_ = progress.Log("info", msg, nil)
-	// Use real (checked, checked) so the bar is honest. Fall back to (1,1)
-	// when nothing was checked to avoid 0/0.
-	total := checked
-	if total <= 0 {
-		total = 1
-	}
-	_ = progress.UpdateProgress(total, total, fmt.Sprintf("%s (%d/%d 100.00%%)", msg, total, total))
-	tags := activity.TagsIf(updated == 0, activity.NoOpTag)
-	if operations.IsManual(ctx) {
-		tags = append(tags, activity.AlwaysShow)
-	}
-	activity.EmitInfo(s.activityWriter, opID, "isbn-enrich", "isbn-enrichment", msg, tags...)
-	return nil
-}
-
-// runMetadataRefreshScan reports books with incomplete metadata. Read-only,
-// safe to re-run on restart with no state.
-func (s *Server) runMetadataRefreshScan(ctx context.Context, progress operations.ProgressReporter) error {
-	store := s.Store()
-	if store == nil {
-		return fmt.Errorf("database not initialized")
-	}
-	_ = progress.Log("info", "Starting metadata refresh scan", nil)
-	// Pre-load total is unknown; placeholder (0/1) avoids 0/0.
-	_ = progress.UpdateProgress(0, 1, "Scanning books for incomplete metadata... (0/1 0.00%)")
-	books, err := store.GetAllBooks(10000, 0)
-	if err != nil {
-		return fmt.Errorf("failed to get books: %w", err)
-	}
-	_ = progress.Log("info", fmt.Sprintf("Checking %d books for incomplete metadata", len(books)), nil)
-	incomplete := 0
-	for i, book := range books {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		if book.AuthorID == nil || book.Title == "" {
-			incomplete++
-			_ = progress.Log("debug", fmt.Sprintf("Incomplete: %q (id=%s)", book.Title, book.ID), nil)
-		}
-		if (i+1)%200 == 0 {
-			_ = progress.UpdateProgress(i+1, len(books), fmt.Sprintf("Checked %d/%d books", i+1, len(books)))
-		}
-	}
-	resultMsg := fmt.Sprintf("Found %d books with incomplete metadata out of %d total", incomplete, len(books))
-	_ = progress.Log("info", resultMsg, nil)
-	_ = progress.UpdateProgress(len(books), len(books), resultMsg)
-	return nil
-}
-
-func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
+// batchWriteBackAudiobooks handles POST /api/v1/audiobooks/batch-write-back.
+func (h *Handler) batchWriteBackAudiobooksImpl(c *gin.Context) {
 	var req struct {
 		BookIDs  []string `json:"book_ids"`
 		Rename   bool     `json:"rename"`
@@ -1731,7 +1217,7 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 		return
 	}
 
-	store := s.Store()
+	store := h.resolveStore()
 	doOrganize := req.Organize || req.Rename
 
 	// Create a supervisor operation for tracking
@@ -1751,7 +1237,7 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 		Organize:   doOrganize,
 		Force:      req.Force,
 	}
-	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "metadata.batch-save", params); enqErr != nil {
+	if _, enqErr := h.opRegistry.EnqueueOp(c.Request.Context(), "metadata.batch-save", params); enqErr != nil {
 		httputil.InternalError(c, "failed to enqueue operation", enqErr)
 		return
 	}
@@ -1764,7 +1250,7 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 }
 
 // getMetadataFields returns available metadata fields with their types and validation rules
-func (s *Server) getMetadataFields(c *gin.Context) {
+func (h *Handler) getMetadataFieldsImpl(c *gin.Context) {
 	fields := []map[string]any{
 		{
 			"name":        "title",
@@ -1840,9 +1326,6 @@ func (s *Server) getMetadataFields(c *gin.Context) {
 	})
 }
 
-// ratingPatchRequest aliases the canonical type from internal/server/handlers.
-type ratingPatchRequest = handlers.RatingPatchRequest
-
 // parseOptionalRating decodes a json.RawMessage into a *float64 and a clear flag.
 // Returns (nil, false, nil) if raw is empty (field omitted).
 // Returns (nil, true, nil) if raw is JSON null (clear).
@@ -1870,7 +1353,7 @@ func parseOptionalRating(raw json.RawMessage, fieldName string) (*float64, bool,
 }
 
 // handleUpdateBookRating handles PATCH /api/v1/audiobooks/:id/rating.
-func (s *Server) handleUpdateBookRating(c *gin.Context) {
+func (h *Handler) handleUpdateBookRatingImpl(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		httputil.RespondWithBadRequest(c, "missing book id")
@@ -1926,7 +1409,7 @@ func (s *Server) handleUpdateBookRating(c *gin.Context) {
 		}
 	}
 
-	store := s.Store()
+	store := h.resolveStore()
 	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
