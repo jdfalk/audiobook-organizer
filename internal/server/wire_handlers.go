@@ -1,7 +1,7 @@
 // file: internal/server/wire_handlers.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: f7a8b9c0-d1e2-3456-7890-abcdef012345
-// last-edited: 2026-06-02
+// last-edited: 2026-06-03
 
 package server
 
@@ -109,6 +109,32 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 	}
 	itunesH := handlers.NewITunesHandler(itSvc, itImporter, s.opRegistry, s.Store())
 
+	// AI handlers. Guard each concrete dependency so a typed-nil pointer is not
+	// boxed into the handler's interface fields — that would defeat the
+	// `h.scanStore == nil` / `h.pipeline == nil` guards (which mirror the old
+	// `s.aiScanStore == nil` checks on the concrete pointers).
+	var aiScanStore handlers.AIScanStore
+	if s.aiScanStore != nil {
+		aiScanStore = s.aiScanStore
+	}
+	var aiPipeline handlers.AIPipeline
+	if s.pipelineManager != nil {
+		aiPipeline = s.pipelineManager
+	}
+	var aiUpdater handlers.AudiobookUpdater
+	if s.audiobookUpdateService != nil {
+		aiUpdater = s.audiobookUpdateService
+	}
+	aiH := handlers.NewAIHandler(
+		s.Store(),
+		aiScanStore,
+		aiPipeline,
+		aiUpdater,
+		s.dedupCache,
+		s.opRegistry,
+		func(b *database.Book) any { return s.enrichBookForResponseSingle(b) },
+	)
+
 	// ── Public cache routes (no auth) ────────────────────────────────────────
 	api.GET("/cache/stats", cacheH.HandleCacheStats)
 	api.GET("/cache/stats/history", cacheH.HandleCacheStatsHistory)
@@ -206,6 +232,26 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 		itunesG.GET("/library-status", s.perm(auth.PermLibraryView), itunesH.LibraryStatus)
 		itunesG.POST("/sync", s.perm(auth.PermLibraryEditMetadata), itunesH.Sync)
 	}
+
+	// AI domain (migrated from server_lifecycle.go).
+	protected.POST("/authors/duplicates/ai-review", s.perm(auth.PermLibraryEditMetadata), aiH.ReviewDuplicateAuthors)
+	protected.POST("/authors/duplicates/ai-review/apply", s.perm(auth.PermLibraryEditMetadata), aiH.ApplyAuthorReview)
+	protected.POST("/ai/parse-filename", s.perm(auth.PermLibraryEditMetadata), aiH.ParseFilename)
+	protected.POST("/ai/test-connection", s.perm(auth.PermLibraryEditMetadata), aiH.TestConnection)
+	aiScans := protected.Group("/ai/scans")
+	{
+		aiScans.POST("", s.perm(auth.PermLibraryEditMetadata), aiH.StartScan)
+		aiScans.GET("", s.perm(auth.PermLibraryView), aiH.ListScans)
+		aiScans.GET("/compare", aiH.CompareScans) // Must be before /:id to avoid conflict
+		aiScans.GET("/:id", s.perm(auth.PermLibraryView), aiH.GetScan)
+		aiScans.GET("/:id/results", s.perm(auth.PermLibraryView), aiH.GetScanResults)
+		aiScans.POST("/:id/apply", s.perm(auth.PermLibraryEditMetadata), aiH.ApplyScanResults)
+		aiScans.POST("/:id/cancel", s.perm(auth.PermLibraryEditMetadata), aiH.CancelScan)
+		aiScans.DELETE("/:id", s.perm(auth.PermLibraryDelete), aiH.DeleteScan)
+	}
+	protected.POST("/metadata-sources/test", s.perm(auth.PermSettingsManage), aiH.TestMetadataSource)
+	protected.POST("/audiobooks/:id/parse-with-ai", s.perm(auth.PermLibraryEditMetadata), aiH.ParseAudiobook)
+	protected.GET("/ai-jobs", s.perm(auth.PermSettingsManage), aiH.ListAIJobs)
 
 	// Operations v2 (UOS-06)
 	protected.GET("/operations/timeline", s.perm(auth.PermLibraryView), opsV2H.GetOperationTimeline)
