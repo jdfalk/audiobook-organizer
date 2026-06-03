@@ -1098,11 +1098,13 @@ func (s *Server) setupRoutes() {
 			// iTunes import routes
 			itunesGroup := protected.Group("/itunes")
 			{
-				itunesGroup.POST("/validate", s.perm(auth.PermLibraryEditMetadata), s.handleITunesValidate)
-				itunesGroup.POST("/test-mapping", s.perm(auth.PermLibraryEditMetadata), s.handleITunesTestMapping)
-				itunesGroup.POST("/import", s.perm(auth.PermLibraryEditMetadata), s.handleITunesImport)
-				itunesGroup.POST("/write-back", s.perm(auth.PermLibraryEditMetadata), s.handleITunesWriteBack)
-				itunesGroup.POST("/write-back-all", s.perm(auth.PermLibraryEditMetadata), s.handleITunesWriteBackAll)
+				// NOTE: the 12 core iTunes routes (validate, test-mapping,
+				// import, write-back[/all/preview], library-stats, books,
+				// import-status[/bulk], library-status, sync) were migrated
+				// to handlers.ITunesHandler and are now registered in
+				// wireHandlers (wire_handlers.go). The survivors below stay
+				// here because they still call *Server methods directly.
+				//
 				// REMOVED in v5: cleanup-orphans was a bulk-remove
 				// endpoint that inferred "what should not be in iTunes"
 				// from the DB. With a stale or partially-cleared DB
@@ -1112,13 +1114,6 @@ func (s *Server) setupRoutes() {
 				// path) are the only safe pattern. Any future bulk
 				// reconciliation must be opt-in, dry-run-by-default,
 				// preview-required, and reviewed item-by-item.
-				itunesGroup.GET("/library-stats", s.perm(auth.PermLibraryView), s.handleITunesLibraryStats)
-				itunesGroup.POST("/write-back/preview", s.perm(auth.PermLibraryEditMetadata), s.handleITunesWriteBackPreview)
-				itunesGroup.GET("/books", s.perm(auth.PermLibraryView), s.handleListITunesBooks)
-				itunesGroup.GET("/import-status/:id", s.perm(auth.PermLibraryView), s.handleITunesImportStatus)
-				itunesGroup.POST("/import-status/bulk", s.perm(auth.PermLibraryEditMetadata), s.handleITunesImportStatusBulk)
-				itunesGroup.GET("/library-status", s.perm(auth.PermLibraryView), s.handleITunesLibraryStatus)
-				itunesGroup.POST("/sync", s.perm(auth.PermLibraryEditMetadata), s.handleITunesSync)
 				// Diff-and-batch rebuild: computes the full diff
 				// between the DB and the current ITL file, then
 				// applies all adds/removes/updates in one atomic
