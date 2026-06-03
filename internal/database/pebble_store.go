@@ -4933,7 +4933,11 @@ func (p *PebbleStore) listUserPlaylists(playlistType, userFilter string, matchUs
 		if playlistType != "" && pl.Type != playlistType {
 			continue
 		}
-		if matchUser && pl.CreatedByUserID != userFilter {
+		// When scoping to a user, include that user's playlists AND legacy
+		// unowned rows (empty CreatedByUserID, e.g. pre-ownership iTunes
+		// imports) so the refactor doesn't hide pre-existing data. This mirrors
+		// the handler's ownedByCaller semantics.
+		if matchUser && pl.CreatedByUserID != "" && pl.CreatedByUserID != userFilter {
 			continue
 		}
 		all = append(all, pl)

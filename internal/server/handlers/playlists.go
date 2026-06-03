@@ -92,13 +92,24 @@ func NewPlaylistHandlerWithGetter(store PlaylistStore, indexFn func() *search.Bl
 	return &PlaylistHandler{store: store, indexFn: indexFn}
 }
 
-// ownedByCaller reports whether pl belongs to the calling user. Playlists are
-// per-user; without this check any authenticated user could read or mutate
+// ownedByCaller reports whether pl is accessible to the calling user. Playlists
+// are per-user; without this check any authenticated user could read or mutate
 // another user's playlist by guessing its ID (IDOR). A nil playlist is treated
 // as not-owned. Callers respond 404 (not 403) on failure so the existence of
 // another user's playlist is not disclosed.
+//
+// A playlist with an empty CreatedByUserID is treated as legacy/unowned and is
+// accessible to any caller. Such rows predate ownership tracking (e.g. iTunes
+// smart-playlist imports created before this field was stamped); refusing them
+// would silently hide pre-existing data. New playlists always carry an owner.
 func ownedByCaller(c *gin.Context, pl *database.UserPlaylist) bool {
-	return pl != nil && pl.CreatedByUserID == CallingUserID(c)
+	if pl == nil {
+		return false
+	}
+	if pl.CreatedByUserID == "" {
+		return true
+	}
+	return pl.CreatedByUserID == CallingUserID(c)
 }
 
 // -----------------------------------------------------------------------

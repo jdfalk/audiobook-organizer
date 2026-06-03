@@ -1,5 +1,5 @@
 // file: internal/itunes/service/playlist_sync.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 1e9f0a8b-2c3d-4a70-b8c5-3d7e0f1b9a99
 //
 // iTunes playlist sync (spec 3.4 tasks 5-6).
@@ -87,6 +87,10 @@ func (p *PlaylistSync) MigrateSmartPlaylists(lib *itunes.ITLLibrary) (imported, 
 			ITunesPersistentID:   pid,
 			ITunesRawCriteriaB64: rawB64,
 			Description:          fmt.Sprintf("Imported from iTunes smart playlist %q", pl.Title),
+			// Stamp ownership so the API's per-user playlist isolation does not
+			// hide iTunes-imported playlists. The sync worker runs as the local
+			// admin identity (no per-request user context).
+			CreatedByUserID: adminUserID,
 		})
 		if err != nil {
 			slog.Warn("create playlist", "pl", pl.Title, "err", err)
