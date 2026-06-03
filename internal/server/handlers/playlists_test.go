@@ -99,6 +99,28 @@ func TestPlaylistHandler_GetPlaylist_Owner_Succeeds(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+// TestPlaylistHandler_GetPlaylist_LegacyUnowned_Accessible confirms that a
+// playlist with an empty CreatedByUserID (legacy / pre-ownership iTunes import)
+// remains accessible to any caller — the IDOR fix must not hide pre-existing data.
+func TestPlaylistHandler_GetPlaylist_LegacyUnowned_Accessible(t *testing.T) {
+	legacy := &database.UserPlaylist{
+		ID:              "pl-legacy",
+		Name:            "iTunes import",
+		Type:            database.UserPlaylistTypeStatic,
+		BookIDs:         []string{"b1"},
+		CreatedByUserID: "", // unowned — created before ownership tracking
+	}
+	store := handlersmocks.NewMockPlaylistStore(t)
+	store.EXPECT().GetUserPlaylist("pl-legacy").Return(legacy, nil)
+
+	h := handlers.NewPlaylistHandler(store, nil)
+	c, w := newPlaylistCtxAs(http.MethodGet, "/playlists/pl-legacy", "userA")
+	c.Params = gin.Params{{Key: "id", Value: "pl-legacy"}}
+	h.GetPlaylist(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
 // TestPlaylistHandler_ListPlaylists_ScopesToCaller confirms the list endpoint
 // passes the calling user's ID to the store so only that user's playlists are
 // returned (no cross-user disclosure).
