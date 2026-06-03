@@ -1,7 +1,7 @@
 // file: internal/operations/registry/worker.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: b8c9d0e1-f2a3-4b5c-6d7e-8f9a0b1c2d3e
-// last-edited: 2026-06-01
+// last-edited: 2026-06-03
 
 package registry
 
@@ -41,6 +41,23 @@ type runHandle struct {
 	abandoned      bool
 	currentItem    string
 	currentItemMu  sync.Mutex
+}
+
+// cancelIfActive cancels the run's context if it has been wired up.
+//
+// The dispatcher (dispatcher.go) inserts a *stub* handle into r.running with a
+// nil cancel func to block Gate-0 re-dispatch the instant an op is claimed; the
+// worker overwrites it with the full handle (with cancel) on pickup
+// (worker.go). Between those two events a handle is present in r.running with
+// cancel == nil. Callers that walk r.running and cancel (Shutdown, Cancel, the
+// watchdog) must go through this guard so they no-op on a stub instead of
+// panicking with a nil-pointer dereference. For Shutdown this is fully correct:
+// shuttingDown is set before the walk, so a stubbed op is never executed by the
+// worker that eventually picks it up.
+func (h *runHandle) cancelIfActive() {
+	if h != nil && h.cancel != nil {
+		h.cancel()
+	}
 }
 
 func (h *runHandle) setCurrentItem(label string) {

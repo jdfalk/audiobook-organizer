@@ -1,5 +1,5 @@
 // file: internal/operations/registry/watchdog.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 2b3c4d5e-6f7a-8901-bcde-f01234567890
 // last-edited: 2026-05-06
 
@@ -87,7 +87,7 @@ func (r *Registry) watchdogCycle() {
 				fmt.Sprintf("no progress for %s (timeout=%s)", now.Sub(*row.LastProgressAt).Round(time.Second), progressTimeout))
 			r.logger.Warn("registry: canceling stuck op", "op_id", h.id, "def_id", def.ID,
 				"idle_since", row.LastProgressAt)
-			h.cancel()
+			h.cancelIfActive()
 			continue // don't also check uncheckpointed for the same op
 		}
 
