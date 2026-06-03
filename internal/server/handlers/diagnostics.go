@@ -1,9 +1,16 @@
-// file: internal/server/diagnostics_handlers.go
-// version: 3.2.1
-// last-edited: 2026-05-19
-// guid: a2b3c4d5-e6f7-4890-ab12-cd34ef56gh78
+// file: internal/server/handlers/diagnostics.go
+// version: 1.0.0
+// guid: 14e70c44-73ca-456a-bc67-8dc6ba6e5736
+// last-edited: 2026-06-03
 
-package server
+// DiagnosticsHandler hosts the diagnostics HTTP endpoints extracted from the
+// server package: ZIP export start/download, AI batch submit + results, applying
+// approved AI suggestions, and the db-health stats endpoint. Dependencies that
+// would otherwise require importing package server (the AI batch parser, the
+// diagnostics + merge services) arrive as constructor params behind narrow
+// interfaces, so package handlers stays free of any import on package server.
+
+package handlers
 
 import (
 	"bytes"
@@ -24,7 +31,39 @@ import (
 	ulid "github.com/oklog/ulid/v2"
 )
 
-// diagnosticsSuggestion represents a single AI suggestion from diagnostics analysis.
+// --- narrow dependency interfaces ---
+
+// DiagnosticsService is the narrow interface DiagnosticsHandler requires from
+// the diagnostics service. Only CollectAllBooks is called by the handlers; the
+// concrete *diagnostics.Service satisfies it.
+type DiagnosticsService interface {
+	CollectAllBooks() ([]database.Book, error)
+}
+
+// MergeService is the narrow interface DiagnosticsHandler requires from the
+// merge service. Only MergeBooks is called by the handlers; the concrete
+// *merge.Service satisfies it.
+type MergeService interface {
+	MergeBooks(bookIDs []string, primaryID string) (*merge.Result, error)
+}
+
+// --- op param wrapper ---
+//
+// diagnosticsExportOpParams mirrors the unexported server-package type of the
+// same shape (server.diagnosticsExportOpParams in diagnostics_ops.go).
+// EnqueueOp json.Marshals params immediately and the op executor in package
+// server json.Unmarshals them back into its own copy, so the wire shape (JSON
+// tags) must stay byte-identical to the server-side definition even though the
+// Go types live in two packages.
+type diagnosticsExportOpParams struct {
+	LegacyOpID  string `json:"legacy_op_id"`
+	Category    string `json:"category"`
+	Description string `json:"description"`
+}
+
+// diagnosticsSuggestion represents a single AI suggestion from diagnostics
+// analysis. Relocated from the server package (was an unexported type in
+// diagnostics_handlers.go); only used internally to decode ResultData.
 type diagnosticsSuggestion struct {
 	ID        string   `json:"id"`
 	Action    string   `json:"action"`
@@ -34,8 +73,88 @@ type diagnosticsSuggestion struct {
 	Fix       string   `json:"fix,omitempty"`
 }
 
-// startDiagnosticsExport creates a diagnostic ZIP export asynchronously.
-func (s *Server) startDiagnosticsExport(c *gin.Context) {
+// --- db-health response shapes ---
+//
+// Relocated verbatim from the server package (diagnostics_handlers.go) to
+// preserve the JSON contract of GET /api/v1/diagnostics/db-health.
+
+type dbHealthResponse struct {
+	SQLite           *dbHealthSQLite           `json:"sqlite,omitempty"`
+	Pebble           *dbHealthPebble           `json:"pebble,omitempty"`
+	Embeddings       dbHealthEmbeddings        `json:"embeddings"`
+	AiScans          dbHealthAiScans           `json:"ai_scans"`
+	MetadataCache    dbHealthMetadataCache     `json:"metadata_cache"`
+	BookPathPrefixes []database.BookPathPrefix `json:"book_path_prefixes,omitempty"`
+}
+
+type dbHealthSQLite struct {
+	Tables    []database.SQLiteTableStat `json:"tables"`
+	SizeBytes int64                      `json:"size_bytes"`
+}
+
+type dbHealthPebble struct {
+	KeyCount  int64  `json:"key_count"`
+	SizeBytes uint64 `json:"size_bytes"`
+}
+
+type dbHealthEmbeddings struct {
+	VectorCount int64 `json:"vector_count"`
+	SizeBytes   int64 `json:"size_bytes"`
+}
+
+type dbHealthAiScans struct {
+	JobCount     int    `json:"job_count"`
+	PendingCount int    `json:"pending_count"`
+	SizeBytes    uint64 `json:"size_bytes"`
+}
+
+type dbHealthMetadataCache struct {
+	TotalEntries   int64 `json:"total_entries"`
+	TTLDays        int   `json:"ttl_days"`
+	ExpiredEntries int64 `json:"expired_entries"`
+}
+
+// DiagnosticsHandler hosts the diagnostics HTTP endpoints. Fields are narrow
+// dependency interfaces (plus clean concrete database stores and the AI batch
+// parser) so the handler is mockable and package handlers never imports package
+// server.
+type DiagnosticsHandler struct {
+	store          database.Store         // full store (db-health type switch + apply/export paths)
+	diagService    DiagnosticsService     // diagnostics service (CollectAllBooks); may be nil
+	mergeService   MergeService           // merge service (MergeBooks); may be nil
+	embeddingStore *database.EmbeddingStore // embeddings health stats; may be nil
+	aiScanStore    *database.AIScanStore  // ai-scan health stats; may be nil
+	registry       OperationsRegistry     // shared ops registry (EnqueueOp only)
+	batchParser    *ai.OpenAIParser       // resolved from server.batchPoller.parser; may be nil
+}
+
+// NewDiagnosticsHandler constructs a DiagnosticsHandler. Field/param order:
+// store, diagService, mergeService, embeddingStore, aiScanStore, registry,
+// batchParser. diagService/mergeService may be nil — the handlers replicate the
+// server-side lazy construction fallback. batchParser may be nil — the submit-AI
+// flow falls back to preparing batch data without submission.
+func NewDiagnosticsHandler(
+	store database.Store,
+	diagService DiagnosticsService,
+	mergeService MergeService,
+	embeddingStore *database.EmbeddingStore,
+	aiScanStore *database.AIScanStore,
+	registry OperationsRegistry,
+	batchParser *ai.OpenAIParser,
+) *DiagnosticsHandler {
+	return &DiagnosticsHandler{
+		store:          store,
+		diagService:    diagService,
+		mergeService:   mergeService,
+		embeddingStore: embeddingStore,
+		aiScanStore:    aiScanStore,
+		registry:       registry,
+		batchParser:    batchParser,
+	}
+}
+
+// StartExport creates a diagnostic ZIP export asynchronously.
+func (h *DiagnosticsHandler) StartExport(c *gin.Context) {
 	var req struct {
 		Category    string `json:"category"`
 		Description string `json:"description"`
@@ -60,7 +179,7 @@ func (s *Server) startDiagnosticsExport(c *gin.Context) {
 		return
 	}
 
-	store := s.Store()
+	store := h.store
 	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
@@ -78,7 +197,7 @@ func (s *Server) startDiagnosticsExport(c *gin.Context) {
 		Category:    req.Category,
 		Description: req.Description,
 	}
-	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "diagnostics.export", params); enqErr != nil {
+	if _, enqErr := h.registry.EnqueueOp(c.Request.Context(), "diagnostics.export", params); enqErr != nil {
 		httputil.InternalError(c, "failed to enqueue diagnostics export", enqErr)
 		return
 	}
@@ -89,11 +208,11 @@ func (s *Server) startDiagnosticsExport(c *gin.Context) {
 	})
 }
 
-// downloadDiagnosticsExport serves the ZIP file for a completed diagnostics export.
-func (s *Server) downloadDiagnosticsExport(c *gin.Context) {
+// DownloadExport serves the ZIP file for a completed diagnostics export.
+func (h *DiagnosticsHandler) DownloadExport(c *gin.Context) {
 	opID := c.Param("operationId")
 
-	store := s.Store()
+	store := h.store
 	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
@@ -140,8 +259,8 @@ func (s *Server) downloadDiagnosticsExport(c *gin.Context) {
 	c.File(zipPath)
 }
 
-// submitDiagnosticsAI generates a diagnostics export and submits it to OpenAI batch API.
-func (s *Server) submitDiagnosticsAI(c *gin.Context) {
+// SubmitAI generates a diagnostics export and submits it to OpenAI batch API.
+func (h *DiagnosticsHandler) SubmitAI(c *gin.Context) {
 	if config.AppConfig.OpenAIAPIKey == "" {
 		httputil.RespondWithBadRequest(c, "OpenAI API key not configured")
 		return
@@ -160,7 +279,7 @@ func (s *Server) submitDiagnosticsAI(c *gin.Context) {
 		req.Category = "general"
 	}
 
-	store := s.Store()
+	store := h.store
 	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
@@ -173,7 +292,7 @@ func (s *Server) submitDiagnosticsAI(c *gin.Context) {
 		return
 	}
 
-	ds := s.diagnosticsService
+	ds := h.diagService
 	if ds == nil {
 		ds = diagnostics.NewService(store, nil, config.AppConfig.ITunesLibraryReadPath)
 	}
@@ -181,11 +300,9 @@ func (s *Server) submitDiagnosticsAI(c *gin.Context) {
 	category := req.Category
 	description := req.Description
 
-	// Get the AI parser for file upload and batch creation
-	var parser *ai.OpenAIParser
-	if s.batchPoller != nil {
-		parser = s.batchPoller.parser
-	}
+	// The AI parser for file upload and batch creation. Resolved by the
+	// controller from server.batchPoller.parser (may be nil).
+	parser := h.batchParser
 
 	// Run async: generate export, build JSONL, submit to OpenAI
 	go func() {
@@ -266,11 +383,11 @@ func (s *Server) submitDiagnosticsAI(c *gin.Context) {
 	})
 }
 
-// getDiagnosticsAIResults returns the AI analysis results for a diagnostics operation.
-func (s *Server) getDiagnosticsAIResults(c *gin.Context) {
+// GetAIResults returns the AI analysis results for a diagnostics operation.
+func (h *DiagnosticsHandler) GetAIResults(c *gin.Context) {
 	opID := c.Param("operationId")
 
-	store := s.Store()
+	store := h.store
 	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
@@ -321,8 +438,8 @@ func (s *Server) getDiagnosticsAIResults(c *gin.Context) {
 	})
 }
 
-// applyDiagnosticsSuggestions applies approved AI suggestions from diagnostics analysis.
-func (s *Server) applyDiagnosticsSuggestions(c *gin.Context) {
+// ApplySuggestions applies approved AI suggestions from diagnostics analysis.
+func (h *DiagnosticsHandler) ApplySuggestions(c *gin.Context) {
 	var req struct {
 		OperationID           string   `json:"operation_id" binding:"required"`
 		ApprovedSuggestionIDs []string `json:"approved_suggestion_ids" binding:"required"`
@@ -332,7 +449,7 @@ func (s *Server) applyDiagnosticsSuggestions(c *gin.Context) {
 		return
 	}
 
-	store := s.Store()
+	store := h.store
 	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
@@ -374,7 +491,7 @@ func (s *Server) applyDiagnosticsSuggestions(c *gin.Context) {
 		approvedSet[id] = true
 	}
 
-	ms := s.mergeService
+	ms := h.mergeService
 	if ms == nil {
 		ms = merge.NewService(store)
 	}
@@ -478,47 +595,10 @@ func (s *Server) applyDiagnosticsSuggestions(c *gin.Context) {
 	})
 }
 
-// dbHealthResponse is the JSON shape returned by GET /api/v1/diagnostics/db-health.
-type dbHealthResponse struct {
-	SQLite           *dbHealthSQLite           `json:"sqlite,omitempty"`
-	Pebble           *dbHealthPebble           `json:"pebble,omitempty"`
-	Embeddings       dbHealthEmbeddings        `json:"embeddings"`
-	AiScans          dbHealthAiScans           `json:"ai_scans"`
-	MetadataCache    dbHealthMetadataCache     `json:"metadata_cache"`
-	BookPathPrefixes []database.BookPathPrefix `json:"book_path_prefixes,omitempty"`
-}
-
-type dbHealthSQLite struct {
-	Tables    []database.SQLiteTableStat `json:"tables"`
-	SizeBytes int64                      `json:"size_bytes"`
-}
-
-type dbHealthPebble struct {
-	KeyCount  int64  `json:"key_count"`
-	SizeBytes uint64 `json:"size_bytes"`
-}
-
-type dbHealthEmbeddings struct {
-	VectorCount int64 `json:"vector_count"`
-	SizeBytes   int64 `json:"size_bytes"`
-}
-
-type dbHealthAiScans struct {
-	JobCount     int    `json:"job_count"`
-	PendingCount int    `json:"pending_count"`
-	SizeBytes    uint64 `json:"size_bytes"`
-}
-
-type dbHealthMetadataCache struct {
-	TotalEntries   int64 `json:"total_entries"`
-	TTLDays        int   `json:"ttl_days"`
-	ExpiredEntries int64 `json:"expired_entries"`
-}
-
-// getDBHealth returns health stats for all backing stores.
+// GetDBHealth returns health stats for all backing stores.
 // GET /api/v1/diagnostics/db-health
-func (s *Server) getDBHealth(c *gin.Context) {
-	store := s.Store()
+func (h *DiagnosticsHandler) GetDBHealth(c *gin.Context) {
+	store := h.store
 	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
@@ -555,8 +635,8 @@ func (s *Server) getDBHealth(c *gin.Context) {
 	}
 
 	// Embeddings store (always SQLite, may be nil if DB path not set yet).
-	if s.embeddingStore != nil {
-		estats, err := s.embeddingStore.HealthStats()
+	if h.embeddingStore != nil {
+		estats, err := h.embeddingStore.HealthStats()
 		if err != nil {
 			slog.Warn("db-health embedding stats", "err", err)
 		}
@@ -567,8 +647,8 @@ func (s *Server) getDBHealth(c *gin.Context) {
 	}
 
 	// AI scan store (always PebbleDB, may be nil).
-	if s.aiScanStore != nil {
-		astats, err := s.aiScanStore.HealthStats()
+	if h.aiScanStore != nil {
+		astats, err := h.aiScanStore.HealthStats()
 		if err != nil {
 			slog.Warn("db-health ai scan stats", "err", err)
 		}

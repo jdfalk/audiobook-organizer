@@ -168,3 +168,5 @@ packages:
       AIScanStore:
       AIPipeline:
       AudiobookUpdater:
+      DiagnosticsService:
+      MergeService:

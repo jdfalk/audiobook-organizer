@@ -7,6 +7,7 @@ package server
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -135,6 +136,33 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 		func(b *database.Book) any { return s.enrichBookForResponseSingle(b) },
 	)
 
+	// Diagnostics handlers. Resolve the AI batch parser from the (unexported)
+	// batchPoller field — the handler cannot import package server, so the
+	// controller reads parser here and passes it in. Guard typed-nil boxing of
+	// the diagnostics/merge services so the handler's nil-fallback (lazy
+	// construction) fires correctly.
+	var diagParser *ai.OpenAIParser
+	if s.batchPoller != nil {
+		diagParser = s.batchPoller.parser
+	}
+	var diagSvc handlers.DiagnosticsService
+	if s.diagnosticsService != nil {
+		diagSvc = s.diagnosticsService
+	}
+	var diagMergeSvc handlers.MergeService
+	if s.mergeService != nil {
+		diagMergeSvc = s.mergeService
+	}
+	diagH := handlers.NewDiagnosticsHandler(
+		s.Store(),
+		diagSvc,
+		diagMergeSvc,
+		s.embeddingStore,
+		s.aiScanStore,
+		s.opRegistry,
+		diagParser,
+	)
+
 	// ── Public cache routes (no auth) ────────────────────────────────────────
 	api.GET("/cache/stats", cacheH.HandleCacheStats)
 	api.GET("/cache/stats/history", cacheH.HandleCacheStatsHistory)
@@ -252,6 +280,14 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 	protected.POST("/metadata-sources/test", s.perm(auth.PermSettingsManage), aiH.TestMetadataSource)
 	protected.POST("/audiobooks/:id/parse-with-ai", s.perm(auth.PermLibraryEditMetadata), aiH.ParseAudiobook)
 	protected.GET("/ai-jobs", s.perm(auth.PermSettingsManage), aiH.ListAIJobs)
+
+	// Diagnostics (migrated from server_lifecycle.go).
+	protected.GET("/diagnostics/db-health", s.perm(auth.PermSettingsManage), diagH.GetDBHealth)
+	protected.POST("/diagnostics/export", s.perm(auth.PermSettingsManage), diagH.StartExport)
+	protected.GET("/diagnostics/export/:operationId/download", s.perm(auth.PermSettingsManage), diagH.DownloadExport)
+	protected.POST("/diagnostics/submit-ai", s.perm(auth.PermSettingsManage), diagH.SubmitAI)
+	protected.GET("/diagnostics/ai-results/:operationId", s.perm(auth.PermSettingsManage), diagH.GetAIResults)
+	protected.POST("/diagnostics/apply-suggestions", s.perm(auth.PermSettingsManage), diagH.ApplySuggestions)
 
 	// Operations v2 (UOS-06)
 	protected.GET("/operations/timeline", s.perm(auth.PermLibraryView), opsV2H.GetOperationTimeline)
