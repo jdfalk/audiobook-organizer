@@ -1,5 +1,5 @@
 // file: internal/server/wire_handlers.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: f7a8b9c0-d1e2-3456-7890-abcdef012345
 // last-edited: 2026-06-03
 
@@ -14,7 +14,9 @@ import (
 	dedupengine "github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	entities "github.com/jdfalk/audiobook-organizer/internal/server/handlers/entities"
+	operations "github.com/jdfalk/audiobook-organizer/internal/server/handlers/operations"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
+	"github.com/jdfalk/audiobook-organizer/internal/undo"
 )
 
 // wireHandlers instantiates handler structs and registers their routes.
@@ -157,6 +159,62 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 		}
 	}
 	opsV2H := handlers.NewOperationsV2Handler(opsV2, opReg, opEventHub)
+
+	// Operations domain handler (scan/organize/optimize/transcode triggers,
+	// operation status/logs/result/changes/revert, stale-op management, DB
+	// optimize, tasks, maintenance window). Guard typed-nil boxing for each
+	// interface-typed concrete-pointer dep: s.opRegistry (*opsregistry.Registry),
+	// s.pipelineManager (*aiscan.PipelineManager) and s.aiScanStore
+	// (*database.AIScanStore) can all legitimately be nil; boxing a nil concrete
+	// pointer into the interface would yield a non-nil interface and defeat the
+	// handler's in-method nil guards (which mirror the old `s.opRegistry == nil` /
+	// `s.pipelineManager != nil && s.aiScanStore != nil` checks). opRegistry,
+	// pipelineManager and aiScanStore are all wired before setupRoutes
+	// (wireServerFromContainer) and aiScanStore is only re-nilled during
+	// shutdown, so snapshotting them here is safe. s.scheduler is the exception:
+	// it is assigned in Start() AFTER this runs, so it is passed as a lazy
+	// provider closure (below) instead of a snapshot.
+	var opsOpReg operations.OperationsRegistry
+	if s.opRegistry != nil {
+		opsOpReg = s.opRegistry
+	}
+	var opsPipeline operations.ScanCanceler
+	if s.pipelineManager != nil {
+		opsPipeline = s.pipelineManager
+	}
+	var opsScanStore operations.AIScanLister
+	if s.aiScanStore != nil {
+		opsScanStore = s.aiScanStore
+	}
+	// collectStale stays in package server (also called from server_lifecycle.go).
+	// preflightUndo / revert wrap server-private re-export helpers that consume a
+	// full database.Store opaquely; the controller closes over s.Store().
+	operationsH := operations.New(
+		s.Store(),
+		opsOpReg,
+		// Lazy scheduler provider: s.scheduler is assigned in Start() (after this
+		// wire-time runs), so resolve it at request time. Guard inside the
+		// closure so a nil *scheduler.TaskScheduler is not boxed into a non-nil
+		// interface (which would defeat the handler's nil check).
+		func() operations.Scheduler {
+			if s.scheduler == nil {
+				return nil
+			}
+			return s.scheduler
+		},
+		opsPipeline,
+		opsScanStore,
+		s.collectStaleOperations,
+		func(id string) (*undo.UndoConflictReport, error) {
+			return undo.PreflightUndoConflicts(s.Store(), id)
+		},
+		func(id string) error {
+			return NewRevertService(s.Store()).RevertOperation(id)
+		},
+	)
+	// getSystemLogs (system_handlers.go) delegates its operation_id branch to
+	// operationsH.GetOperationLogs; stash it on the Server for that call.
+	s.operationsHandler = operationsH
 
 	// iTunes handlers. Guard the service/importer wiring: s.itunesSvc is set
 	// from the service registry and may be nil (iTunes disabled / not
@@ -399,6 +457,38 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 	protected.POST("/operations/v2", s.perm(auth.PermScanTrigger), opsV2H.TriggerOperationV2)
 	protected.GET("/op-defs", s.perm(auth.PermLibraryView), opsV2H.ListOpDefs)
 	protected.GET("/op-defs/:id", s.perm(auth.PermLibraryView), opsV2H.GetOpDef)
+
+	// Operations domain (migrated from server_lifecycle.go). Paths + permission
+	// guards copied verbatim. These share the /operations path prefix with the
+	// operations_v2 routes above (timeline/events/v2/op-defs) and the survivors
+	// that stay in server_lifecycle.go (active/recent/reconcile/itunes-path-*/
+	// cleanup-version-groups/results/file-ops) — all distinct method+path pairs,
+	// all using the identical `:id` param name, so Gin registers them cleanly.
+	protected.GET("/operations", s.perm(auth.PermLibraryView), operationsH.ListOperations)
+	protected.GET("/operations/stale", s.perm(auth.PermLibraryView), operationsH.ListStaleOperations)
+	protected.POST("/operations/scan", s.perm(auth.PermScanTrigger), operationsH.StartScan)
+	protected.POST("/operations/organize", s.perm(auth.PermScanTrigger), operationsH.StartOrganize)
+	protected.POST("/operations/transcode", s.perm(auth.PermScanTrigger), operationsH.StartTranscode)
+	protected.POST("/operations/optimize", s.perm(auth.PermScanTrigger), operationsH.StartOptimize)
+	protected.GET("/operations/:id/status", s.perm(auth.PermLibraryView), operationsH.GetOperationStatus)
+	protected.GET("/operations/:id/logs", s.perm(auth.PermLibraryView), operationsH.GetOperationLogs)
+	protected.GET("/operations/:id/result", s.perm(auth.PermLibraryView), operationsH.GetOperationResult)
+	protected.DELETE("/operations/:id", s.perm(auth.PermSettingsManage), operationsH.CancelOperation)
+	protected.POST("/operations/clear-stale", s.perm(auth.PermSettingsManage), operationsH.ClearStaleOperations)
+	protected.DELETE("/operations/history", s.perm(auth.PermSettingsManage), operationsH.DeleteOperationHistory)
+	protected.POST("/operations/optimize-database", s.perm(auth.PermSettingsManage), operationsH.OptimizeDatabase)
+	protected.POST("/operations/sweep-tombstones", s.perm(auth.PermSettingsManage), operationsH.SweepTombstones)
+	protected.POST("/operations/set-internal-flag", s.perm(auth.PermSettingsManage), operationsH.SetInternalFlag)
+	protected.GET("/operations/audit-files", s.perm(auth.PermSettingsManage), operationsH.AuditFileConsistency)
+	protected.GET("/operations/:id/changes", s.perm(auth.PermLibraryView), operationsH.GetOperationChanges)
+	protected.GET("/operations/:id/undo/preflight", s.perm(auth.PermLibraryView), operationsH.UndoPreflightHandler)
+	protected.POST("/operations/:id/revert", s.perm(auth.PermLibraryOrganize), operationsH.RevertOperation)
+	protected.GET("/tasks", s.perm(auth.PermSettingsManage), operationsH.ListTasks)
+	protected.POST("/tasks/:name/run", s.perm(auth.PermSettingsManage), operationsH.RunTask)
+	protected.PUT("/tasks/:name", s.perm(auth.PermSettingsManage), operationsH.UpdateTaskConfig)
+	protected.POST("/maintenance-window/run", s.perm(auth.PermSettingsManage), operationsH.RunMaintenanceWindowNow)
+	protected.GET("/maintenance-window/status", s.perm(auth.PermSettingsManage), operationsH.GetMaintenanceWindowStatus)
+	protected.PUT("/maintenance-window/config", s.perm(auth.PermSettingsManage), operationsH.UpdateMaintenanceWindowConfig)
 
 	// Plugins
 	plugins := protected.Group("/plugins")

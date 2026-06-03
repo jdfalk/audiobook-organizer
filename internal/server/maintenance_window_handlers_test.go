@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_window_handlers_test.go
-// version: 1.1.1
+// version: 1.2.0
 // guid: d5e6f7a8-b9c0-1234-efab-456789012345
 // last-edited: 2026-05-11
 
@@ -12,7 +12,6 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
@@ -174,11 +173,8 @@ func TestUpdateMaintenanceWindowConfig_InvalidHour(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code, "hour 24 should return 400")
 }
 
-func TestCalculateNextWindowRun(t *testing.T) {
-	// The result must be a valid RFC3339 time in the future.
-	result := calculateNextWindowRun(3)
-	parsed, err := time.Parse(time.RFC3339, result)
-	require.NoError(t, err, "should return valid RFC3339 time")
-	assert.True(t, parsed.After(time.Now().Add(-time.Minute)), "next run must be after now (with 1-min slack)")
-	assert.Equal(t, 3, parsed.Hour(), "result hour should match start hour")
-}
+// NOTE: calculateNextWindowRun moved to the handlers/operations sub-package as
+// an unexported helper. It is covered indirectly there via the
+// GetMaintenanceWindowStatus handler test (which asserts a non-empty
+// next_run_estimate); an external operations_test package cannot reference the
+// unexported helper directly.

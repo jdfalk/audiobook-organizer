@@ -1,5 +1,5 @@
 // file: internal/server/handlers_integration_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 package server
@@ -20,8 +20,34 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	entities "github.com/jdfalk/audiobook-organizer/internal/server/handlers/entities"
+	operations "github.com/jdfalk/audiobook-organizer/internal/server/handlers/operations"
+	"github.com/jdfalk/audiobook-organizer/internal/undo"
 	"github.com/jdfalk/audiobook-organizer/internal/work"
 )
+
+// newOperationsHandler constructs an operations.Handler from the test server's
+// store + injected funcs. The operations domain handlers were extracted into
+// the handlers/operations sub-package; the whitebox handler tests in
+// handlers_unit_test.go still exercise the real store → JSON-envelope path
+// through this constructor. The registry/scheduler/pipeline/scanStore deps and
+// the three injected funcs are stubbed because the migrated store-only handlers
+// under test (status/list/logs/result/changes) never reach them.
+func newOperationsHandler(s *Server) *operations.Handler {
+	return operations.New(
+		s.Store(),
+		nil, // registry
+		nil, // scheduler
+		nil, // pipeline (ScanCanceler)
+		nil, // scanStore (AIScanLister)
+		s.collectStaleOperations,
+		func(id string) (*undo.UndoConflictReport, error) {
+			return undo.PreflightUndoConflicts(s.Store(), id)
+		},
+		func(id string) error {
+			return NewRevertService(s.Store()).RevertOperation(id)
+		},
+	)
+}
 
 // newEntitiesHandler constructs an entities.Handler from the test server's
 // (real) services + caches. The entities domain handlers were extracted into
