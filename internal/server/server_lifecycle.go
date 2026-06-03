@@ -1256,14 +1256,8 @@ func (s *Server) setupRoutes() {
 			protected.DELETE("/works/:id", s.perm(auth.PermLibraryDelete), s.deleteWork)
 			protected.GET("/works/:id/books", s.perm(auth.PermLibraryView), s.listWorkBooks)
 
-			// Version management routes
-			protected.GET("/audiobooks/:id/versions", s.perm(auth.PermLibraryView), s.listAudiobookVersions)
-			protected.POST("/audiobooks/:id/versions", s.perm(auth.PermLibraryEditMetadata), s.linkAudiobookVersion)
-			protected.PUT("/audiobooks/:id/set-primary", s.perm(auth.PermLibraryEditMetadata), s.setAudiobookPrimary)
-			protected.POST("/audiobooks/:id/split-version", s.perm(auth.PermLibraryEditMetadata), s.splitVersion)
-			protected.POST("/audiobooks/:id/split-to-books", s.perm(auth.PermLibraryEditMetadata), s.splitSegmentsToBooks)
-			protected.POST("/audiobooks/:id/move-segments", s.perm(auth.PermLibraryEditMetadata), s.moveSegments)
-			protected.GET("/version-groups/:id", s.perm(auth.PermLibraryView), s.getVersionGroup)
+			// Version management routes are registered in wireHandlers
+			// (VersionsHandler).
 
 			// Work queue routes (alternative singular form for compatibility)
 			protected.GET("/work", s.perm(auth.PermLibraryView), s.listWork)
