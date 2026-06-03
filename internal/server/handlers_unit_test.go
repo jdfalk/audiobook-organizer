@@ -1,5 +1,5 @@
 // file: internal/server/handlers_unit_test.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: f8a2d1c3-4b5e-6789-abcd-ef0123456789
 //
 // Unit tests for HTTP handlers using MockStore + httptest.
@@ -569,7 +569,7 @@ func TestHandler_GetBookTagsDetailed_Success(t *testing.T) {
 	}
 	mockStore.EXPECT().GetBookTagsDetailed("b1").Return(tags, nil)
 
-	router.GET("/audiobooks/:id/tags-detailed", srv.getBookTagsDetailed)
+	router.GET("/audiobooks/:id/tags-detailed", newAudiobooksHandler(srv).GetBookTagsDetailed)
 
 	req := httptest.NewRequest("GET", "/audiobooks/b1/tags-detailed", nil)
 	w := httptest.NewRecorder()
@@ -588,7 +588,7 @@ func TestHandler_GetBookTagsDetailed_Empty(t *testing.T) {
 
 	mockStore.EXPECT().GetBookTagsDetailed("b2").Return(nil, nil)
 
-	router.GET("/audiobooks/:id/tags-detailed", srv.getBookTagsDetailed)
+	router.GET("/audiobooks/:id/tags-detailed", newAudiobooksHandler(srv).GetBookTagsDetailed)
 
 	req := httptest.NewRequest("GET", "/audiobooks/b2/tags-detailed", nil)
 	w := httptest.NewRecorder()
@@ -612,7 +612,7 @@ func TestHandler_GetBookAlternativeTitles_Success(t *testing.T) {
 	}
 	mockStore.EXPECT().GetBookAlternativeTitles("b1").Return(alts, nil)
 
-	router.GET("/audiobooks/:id/alternative-titles", srv.getBookAlternativeTitles)
+	router.GET("/audiobooks/:id/alternative-titles", newAudiobooksHandler(srv).GetBookAlternativeTitles)
 
 	req := httptest.NewRequest("GET", "/audiobooks/b1/alternative-titles", nil)
 	w := httptest.NewRecorder()
@@ -638,7 +638,7 @@ func TestHandler_AddBookAlternativeTitle_Success(t *testing.T) {
 		{BookID: "b1", Title: "New Title", Source: "user"},
 	}, nil)
 
-	router.POST("/audiobooks/:id/alternative-titles", srv.addBookAlternativeTitle)
+	router.POST("/audiobooks/:id/alternative-titles", newAudiobooksHandler(srv).AddBookAlternativeTitle)
 
 	body, _ := json.Marshal(map[string]string{"title": "New Title", "source": "user", "language": "en"})
 	req := httptest.NewRequest("POST", "/audiobooks/b1/alternative-titles", bytes.NewReader(body))
@@ -652,7 +652,7 @@ func TestHandler_AddBookAlternativeTitle_Success(t *testing.T) {
 func TestHandler_AddBookAlternativeTitle_MissingTitle(t *testing.T) {
 	srv, _, router := setupHandlerTest(t)
 
-	router.POST("/audiobooks/:id/alternative-titles", srv.addBookAlternativeTitle)
+	router.POST("/audiobooks/:id/alternative-titles", newAudiobooksHandler(srv).AddBookAlternativeTitle)
 
 	body, _ := json.Marshal(map[string]string{"source": "user"})
 	req := httptest.NewRequest("POST", "/audiobooks/b1/alternative-titles", bytes.NewReader(body))
@@ -668,7 +668,7 @@ func TestHandler_AddBookAlternativeTitle_BookNotFound(t *testing.T) {
 
 	mockStore.EXPECT().GetBookByID("missing").Return(nil, errors.New("not found"))
 
-	router.POST("/audiobooks/:id/alternative-titles", srv.addBookAlternativeTitle)
+	router.POST("/audiobooks/:id/alternative-titles", newAudiobooksHandler(srv).AddBookAlternativeTitle)
 
 	body, _ := json.Marshal(map[string]string{"title": "Alt"})
 	req := httptest.NewRequest("POST", "/audiobooks/missing/alternative-titles", bytes.NewReader(body))
@@ -687,7 +687,7 @@ func TestHandler_RemoveBookAlternativeTitle_Success(t *testing.T) {
 	mockStore.EXPECT().RemoveBookAlternativeTitle("b1", "Old Title").Return(nil)
 	mockStore.EXPECT().GetBookAlternativeTitles("b1").Return([]database.BookAlternativeTitle{}, nil)
 
-	router.DELETE("/audiobooks/:id/alternative-titles", srv.removeBookAlternativeTitle)
+	router.DELETE("/audiobooks/:id/alternative-titles", newAudiobooksHandler(srv).RemoveBookAlternativeTitle)
 
 	body, _ := json.Marshal(map[string]string{"title": "Old Title"})
 	req := httptest.NewRequest("DELETE", "/audiobooks/b1/alternative-titles", bytes.NewReader(body))
@@ -701,7 +701,7 @@ func TestHandler_RemoveBookAlternativeTitle_Success(t *testing.T) {
 func TestHandler_RemoveBookAlternativeTitle_MissingTitle(t *testing.T) {
 	srv, _, router := setupHandlerTest(t)
 
-	router.DELETE("/audiobooks/:id/alternative-titles", srv.removeBookAlternativeTitle)
+	router.DELETE("/audiobooks/:id/alternative-titles", newAudiobooksHandler(srv).RemoveBookAlternativeTitle)
 
 	body, _ := json.Marshal(map[string]string{})
 	req := httptest.NewRequest("DELETE", "/audiobooks/b1/alternative-titles", bytes.NewReader(body))

@@ -920,65 +920,23 @@ func (s *Server) setupRoutes() {
 
 		s.wireHandlers(api, authMiddleware, protected)
 		{
-			// Audiobook routes
-			protected.GET("/audiobooks", s.perm(auth.PermLibraryView), s.listAudiobooks)
-			// /audiobooks/search removed — use GET /audiobooks?search= instead
-			protected.GET("/audiobooks/count", s.perm(auth.PermLibraryView), s.countAudiobooks)
-			protected.GET("/audiobooks/facets", s.perm(auth.PermLibraryView), s.audiobookFacets)
-			// /audiobooks/duplicates(/scan-results,/scan,/merge,/dismiss) migrated to
-			// the handlers/duplicates sub-package (wire_handlers.go).
+			// Audiobook routes.
+			// NOTE: the main audiobooks list / CRUD domain (list, count, facets,
+			// soft-delete/restore/purge, rescan, get, tags, update, delete, cover,
+			// segments, files, changelog, path-history, external-ids,
+			// extract-track-info, relocate, batch, batch-operations, user tags,
+			// tags-detailed, batch-tags, alternative-titles, metadata-history,
+			// undo, field-states, changes — 36 handlers) was migrated to the
+			// handlers/audiobooks sub-package (wire_handlers.go). The sibling
+			// /audiobooks/:id/* routes below stay here because they belong to
+			// OTHER domains (quarantine, rating, sample, write-back).
 			protected.GET("/audiobooks/quarantined", s.perm(auth.PermLibraryView), s.listQuarantinedBooks)
-			protected.GET("/audiobooks/soft-deleted", s.perm(auth.PermLibraryView), s.listSoftDeletedAudiobooks)
-			protected.DELETE("/audiobooks/purge-soft-deleted", s.perm(auth.PermLibraryDelete), s.purgeSoftDeletedAudiobooks)
-			protected.POST("/audiobooks/:id/restore", s.perm(auth.PermLibraryOrganize), s.restoreAudiobook)
-			protected.POST("/audiobooks/:id/rescan", s.perm(auth.PermLibraryEditMetadata), s.rescanAudiobook)
 			protected.POST("/audiobooks/:id/quarantine", s.perm(auth.PermSettingsManage), s.quarantineBook)
 			protected.DELETE("/audiobooks/:id/quarantine", s.perm(auth.PermSettingsManage), s.unquarantineBook)
-			protected.GET("/audiobooks/:id", s.perm(auth.PermLibraryView), s.getAudiobook)
-			protected.GET("/audiobooks/:id/tags", s.perm(auth.PermLibraryView), s.getAudiobookTags)
-			protected.PUT("/audiobooks/:id", s.perm(auth.PermLibraryEditMetadata), s.updateAudiobook)
 			protected.PATCH("/audiobooks/:id/rating", s.perm(auth.PermLibraryEditMetadata), s.handleUpdateBookRating)
-			protected.DELETE("/audiobooks/:id", s.perm(auth.PermLibraryDelete), s.deleteAudiobook)
-			protected.GET("/audiobooks/:id/cover", s.perm(auth.PermLibraryView), s.serveAudiobookCover)
 			protected.GET("/audiobooks/:id/sample", s.perm(auth.PermLibraryView), s.handleAudioSample)
-			protected.GET("/audiobooks/:id/segments", s.perm(auth.PermLibraryView), s.listAudiobookSegments)
-			protected.GET("/audiobooks/:id/segments/:segmentId/tags", s.perm(auth.PermLibraryView), s.getSegmentTags)
-			protected.GET("/audiobooks/:id/files", s.perm(auth.PermLibraryView), s.listBookFiles)
-			protected.PATCH("/audiobooks/:id/files/:file_id", s.perm(auth.PermLibraryEditMetadata), s.patchBookFile)
-			protected.GET("/audiobooks/:id/changelog", s.perm(auth.PermLibraryView), s.getBookChangelog)
-			protected.GET("/audiobooks/:id/path-history", s.perm(auth.PermLibraryView), s.getBookPathHistory)
-			protected.GET("/audiobooks/:id/external-ids", s.perm(auth.PermLibraryView), s.getAudiobookExternalIDs)
-			protected.POST("/audiobooks/:id/extract-track-info", s.perm(auth.PermLibraryEditMetadata), s.extractTrackInfo)
-			protected.POST("/audiobooks/:id/relocate", s.perm(auth.PermLibraryOrganize), s.relocateBookFiles)
-			protected.POST("/audiobooks/batch", s.perm(auth.PermLibraryEditMetadata), s.batchUpdateAudiobooks)
 			protected.POST("/audiobooks/batch-write-back", s.perm(auth.PermLibraryEditMetadata), s.batchWriteBackAudiobooks)
 			protected.POST("/audiobooks/bulk-write-back", s.perm(auth.PermLibraryEditMetadata), s.handleBulkWriteBack)
-			protected.POST("/audiobooks/batch-operations", s.perm(auth.PermLibraryEditMetadata), s.batchOperations)
-
-			// User tag routes
-			protected.GET("/tags", s.perm(auth.PermLibraryView), s.listAllUserTags)
-			protected.GET("/audiobooks/:id/user-tags", s.perm(auth.PermLibraryView), s.getBookUserTags)
-			// Detailed tag route: returns tag+source pairs so the
-			// UI can render system-applied tags (dedup:*,
-			// metadata:source:*, etc.) differently from user tags.
-			protected.GET("/audiobooks/:id/tags-detailed", s.perm(auth.PermLibraryView), s.getBookTagsDetailed)
-			protected.POST("/audiobooks/batch-tags", s.perm(auth.PermLibraryEditMetadata), s.batchUpdateTags)
-
-			// Book alternative titles
-			protected.GET("/audiobooks/:id/alternative-titles", s.perm(auth.PermLibraryView), s.getBookAlternativeTitles)
-			protected.POST("/audiobooks/:id/alternative-titles", s.perm(auth.PermLibraryEditMetadata), s.addBookAlternativeTitle)
-			protected.DELETE("/audiobooks/:id/alternative-titles", s.perm(auth.PermLibraryDelete), s.removeBookAlternativeTitle)
-
-			// User preferences migrated to the handlers/system sub-package
-			// (wireHandlers).
-
-			// Metadata change history
-			protected.GET("/audiobooks/:id/metadata-history", s.perm(auth.PermLibraryView), s.getBookMetadataHistory)
-			protected.GET("/audiobooks/:id/metadata-history/:field", s.perm(auth.PermLibraryView), s.getFieldMetadataHistory)
-			protected.POST("/audiobooks/:id/metadata-history/:field/undo", s.perm(auth.PermLibraryEditMetadata), s.undoMetadataChange)
-			protected.POST("/audiobooks/:id/undo-last-apply", s.perm(auth.PermLibraryEditMetadata), s.undoLastApply)
-			protected.GET("/audiobooks/:id/field-states", s.perm(auth.PermLibraryView), s.getAudiobookFieldStates)
-			protected.GET("/audiobooks/:id/changes", s.perm(auth.PermLibraryView), s.getBookChanges)
 
 			// Author, narrator, and series routes.
 			// NOTE: /authors, /authors/count, /authors/merge,
