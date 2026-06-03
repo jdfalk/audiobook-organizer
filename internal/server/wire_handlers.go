@@ -18,6 +18,7 @@ import (
 	deduphandler "github.com/jdfalk/audiobook-organizer/internal/server/handlers/dedup"
 	duplicates "github.com/jdfalk/audiobook-organizer/internal/server/handlers/duplicates"
 	entities "github.com/jdfalk/audiobook-organizer/internal/server/handlers/entities"
+	metadatahandler "github.com/jdfalk/audiobook-organizer/internal/server/handlers/metadata"
 	operations "github.com/jdfalk/audiobook-organizer/internal/server/handlers/operations"
 	system "github.com/jdfalk/audiobook-organizer/internal/server/handlers/system"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
@@ -540,6 +541,60 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 		s.publishEvent,
 	)
 
+	// ── Metadata domain (handlers/metadata) ──────────────────────────────────
+	// The 19 metadata HTTP handlers (batch-update / validate / export / import,
+	// external search, per-book fetch / search / apply / mark-no-match / revert,
+	// metadata-rejections, cow-versions(+prune), write-back, bulk fetch + bulk
+	// write-back enqueue, batch write-back enqueue, fields, rating PATCH).
+	//
+	// store and writeBackBatcher are resolved through lazy provider closures
+	// (swapped post-wire by integration tests / read at request time by the
+	// originals). metadataFetchService / opRegistry / fileIOPool are wire-time
+	// interface snapshots, each typed-nil guarded so the in-method `!= nil` /
+	// `== nil` checks hold. enrichBook wraps the server-private
+	// enrichBookForResponseSingle (return type private → any). loadMetadataState /
+	// updateFetchedMetadataState / isProtectedPath / publishEvent wrap helpers
+	// that STAY in package server (server_metadata.go / server_middleware.go).
+	var mdMetaFetch metadatahandler.MetadataFetchService
+	if s.metadataFetchService != nil {
+		mdMetaFetch = s.metadataFetchService
+	}
+	var mdOpRegistry metadatahandler.OperationsRegistry
+	if s.opRegistry != nil {
+		mdOpRegistry = s.opRegistry
+	}
+	var mdFileIOPool metadatahandler.FileIOPool
+	if s.fileIOPool != nil {
+		mdFileIOPool = s.fileIOPool
+	}
+	metadataH := metadatahandler.New(
+		func() metadatahandler.MetadataStore {
+			st := s.Store()
+			if st == nil {
+				return nil
+			}
+			return st
+		},
+		mdMetaFetch,
+		// Lazy provider: server.writeBackBatcher is swapped post-wire by
+		// integration tests and the original handlers read it at request time, so
+		// snapshotting would capture the pre-swap value. Nil stays a nil interface.
+		func() metadatahandler.WriteBackEnqueuer {
+			if s.writeBackBatcher == nil {
+				return nil
+			}
+			return s.writeBackBatcher
+		},
+		mdOpRegistry,
+		mdFileIOPool,
+		s.listCache,
+		func(b *database.Book) any { return s.enrichBookForResponseSingle(b) },
+		s.isProtectedPath,
+		s.loadMetadataState,
+		s.updateFetchedMetadataState,
+		s.publishEvent,
+	)
+
 	// ── Public cache routes (no auth) ────────────────────────────────────────
 	api.GET("/cache/stats", cacheH.HandleCacheStats)
 	api.GET("/cache/stats/history", cacheH.HandleCacheStatsHistory)
@@ -866,6 +921,28 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 	protected.POST("/audiobooks/:id/undo-last-apply", s.perm(auth.PermLibraryEditMetadata), audiobooksH.UndoLastApply)
 	protected.GET("/audiobooks/:id/field-states", s.perm(auth.PermLibraryView), audiobooksH.GetAudiobookFieldStates)
 	protected.GET("/audiobooks/:id/changes", s.perm(auth.PermLibraryView), audiobooksH.GetBookChanges)
+
+	// Metadata domain (handlers/metadata) — 19 routes relocated from
+	// server_lifecycle.go. EXACT paths + perm guards preserved.
+	protected.POST("/metadata/batch-update", s.perm(auth.PermLibraryEditMetadata), metadataH.BatchUpdateMetadata)
+	protected.POST("/metadata/validate", s.perm(auth.PermLibraryEditMetadata), metadataH.ValidateMetadata)
+	protected.GET("/metadata/export", s.perm(auth.PermLibraryView), metadataH.ExportMetadata)
+	protected.POST("/metadata/import", s.perm(auth.PermLibraryEditMetadata), metadataH.ImportMetadata)
+	protected.GET("/metadata/search", s.perm(auth.PermLibraryView), metadataH.SearchMetadata)
+	protected.GET("/metadata/fields", s.perm(auth.PermLibraryView), metadataH.GetMetadataFields)
+	protected.POST("/metadata/bulk-fetch", s.perm(auth.PermLibraryEditMetadata), metadataH.BulkFetchMetadata)
+	protected.POST("/audiobooks/:id/fetch-metadata", s.perm(auth.PermLibraryEditMetadata), metadataH.FetchAudiobookMetadata)
+	protected.POST("/audiobooks/:id/search-metadata", s.perm(auth.PermLibraryEditMetadata), metadataH.SearchAudiobookMetadata)
+	protected.POST("/audiobooks/:id/apply-metadata", s.perm(auth.PermLibraryEditMetadata), metadataH.ApplyAudiobookMetadata)
+	protected.POST("/audiobooks/:id/mark-no-match", s.perm(auth.PermLibraryEditMetadata), metadataH.MarkAudiobookNoMatch)
+	protected.POST("/audiobooks/:id/revert-metadata", s.perm(auth.PermLibraryEditMetadata), metadataH.RevertAudiobookMetadata)
+	protected.GET("/audiobooks/:id/metadata-rejections", s.perm(auth.PermLibraryView), metadataH.HandleGetMetadataRejections)
+	protected.GET("/audiobooks/:id/cow-versions", s.perm(auth.PermLibraryView), metadataH.ListBookCOWVersions)
+	protected.POST("/audiobooks/:id/cow-versions/prune", s.perm(auth.PermLibraryEditMetadata), metadataH.PruneBookCOWVersions)
+	protected.POST("/audiobooks/:id/write-back", s.perm(auth.PermLibraryEditMetadata), metadataH.WriteBackAudiobookMetadata)
+	protected.PATCH("/audiobooks/:id/rating", s.perm(auth.PermLibraryEditMetadata), metadataH.HandleUpdateBookRating)
+	protected.POST("/audiobooks/batch-write-back", s.perm(auth.PermLibraryEditMetadata), metadataH.BatchWriteBackAudiobooks)
+	protected.POST("/audiobooks/bulk-write-back", s.perm(auth.PermLibraryEditMetadata), metadataH.HandleBulkWriteBack)
 
 	// Plugins
 	plugins := protected.Group("/plugins")

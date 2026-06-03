@@ -839,18 +839,9 @@ type seriesPrunePreviewResult struct {
 // "Title: A Subtitle" → "Title", "Title - A Subtitle" → "Title".
 // Returns the original title if no subtitle separator is found.
 
-type bulkFetchMetadataRequest struct {
-	BookIDs     []string `json:"book_ids" binding:"required"`
-	OnlyMissing *bool    `json:"only_missing,omitempty"`
-}
-
-type bulkFetchMetadataResult struct {
-	BookID        string   `json:"book_id"`
-	Status        string   `json:"status"`
-	Message       string   `json:"message,omitempty"`
-	AppliedFields []string `json:"applied_fields,omitempty"`
-	FetchedFields []string `json:"fetched_fields,omitempty"`
-}
+// bulkFetchMetadataRequest / bulkFetchMetadataResult moved to the
+// handlers/metadata sub-package (mirrored there) along with the bulkFetchMetadata
+// HTTP handler (ADR-003 Phase 4). They were only used by that handler.
 
 // Version Management Handlers
 

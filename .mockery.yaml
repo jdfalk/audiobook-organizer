@@ -240,3 +240,14 @@ packages:
       BatchService:
       ChangelogService:
       ExternalIDStore:
+  github.com/jdfalk/audiobook-organizer/internal/server/handlers/metadata:
+    config:
+      dir: internal/server/handlers/metadata/mocks
+      filename: "mock_{{.InterfaceName | snakecase}}.go"
+      pkgname: metadatamocks
+    interfaces:
+      MetadataStore:
+      MetadataFetchService:
+      WriteBackEnqueuer:
+      OperationsRegistry:
+      FileIOPool:

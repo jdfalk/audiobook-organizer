@@ -933,10 +933,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/quarantined", s.perm(auth.PermLibraryView), s.listQuarantinedBooks)
 			protected.POST("/audiobooks/:id/quarantine", s.perm(auth.PermSettingsManage), s.quarantineBook)
 			protected.DELETE("/audiobooks/:id/quarantine", s.perm(auth.PermSettingsManage), s.unquarantineBook)
-			protected.PATCH("/audiobooks/:id/rating", s.perm(auth.PermLibraryEditMetadata), s.handleUpdateBookRating)
 			protected.GET("/audiobooks/:id/sample", s.perm(auth.PermLibraryView), s.handleAudioSample)
-			protected.POST("/audiobooks/batch-write-back", s.perm(auth.PermLibraryEditMetadata), s.batchWriteBackAudiobooks)
-			protected.POST("/audiobooks/bulk-write-back", s.perm(auth.PermLibraryEditMetadata), s.handleBulkWriteBack)
 
 			// Author, narrator, and series routes.
 			// NOTE: /authors, /authors/count, /authors/merge,
@@ -1082,13 +1079,8 @@ func (s *Server) setupRoutes() {
 			// handlers/system sub-package (wireHandlers).
 
 			// Enhanced metadata routes
-			protected.POST("/metadata/batch-update", s.perm(auth.PermLibraryEditMetadata), s.batchUpdateMetadata)
-			protected.POST("/metadata/validate", s.perm(auth.PermLibraryEditMetadata), s.validateMetadata)
-			protected.GET("/metadata/export", s.perm(auth.PermLibraryView), s.exportMetadata)
-			protected.POST("/metadata/import", s.perm(auth.PermLibraryEditMetadata), s.importMetadata)
-			protected.GET("/metadata/search", s.perm(auth.PermLibraryView), s.searchMetadata)
-			protected.GET("/metadata/fields", s.perm(auth.PermLibraryView), s.getMetadataFields)
-			protected.POST("/metadata/bulk-fetch", s.perm(auth.PermLibraryEditMetadata), s.bulkFetchMetadata)
+			// batch-update / validate / export / import / search / fields /
+			// bulk-fetch migrated to the handlers/metadata sub-package (wireHandlers).
 			protected.POST("/metadata/batch-fetch-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleBatchFetchCandidates)
 			protected.GET("/metadata/recent-fetches", s.perm(auth.PermLibraryView), s.handleGetLatestMetadataFetch)
 			// Unified metadata-results listing — preferred over /metadata/pending-review.
@@ -1100,16 +1092,10 @@ func (s *Server) setupRoutes() {
 			protected.POST("/metadata/batch-apply-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleBatchApplyCandidates)
 			protected.POST("/metadata/batch-reject-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleRejectCandidates)
 			protected.POST("/metadata/batch-unreject-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleUnrejectCandidates)
-			protected.POST("/audiobooks/:id/fetch-metadata", s.perm(auth.PermLibraryEditMetadata), s.fetchAudiobookMetadata)
-			protected.POST("/audiobooks/:id/search-metadata", s.perm(auth.PermLibraryEditMetadata), s.searchAudiobookMetadata)
-			protected.POST("/audiobooks/:id/apply-metadata", s.perm(auth.PermLibraryEditMetadata), s.applyAudiobookMetadata)
-			protected.POST("/audiobooks/:id/mark-no-match", s.perm(auth.PermLibraryEditMetadata), s.markAudiobookNoMatch)
-			protected.POST("/audiobooks/:id/revert-metadata", s.perm(auth.PermLibraryEditMetadata), s.revertAudiobookMetadata)
-			protected.GET("/audiobooks/:id/metadata-rejections", s.perm(auth.PermLibraryView), s.handleGetMetadataRejections)
+			// fetch-metadata / search-metadata / apply-metadata / mark-no-match /
+			// revert-metadata / metadata-rejections / cow-versions(+prune) /
+			// write-back migrated to the handlers/metadata sub-package (wireHandlers).
 			protected.GET("/audiobooks/:id/similar", s.perm(auth.PermLibraryView), s.handleSimilarBooks)
-			protected.GET("/audiobooks/:id/cow-versions", s.perm(auth.PermLibraryView), s.listBookCOWVersions)
-			protected.POST("/audiobooks/:id/cow-versions/prune", s.perm(auth.PermLibraryEditMetadata), s.pruneBookCOWVersions)
-			protected.POST("/audiobooks/:id/write-back", s.perm(auth.PermLibraryEditMetadata), s.writeBackAudiobookMetadata)
 
 			// AI parsing, scan-pipeline, metadata-source-test, and parse-with-ai
 			// routes migrated to AIHandler (wire_handlers.go).
