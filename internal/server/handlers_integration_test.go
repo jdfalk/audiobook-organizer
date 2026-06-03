@@ -1,5 +1,5 @@
 // file: internal/server/handlers_integration_test.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 package server
@@ -21,6 +21,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
 	entities "github.com/jdfalk/audiobook-organizer/internal/server/handlers/entities"
 	operations "github.com/jdfalk/audiobook-organizer/internal/server/handlers/operations"
+	system "github.com/jdfalk/audiobook-organizer/internal/server/handlers/system"
 	"github.com/jdfalk/audiobook-organizer/internal/undo"
 	"github.com/jdfalk/audiobook-organizer/internal/work"
 )
@@ -65,6 +66,55 @@ func newEntitiesHandler(s *Server) *entities.Handler {
 		s.seriesCache,
 		s.dedupCache,
 		func(b []database.Book) []any { return make([]any, len(b)) },
+	)
+}
+
+// newSystemHandler constructs a system.Handler from the test server's store +
+// injected deps. The system domain handlers were extracted into the
+// handlers/system sub-package; the whitebox handler tests in
+// handlers_unit_test.go still exercise the real store → JSON-envelope path
+// through this constructor. systemService/configUpdateService/pluginRegistry/
+// olService and the func deps are wired from the real Server fields; the hub is
+// passed as a lazy provider closure (mirroring wireHandlers) so the
+// handleEvents nil-guard test, which nils s.hub after construction, still
+// resolves nil and 503s. filterReviewedAuthorGroups is the bound *Server method.
+func newSystemHandler(s *Server) *system.Handler {
+	var sysSvc system.SystemService
+	if s.systemService != nil {
+		sysSvc = s.systemService
+	}
+	var cfgUpd system.ConfigUpdateService
+	if s.configUpdateService != nil {
+		cfgUpd = s.configUpdateService
+	}
+	var plugins system.PluginHealthChecker
+	if s.pluginRegistry != nil {
+		plugins = s.pluginRegistry
+	}
+	var opLogs system.OperationLogsProvider
+	if s.operationsHandler != nil {
+		opLogs = s.operationsHandler
+	}
+	return system.New(
+		func() system.SystemStore { return s.Store() },
+		sysSvc,
+		cfgUpd,
+		plugins,
+		// Lazy hub provider mirrors wireHandlers; resolve s.hub at request time so
+		// TestHandleEventsUnavailable (which nils s.hub after construction) still
+		// hits the 503 guard.
+		func() system.EventStreamer {
+			if s.hub == nil {
+				return nil
+			}
+			return s.hub
+		},
+		opLogs,
+		s.olService,
+		getDiskStats,
+		resetLibrarySizeCache,
+		func() string { return appVersion },
+		s.filterReviewedAuthorGroups,
 	)
 }
 

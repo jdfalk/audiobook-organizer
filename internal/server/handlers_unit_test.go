@@ -1,5 +1,5 @@
 // file: internal/server/handlers_unit_test.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: f8a2d1c3-4b5e-6789-abcd-ef0123456789
 //
 // Unit tests for HTTP handlers using MockStore + httptest.
@@ -57,7 +57,7 @@ func TestHandler_HealthCheck_Success(t *testing.T) {
 	mockStore.EXPECT().CountAuthors().Return(1, nil)
 	mockStore.EXPECT().CountSeries().Return(1, nil)
 
-	router.GET("/health", srv.healthCheck)
+	router.GET("/health", newSystemHandler(srv).HealthCheck)
 
 	req := httptest.NewRequest("GET", "/health", nil)
 	w := httptest.NewRecorder()
@@ -82,7 +82,7 @@ func TestHandler_HealthCheck_DBError(t *testing.T) {
 	mockStore.EXPECT().CountAuthors().Return(0, errors.New("db down"))
 	mockStore.EXPECT().CountSeries().Return(0, errors.New("db down"))
 
-	router.GET("/health", srv.healthCheck)
+	router.GET("/health", newSystemHandler(srv).HealthCheck)
 
 	req := httptest.NewRequest("GET", "/health", nil)
 	w := httptest.NewRecorder()
@@ -329,7 +329,7 @@ func TestHandler_ListBlockedHashes_Success(t *testing.T) {
 	hashes := []database.DoNotImport{{Hash: "abc123", Reason: "corrupted"}}
 	mockStore.EXPECT().GetAllBlockedHashes().Return(hashes, nil)
 
-	router.GET("/blocked-hashes", srv.listBlockedHashes)
+	router.GET("/blocked-hashes", newSystemHandler(srv).ListBlockedHashes)
 
 	req := httptest.NewRequest("GET", "/blocked-hashes", nil)
 	w := httptest.NewRecorder()
@@ -349,7 +349,7 @@ func TestHandler_AddBlockedHash_Success(t *testing.T) {
 	hash := "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
 	mockStore.EXPECT().AddBlockedHash(hash, "test reason").Return(nil)
 
-	router.POST("/blocked-hashes", srv.addBlockedHash)
+	router.POST("/blocked-hashes", newSystemHandler(srv).AddBlockedHash)
 
 	body, _ := json.Marshal(map[string]string{"hash": hash, "reason": "test reason"})
 	req := httptest.NewRequest("POST", "/blocked-hashes", bytes.NewReader(body))
@@ -363,7 +363,7 @@ func TestHandler_AddBlockedHash_Success(t *testing.T) {
 func TestHandler_AddBlockedHash_InvalidLength(t *testing.T) {
 	srv, _, router := setupHandlerTest(t)
 
-	router.POST("/blocked-hashes", srv.addBlockedHash)
+	router.POST("/blocked-hashes", newSystemHandler(srv).AddBlockedHash)
 
 	body, _ := json.Marshal(map[string]string{"hash": "tooshort", "reason": "test"})
 	req := httptest.NewRequest("POST", "/blocked-hashes", bytes.NewReader(body))
@@ -380,7 +380,7 @@ func TestHandler_AddBlockedHash_InvalidLength(t *testing.T) {
 func TestHandler_AddBlockedHash_MissingFields(t *testing.T) {
 	srv, _, router := setupHandlerTest(t)
 
-	router.POST("/blocked-hashes", srv.addBlockedHash)
+	router.POST("/blocked-hashes", newSystemHandler(srv).AddBlockedHash)
 
 	body, _ := json.Marshal(map[string]string{"hash": "abc"})
 	req := httptest.NewRequest("POST", "/blocked-hashes", bytes.NewReader(body))
@@ -398,7 +398,7 @@ func TestHandler_RemoveBlockedHash_Success(t *testing.T) {
 
 	mockStore.EXPECT().RemoveBlockedHash("somehash").Return(nil)
 
-	router.DELETE("/blocked-hashes/:hash", srv.removeBlockedHash)
+	router.DELETE("/blocked-hashes/:hash", newSystemHandler(srv).RemoveBlockedHash)
 
 	req := httptest.NewRequest("DELETE", "/blocked-hashes/somehash", nil)
 	w := httptest.NewRecorder()
@@ -412,7 +412,7 @@ func TestHandler_RemoveBlockedHash_StoreError(t *testing.T) {
 
 	mockStore.EXPECT().RemoveBlockedHash("bad").Return(errors.New("not found"))
 
-	router.DELETE("/blocked-hashes/:hash", srv.removeBlockedHash)
+	router.DELETE("/blocked-hashes/:hash", newSystemHandler(srv).RemoveBlockedHash)
 
 	req := httptest.NewRequest("DELETE", "/blocked-hashes/bad", nil)
 	w := httptest.NewRecorder()
@@ -429,7 +429,7 @@ func TestHandler_GetUserPreference_Found(t *testing.T) {
 	val := "dark"
 	mockStore.EXPECT().GetUserPreference("theme").Return(&database.UserPreference{Key: "theme", Value: &val}, nil)
 
-	router.GET("/preferences/:key", srv.getUserPreference)
+	router.GET("/preferences/:key", newSystemHandler(srv).GetUserPreference)
 
 	req := httptest.NewRequest("GET", "/preferences/theme", nil)
 	w := httptest.NewRecorder()
@@ -446,7 +446,7 @@ func TestHandler_GetUserPreference_NotFoundReturnsEmpty(t *testing.T) {
 
 	mockStore.EXPECT().GetUserPreference("missing").Return(nil, nil)
 
-	router.GET("/preferences/:key", srv.getUserPreference)
+	router.GET("/preferences/:key", newSystemHandler(srv).GetUserPreference)
 
 	req := httptest.NewRequest("GET", "/preferences/missing", nil)
 	w := httptest.NewRecorder()
@@ -470,7 +470,7 @@ func TestHandler_SetUserPreference_Success(t *testing.T) {
 
 	mockStore.EXPECT().SetUserPreference("theme", "light").Return(nil)
 
-	router.PUT("/preferences/:key", srv.setUserPreference)
+	router.PUT("/preferences/:key", newSystemHandler(srv).SetUserPreference)
 
 	body, _ := json.Marshal(map[string]string{"value": "light"})
 	req := httptest.NewRequest("PUT", "/preferences/theme", bytes.NewReader(body))
@@ -490,7 +490,7 @@ func TestHandler_SetUserPreference_StoreError(t *testing.T) {
 
 	mockStore.EXPECT().SetUserPreference("bad", "val").Return(errors.New("write fail"))
 
-	router.PUT("/preferences/:key", srv.setUserPreference)
+	router.PUT("/preferences/:key", newSystemHandler(srv).SetUserPreference)
 
 	body, _ := json.Marshal(map[string]string{"value": "val"})
 	req := httptest.NewRequest("PUT", "/preferences/bad", bytes.NewReader(body))
@@ -508,7 +508,7 @@ func TestHandler_DeleteUserPreference_Success(t *testing.T) {
 
 	mockStore.EXPECT().SetUserPreference("theme", "").Return(nil)
 
-	router.DELETE("/preferences/:key", srv.deleteUserPreference)
+	router.DELETE("/preferences/:key", newSystemHandler(srv).DeleteUserPreference)
 
 	req := httptest.NewRequest("DELETE", "/preferences/theme", nil)
 	w := httptest.NewRecorder()
@@ -532,7 +532,7 @@ func TestHandler_GetDashboard_Success(t *testing.T) {
 	mockStore.EXPECT().GetDashboardStats().Return(stats, nil)
 	mockStore.EXPECT().GetRecentOperations(5).Return([]database.Operation{}, nil)
 
-	router.GET("/dashboard", srv.getDashboard)
+	router.GET("/dashboard", newSystemHandler(srv).GetDashboard)
 
 	req := httptest.NewRequest("GET", "/dashboard", nil)
 	w := httptest.NewRecorder()
@@ -549,7 +549,7 @@ func TestHandler_GetDashboard_StoreError(t *testing.T) {
 
 	mockStore.EXPECT().GetDashboardStats().Return(nil, errors.New("db error"))
 
-	router.GET("/dashboard", srv.getDashboard)
+	router.GET("/dashboard", newSystemHandler(srv).GetDashboard)
 
 	req := httptest.NewRequest("GET", "/dashboard", nil)
 	w := httptest.NewRecorder()
@@ -722,7 +722,7 @@ func TestHandler_GetSystemActivityLog_Success(t *testing.T) {
 	}
 	mockStore.EXPECT().GetSystemActivityLogs("", 50).Return(logs, nil)
 
-	router.GET("/system/activity-log", srv.getSystemActivityLog)
+	router.GET("/system/activity-log", newSystemHandler(srv).GetSystemActivityLog)
 
 	req := httptest.NewRequest("GET", "/system/activity-log", nil)
 	w := httptest.NewRecorder()
@@ -739,7 +739,7 @@ func TestHandler_GetSystemActivityLog_WithSourceAndLimit(t *testing.T) {
 
 	mockStore.EXPECT().GetSystemActivityLogs("scanner", 10).Return([]database.SystemActivityLog{}, nil)
 
-	router.GET("/system/activity-log", srv.getSystemActivityLog)
+	router.GET("/system/activity-log", newSystemHandler(srv).GetSystemActivityLog)
 
 	req := httptest.NewRequest("GET", "/system/activity-log?source=scanner&limit=10", nil)
 	w := httptest.NewRecorder()
@@ -759,7 +759,7 @@ func TestHandler_ResetSystem_Success(t *testing.T) {
 	mockStore.EXPECT().Reset().Return(nil)
 	mockStore.EXPECT().InvalidateLibraryStats().Return()
 
-	router.POST("/system/reset", srv.resetSystem)
+	router.POST("/system/reset", newSystemHandler(srv).ResetSystem)
 
 	req := httptest.NewRequest("POST", "/system/reset", nil)
 	w := httptest.NewRecorder()
@@ -773,7 +773,7 @@ func TestHandler_ResetSystem_StoreError(t *testing.T) {
 
 	mockStore.EXPECT().Reset().Return(errors.New("reset failed"))
 
-	router.POST("/system/reset", srv.resetSystem)
+	router.POST("/system/reset", newSystemHandler(srv).ResetSystem)
 
 	req := httptest.NewRequest("POST", "/system/reset", nil)
 	w := httptest.NewRecorder()
@@ -787,7 +787,7 @@ func TestHandler_ResetSystem_StoreError(t *testing.T) {
 func TestHandler_FactoryReset_MissingConfirm(t *testing.T) {
 	srv, _, router := setupHandlerTest(t)
 
-	router.POST("/system/factory-reset", srv.factoryReset)
+	router.POST("/system/factory-reset", newSystemHandler(srv).FactoryReset)
 
 	body, _ := json.Marshal(map[string]string{"confirm": "wrong"})
 	req := httptest.NewRequest("POST", "/system/factory-reset", bytes.NewReader(body))
@@ -804,7 +804,7 @@ func TestHandler_FactoryReset_MissingConfirm(t *testing.T) {
 func TestHandler_FactoryReset_NoBody(t *testing.T) {
 	srv, _, router := setupHandlerTest(t)
 
-	router.POST("/system/factory-reset", srv.factoryReset)
+	router.POST("/system/factory-reset", newSystemHandler(srv).FactoryReset)
 
 	req := httptest.NewRequest("POST", "/system/factory-reset", nil)
 	req.Header.Set("Content-Type", "application/json")
@@ -964,7 +964,7 @@ func TestHandler_CountAuthors_StoreError(t *testing.T) {
 func TestHandler_HandleEvents_NoHub(t *testing.T) {
 	srv, _, router := setupHandlerTest(t)
 
-	router.GET("/events", srv.handleEvents)
+	router.GET("/events", newSystemHandler(srv).HandleEvents)
 
 	req := httptest.NewRequest("GET", "/events", nil)
 	w := httptest.NewRecorder()
@@ -1424,7 +1424,7 @@ func TestHandler_SetAudiobookNarrators_Success(t *testing.T) {
 func TestHandler_DeleteBackup_PathTraversal(t *testing.T) {
 	srv, _, router := setupHandlerTest(t)
 
-	router.DELETE("/backups/:filename", srv.deleteBackup)
+	router.DELETE("/backups/:filename", newSystemHandler(srv).DeleteBackup)
 
 	req := httptest.NewRequest("DELETE", "/backups/passwd", nil)
 	w := httptest.NewRecorder()

@@ -1,14 +1,25 @@
-// file: internal/server/system_handlers.go
-// version: 2.6.0
-// last-edited: 2026-05-29
-// guid: 0c5a18be-5744-4e41-a35a-e7e96630833b
-//
-// System-level HTTP handlers split out of server.go: health, status,
-// storage, logs, announcements, reset/factory-reset, config get/update,
-// SSE event stream, dashboard, backup CRUD, blocked-hash CRUD, and
-// user-preference CRUD. Migrated to use RespondWith* helpers.
+// file: internal/server/handlers/system/handler.go
+// version: 1.0.0
+// guid: 8475f406-df31-4286-95b0-30787397603e
+// last-edited: 2026-06-03
 
-package server
+// Package system hosts the system-level HTTP handlers extracted from the server
+// package: health, status, announcements, storage, logs, activity-log,
+// reset/factory-reset, config get/update, the SSE event stream, backup CRUD,
+// dashboard, blocked-hash CRUD, user-preference CRUD, policy-tags, and
+// quick-queries.
+//
+// Dependencies that lived on the *Server receiver are reached through narrow
+// interfaces (SystemStore, SystemService, ConfigUpdateService,
+// PluginHealthChecker, EventStreamer, OperationLogsProvider) plus the concrete
+// *metafetch.OpenLibraryService (factoryReset reaches its .Mu / .OLStore fields,
+// which an interface cannot abstract) and three injected funcs (getDiskStats,
+// resetLibrarySizeCache, appVersion, filterReviewedAuthorGroups) that wrap
+// server-package helpers / build-tagged functions / mutable package vars that
+// stay in package server. As a result package system never imports package
+// server.
+
+package system
 
 import (
 	"encoding/json"
@@ -31,14 +42,115 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/security/pathvalidation"
 )
 
-// Handler functions (stubs for now)
-func (s *Server) healthCheck(c *gin.Context) {
+// Handler hosts the system-domain HTTP endpoints.
+type Handler struct {
+	// getStore resolves the database store lazily, at request time. The original
+	// handlers read s.Store() at call time (late binding), and a router
+	// integration test (TestBlockedHashes_CRUD) swaps server.store AFTER wiring to
+	// inject a mock — so snapshotting the store at wire time would capture the
+	// pre-swap store and miss the mock's expectations. The provider closure
+	// performs the typed-nil guard. Mirrors the operations handler's getScheduler
+	// and this handler's getHub seams.
+	getStore     func() SystemStore
+	systemSvc    SystemService
+	configUpdate ConfigUpdateService
+	plugins      PluginHealthChecker
+	opLogs       OperationLogsProvider
+
+	// getHub resolves the SSE event hub lazily, at request time. The original
+	// handleEvents read s.hub at call time (late binding), and a test
+	// (TestHandleEventsUnavailable) nils s.hub AFTER wiring to exercise the 503
+	// guard — so snapshotting the hub at wire time would capture a live hub and
+	// invoke HandleSSE instead of returning 503. The provider closure performs
+	// the typed-nil guard so a nil *realtime.EventHub is never boxed into a
+	// non-nil interface. Mirrors the operations handler's getScheduler seam.
+	getHub func() EventStreamer
+
+	// olService is taken as a concrete pointer (not an interface) because
+	// factoryReset reaches its .Mu (mutex) and .OLStore fields directly; field
+	// access cannot go through an interface. A nil concrete pointer is fine — the
+	// handler nil-checks h.olService exactly as the original nil-checked
+	// s.olService.
+	olService *metafetch.OpenLibraryService
+
+	// getDiskStats wraps the build-tagged server-package getDiskStats
+	// (diskstats_unix.go / diskstats_windows.go), which stays in package server.
+	getDiskStats func(path string) (total, free uint64, err error)
+
+	// resetLibrarySizeCache wraps the server-package helper of the same name,
+	// which is also called from library_size_refresh_op.go and so stays in
+	// package server.
+	resetLibrarySizeCache func()
+
+	// appVersion returns the runtime app version (the mutable server-package
+	// `appVersion` var, set at startup). A getter func preserves read-at-call-time
+	// semantics rather than snapshotting at wire time.
+	appVersion func() string
+
+	// filterReviewedAuthorGroups wraps the server-private
+	// *Server.filterReviewedAuthorGroups (in duplicates_handlers.go, also used by
+	// the duplicates domain), which stays in package server. The controller
+	// passes s.filterReviewedAuthorGroups.
+	filterReviewedAuthorGroups func([]dedup.AuthorDedupGroup) []dedup.AuthorDedupGroup
+}
+
+// New constructs a system Handler from its dependencies.
+func New(
+	getStore func() SystemStore,
+	systemSvc SystemService,
+	configUpdate ConfigUpdateService,
+	plugins PluginHealthChecker,
+	getHub func() EventStreamer,
+	opLogs OperationLogsProvider,
+	olService *metafetch.OpenLibraryService,
+	getDiskStats func(path string) (total, free uint64, err error),
+	resetLibrarySizeCache func(),
+	appVersion func() string,
+	filterReviewedAuthorGroups func([]dedup.AuthorDedupGroup) []dedup.AuthorDedupGroup,
+) *Handler {
+	return &Handler{
+		getStore:                   getStore,
+		systemSvc:                  systemSvc,
+		configUpdate:               configUpdate,
+		plugins:                    plugins,
+		getHub:                     getHub,
+		opLogs:                     opLogs,
+		olService:                  olService,
+		getDiskStats:               getDiskStats,
+		resetLibrarySizeCache:      resetLibrarySizeCache,
+		appVersion:                 appVersion,
+		filterReviewedAuthorGroups: filterReviewedAuthorGroups,
+	}
+}
+
+// resolveStore returns the live store via the lazy provider, or nil if no
+// provider was supplied or the provider yields nil. Returned as the narrow
+// SystemStore; callers keep the result in a local for the request.
+func (h *Handler) resolveStore() SystemStore {
+	if h.getStore == nil {
+		return nil
+	}
+	return h.getStore()
+}
+
+// resolveHub returns the live SSE hub via the lazy provider, or nil if no
+// provider was supplied (e.g. some unit tests) or the provider yields nil.
+func (h *Handler) resolveHub() EventStreamer {
+	if h.getHub == nil {
+		return nil
+	}
+	return h.getHub()
+}
+
+// HealthCheck implements GET /health (and /api/health, /api/v1/health).
+func (h *Handler) HealthCheck(c *gin.Context) {
 	// Gather basic metrics; tolerate errors (don't fail health entirely)
+	store := h.resolveStore()
 	var bookCount, authorCount, seriesCount, playlistCount int
 	var dbErr error
 	var brokenFileCount int
-	if s.Store() != nil {
-		if bc, err := s.Store().CountBooks(); err == nil {
+	if store != nil {
+		if bc, err := store.CountBooks(); err == nil {
 			bookCount = bc
 		} else {
 			dbErr = err
@@ -49,12 +161,12 @@ func (s *Server) healthCheck(c *gin.Context) {
 		// Pebble prefix scan + JSON unmarshal across the corpus, which is
 		// the same bug class as PR #1149 — wasteful for a probe endpoint.
 		// See docs/perf-audit-2026-05-29-getall-callers.md (Win 1).
-		if ac, err := s.Store().CountAuthors(); err == nil {
+		if ac, err := store.CountAuthors(); err == nil {
 			authorCount = ac
 		} else if dbErr == nil {
 			dbErr = err
 		}
-		if sc, err := s.Store().CountSeries(); err == nil {
+		if sc, err := store.CountSeries(); err == nil {
 			seriesCount = sc
 		} else if dbErr == nil {
 			dbErr = err
@@ -62,11 +174,11 @@ func (s *Server) healthCheck(c *gin.Context) {
 		// Playlist count intentionally omitted — no reliable counting method yet
 
 		// Try to read broken file count from underlying store (PebbleStore)
-		if gf, ok := s.Store().(interface{ GetBrokenFileCount() (int, error) }); ok {
+		if gf, ok := store.(interface{ GetBrokenFileCount() (int, error) }); ok {
 			if cnt, err := gf.GetBrokenFileCount(); err == nil {
 				brokenFileCount = cnt
 			}
-		} else if uw, ok := s.Store().(interface{ Unwrap() database.Store }); ok {
+		} else if uw, ok := store.(interface{ Unwrap() database.Store }); ok {
 			if inner, ok2 := uw.Unwrap().(interface{ GetBrokenFileCount() (int, error) }); ok2 {
 				if cnt, err := inner.GetBrokenFileCount(); err == nil {
 					brokenFileCount = cnt
@@ -74,10 +186,14 @@ func (s *Server) healthCheck(c *gin.Context) {
 			}
 		}
 	}
+	version := "dev"
+	if h.appVersion != nil {
+		version = h.appVersion()
+	}
 	resp := gin.H{
 		"status":        "ok",
 		"timestamp":     time.Now().Unix(),
-		"version":       appVersion,
+		"version":       version,
 		"database_type": config.AppConfig.DatabaseType,
 		"metrics": gin.H{
 			"books":             bookCount,
@@ -94,17 +210,18 @@ func (s *Server) healthCheck(c *gin.Context) {
 	httputil.RespondWithOK(c, resp)
 }
 
-func (s *Server) getSystemStatus(c *gin.Context) {
-	status, err := s.systemService.CollectSystemStatus()
+// GetSystemStatus implements GET /system/status.
+func (h *Handler) GetSystemStatus(c *gin.Context) {
+	status, err := h.systemSvc.CollectSystemStatus()
 	if err != nil {
 		httputil.InternalError(c, "failed to get system status", err)
 		return
 	}
 
 	// Attach plugin health information
-	if s.pluginRegistry != nil {
+	if h.plugins != nil {
 		pluginHealth := make(map[string]string)
-		for id, err := range s.pluginRegistry.HealthCheckAll() {
+		for id, err := range h.plugins.HealthCheckAll() {
 			if err != nil {
 				pluginHealth[id] = err.Error()
 			} else {
@@ -120,7 +237,8 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 	httputil.RespondWithOK(c, status)
 }
 
-func (s *Server) getSystemAnnouncements(c *gin.Context) {
+// GetSystemAnnouncements implements GET /system/announcements.
+func (h *Handler) GetSystemAnnouncements(c *gin.Context) {
 	type Announcement struct {
 		ID       string `json:"id"`
 		Severity string `json:"severity"` // info, warning, error
@@ -129,18 +247,19 @@ func (s *Server) getSystemAnnouncements(c *gin.Context) {
 	}
 
 	var announcements []Announcement
+	store := h.resolveStore()
 
 	// Check for duplicate authors
-	authors, err := s.Store().GetAllAuthors()
+	authors, err := store.GetAllAuthors()
 	if err == nil {
 		bookCountFn := func(authorID int) int {
-			books, err := s.Store().GetBooksByAuthorIDWithRole(authorID)
+			books, err := store.GetBooksByAuthorIDWithRole(authorID)
 			if err != nil {
 				return 0
 			}
 			return len(books)
 		}
-		groups := s.filterReviewedAuthorGroups(dedup.FindDuplicateAuthors(authors, 0.9, bookCountFn))
+		groups := h.filterReviewedAuthorGroups(dedup.FindDuplicateAuthors(authors, 0.9, bookCountFn))
 		if len(groups) > 0 {
 			announcements = append(announcements, Announcement{
 				ID:       "duplicate-authors",
@@ -152,7 +271,7 @@ func (s *Server) getSystemAnnouncements(c *gin.Context) {
 	}
 
 	// Check for missing files (sample first 100 books)
-	books, err := s.Store().GetAllBooks(100, 0)
+	books, err := store.GetAllBooks(100, 0)
 	if err == nil {
 		missingCount := 0
 		for _, book := range books {
@@ -175,14 +294,15 @@ func (s *Server) getSystemAnnouncements(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"announcements": announcements})
 }
 
-func (s *Server) getSystemStorage(c *gin.Context) {
+// GetSystemStorage implements GET /system/storage.
+func (h *Handler) GetSystemStorage(c *gin.Context) {
 	rootDir := strings.TrimSpace(config.AppConfig.RootDir)
 	if rootDir == "" {
 		httputil.RespondWithBadRequest(c, "root_dir is not configured")
 		return
 	}
 
-	totalBytes, freeBytes, err := getDiskStats(rootDir)
+	totalBytes, freeBytes, err := h.getDiskStats(rootDir)
 	if err != nil {
 		httputil.RespondWithInternalError(c, "failed to read filesystem stats")
 		return
@@ -206,17 +326,18 @@ func (s *Server) getSystemStorage(c *gin.Context) {
 	})
 }
 
-func (s *Server) getSystemLogs(c *gin.Context) {
+// GetSystemLogs implements GET /system/logs.
+func (h *Handler) GetSystemLogs(c *gin.Context) {
 	// For operation-specific logs, redirect to the operations handler.
 	if id := c.Query("operation_id"); id != "" {
-		s.operationsHandler.GetOperationLogs(c)
+		h.opLogs.GetOperationLogs(c)
 		return
 	}
 
 	level := c.Query("level")
 	params := httputil.ParsePaginationParams(c)
 
-	logs, total, err := s.systemService.CollectSystemLogs(level, params.Search, params.Limit, params.Offset)
+	logs, total, err := h.systemSvc.CollectSystemLogs(level, params.Search, params.Limit, params.Offset)
 	if err != nil {
 		httputil.InternalError(c, "failed to get system logs", err)
 		return
@@ -230,13 +351,14 @@ func (s *Server) getSystemLogs(c *gin.Context) {
 	})
 }
 
-func (s *Server) getSystemActivityLog(c *gin.Context) {
+// GetSystemActivityLog implements GET /system/activity-log.
+func (h *Handler) GetSystemActivityLog(c *gin.Context) {
 	source := c.Query("source")
 	limit := 50
 	if l, err := strconv.Atoi(c.Query("limit")); err == nil && l > 0 {
 		limit = l
 	}
-	logs, err := s.Store().GetSystemActivityLogs(source, limit)
+	logs, err := h.resolveStore().GetSystemActivityLogs(source, limit)
 	if err != nil {
 		httputil.InternalError(c, "failed to get activity log", err)
 		return
@@ -244,9 +366,11 @@ func (s *Server) getSystemActivityLog(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"items": logs, "count": len(logs)})
 }
 
-func (s *Server) resetSystem(c *gin.Context) {
+// ResetSystem implements POST /system/reset.
+func (h *Handler) ResetSystem(c *gin.Context) {
+	store := h.resolveStore()
 	// Reset database
-	if err := s.Store().Reset(); err != nil {
+	if err := store.Reset(); err != nil {
 		httputil.InternalError(c, "failed to reset database", err)
 		return
 	}
@@ -255,13 +379,14 @@ func (s *Server) resetSystem(c *gin.Context) {
 	config.ResetToDefaults()
 
 	// Reset caches
-	resetLibrarySizeCache()
-	s.Store().InvalidateLibraryStats()
+	h.resetLibrarySizeCache()
+	store.InvalidateLibraryStats()
 
 	httputil.RespondWithOK(c, gin.H{"message": "System reset successfully"})
 }
 
-func (s *Server) factoryReset(c *gin.Context) {
+// FactoryReset implements POST /system/factory-reset.
+func (h *Handler) FactoryReset(c *gin.Context) {
 	var req struct {
 		Confirm string `json:"confirm"`
 	}
@@ -271,9 +396,10 @@ func (s *Server) factoryReset(c *gin.Context) {
 	}
 
 	slog.Info("Factory reset initiated")
+	store := h.resolveStore()
 
 	// Reset database (books, authors, series, settings)
-	if err := s.Store().Reset(); err != nil {
+	if err := store.Reset(); err != nil {
 		slog.Error("Factory reset database reset failed", "err", err)
 		httputil.InternalError(c, "failed to reset database", err)
 		return
@@ -281,13 +407,13 @@ func (s *Server) factoryReset(c *gin.Context) {
 	slog.Info("Factory reset database cleared")
 
 	// Delete OL data (pebble store + dump files)
-	if s.olService != nil {
-		s.olService.Mu.Lock()
-		if s.olService.OLStore != nil {
-			s.olService.OLStore.Close()
-			s.olService.OLStore = nil
+	if h.olService != nil {
+		h.olService.Mu.Lock()
+		if h.olService.OLStore != nil {
+			h.olService.OLStore.Close()
+			h.olService.OLStore = nil
 		}
-		s.olService.Mu.Unlock()
+		h.olService.Mu.Unlock()
 
 		targetDir := metafetch.GetOLDumpDir()
 		if targetDir != "" {
@@ -318,19 +444,20 @@ func (s *Server) factoryReset(c *gin.Context) {
 	config.ResetToDefaults()
 	config.AppConfig.RootDir = ""
 	config.AppConfig.SetupComplete = false
-	if err := config.SaveConfigToDatabase(s.Store()); err != nil {
+	if err := config.SaveConfigToDatabase(store); err != nil {
 		slog.Warn("Factory reset failed to persist config", "err", err)
 	}
 
 	// Reset caches
-	resetLibrarySizeCache()
-	s.Store().InvalidateLibraryStats()
+	h.resetLibrarySizeCache()
+	store.InvalidateLibraryStats()
 
 	slog.Info("Factory reset complete")
 	httputil.RespondWithOK(c, gin.H{"message": "factory reset complete"})
 }
 
-func (s *Server) getConfig(c *gin.Context) {
+// GetConfig implements GET /config.
+func (h *Handler) GetConfig(c *gin.Context) {
 	// Create a copy of config with masked secrets
 	maskedConfig := config.AppConfig
 	if maskedConfig.OpenAIAPIKey != "" {
@@ -339,7 +466,8 @@ func (s *Server) getConfig(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"config": maskedConfig})
 }
 
-func (s *Server) updateConfig(c *gin.Context) {
+// UpdateConfig implements PUT /config.
+func (h *Handler) UpdateConfig(c *gin.Context) {
 	var payload map[string]any
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
@@ -347,7 +475,7 @@ func (s *Server) updateConfig(c *gin.Context) {
 	}
 
 	previousConfig := config.AppConfig
-	status, resp := s.configUpdateService.UpdateConfig(payload)
+	status, resp := h.configUpdate.UpdateConfig(payload)
 	if status >= 400 {
 		config.AppConfig = previousConfig
 		errMsg, _ := resp["error"].(string)
@@ -361,7 +489,7 @@ func (s *Server) updateConfig(c *gin.Context) {
 		return
 	}
 
-	maskedConfig := s.configUpdateService.MaskSecrets(config.AppConfig)
+	maskedConfig := h.configUpdate.MaskSecrets(config.AppConfig)
 	response := gin.H{"config": maskedConfig}
 	if raw, err := json.Marshal(maskedConfig); err == nil {
 		var flat map[string]any
@@ -374,17 +502,19 @@ func (s *Server) updateConfig(c *gin.Context) {
 	httputil.RespondWithOK(c, response)
 }
 
-// handleEvents handles Server-Sent Events (SSE) for real-time updates
-func (s *Server) handleEvents(c *gin.Context) {
-	if s.hub == nil {
+// HandleEvents handles Server-Sent Events (SSE) for real-time updates.
+// Implements GET /api/events.
+func (h *Handler) HandleEvents(c *gin.Context) {
+	hub := h.resolveHub()
+	if hub == nil {
 		httputil.RespondWithError(c, 503, "event hub not initialized", "SERVICE_UNAVAILABLE")
 		return
 	}
-	s.hub.HandleSSE(c)
+	hub.HandleSSE(c)
 }
 
-// createBackup creates a database backup
-func (s *Server) createBackup(c *gin.Context) {
+// CreateBackup creates a database backup. Implements POST /backup/create.
+func (h *Handler) CreateBackup(c *gin.Context) {
 	var req struct {
 		MaxBackups *int `json:"max_backups"`
 	}
@@ -413,8 +543,8 @@ func (s *Server) createBackup(c *gin.Context) {
 	httputil.RespondWithOK(c, info)
 }
 
-// listBackups lists all available backups
-func (s *Server) listBackups(c *gin.Context) {
+// ListBackups lists all available backups. Implements GET /backup/list.
+func (h *Handler) ListBackups(c *gin.Context) {
 	backupConfig := backup.DefaultBackupConfig()
 	if dbPath := config.AppConfig.DatabasePath; dbPath != "" && !filepath.IsAbs(backupConfig.BackupDir) {
 		backupConfig.BackupDir = filepath.Join(filepath.Dir(dbPath), backupConfig.BackupDir)
@@ -437,8 +567,8 @@ func (s *Server) listBackups(c *gin.Context) {
 	})
 }
 
-// restoreBackup restores from a backup file
-func (s *Server) restoreBackup(c *gin.Context) {
+// RestoreBackup restores from a backup file. Implements POST /backup/restore.
+func (h *Handler) RestoreBackup(c *gin.Context) {
 	var req struct {
 		BackupFilename string `json:"backup_filename" binding:"required"`
 		TargetPath     string `json:"target_path"`
@@ -481,8 +611,8 @@ func (s *Server) restoreBackup(c *gin.Context) {
 	})
 }
 
-// deleteBackup deletes a backup file
-func (s *Server) deleteBackup(c *gin.Context) {
+// DeleteBackup deletes a backup file. Implements DELETE /backup/:filename.
+func (h *Handler) DeleteBackup(c *gin.Context) {
 	filename := c.Param("filename")
 	if filename == "" {
 		httputil.RespondWithBadRequest(c, "filename required")
@@ -504,33 +634,35 @@ func (s *Server) deleteBackup(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"message": "backup deleted successfully"})
 }
 
-// getDashboard returns dashboard statistics. The store handles caching internally
-// (PebbleDB: stats:library key with 10-min TTL; SQLite: SQL aggregation directly).
-func (s *Server) getDashboard(c *gin.Context) {
-	if s.Store() == nil {
+// GetDashboard returns dashboard statistics. The store handles caching
+// internally (PebbleDB: stats:library key with 10-min TTL; SQLite: SQL
+// aggregation directly). Implements GET /dashboard.
+func (h *Handler) GetDashboard(c *gin.Context) {
+	store := h.resolveStore()
+	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
-	stats, err := s.Store().GetDashboardStats()
+	stats, err := store.GetDashboardStats()
 	if err != nil {
 		httputil.RespondWithInternalError(c, "failed to retrieve dashboard stats")
 		return
 	}
 
-	recentOps, err := s.Store().GetRecentOperations(5)
+	recentOps, err := store.GetRecentOperations(5)
 	if err != nil {
 		recentOps = []database.Operation{}
 	}
 
 	// Try to read broken file count from underlying store (PebbleStore)
 	brokenFileCount := 0
-	if s.Store() != nil {
-		if gf, ok := s.Store().(interface{ GetBrokenFileCount() (int, error) }); ok {
+	if store != nil {
+		if gf, ok := store.(interface{ GetBrokenFileCount() (int, error) }); ok {
 			if cnt, err := gf.GetBrokenFileCount(); err == nil {
 				brokenFileCount = cnt
 			}
-		} else if uw, ok := s.Store().(interface{ Unwrap() database.Store }); ok {
+		} else if uw, ok := store.(interface{ Unwrap() database.Store }); ok {
 			if inner, ok2 := uw.Unwrap().(interface{ GetBrokenFileCount() (int, error) }); ok2 {
 				if cnt, err := inner.GetBrokenFileCount(); err == nil {
 					brokenFileCount = cnt
@@ -552,14 +684,15 @@ func (s *Server) getDashboard(c *gin.Context) {
 	})
 }
 
-// listBlockedHashes returns all blocked hashes
-func (s *Server) listBlockedHashes(c *gin.Context) {
-	if s.Store() == nil {
+// ListBlockedHashes returns all blocked hashes. Implements GET /blocked-hashes.
+func (h *Handler) ListBlockedHashes(c *gin.Context) {
+	store := h.resolveStore()
+	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
-	hashes, err := s.Store().GetAllBlockedHashes()
+	hashes, err := store.GetAllBlockedHashes()
 	if err != nil {
 		httputil.InternalError(c, "failed to get blocked hashes", err)
 		return
@@ -571,9 +704,10 @@ func (s *Server) listBlockedHashes(c *gin.Context) {
 	})
 }
 
-// addBlockedHash adds a hash to the blocklist
-func (s *Server) addBlockedHash(c *gin.Context) {
-	if s.Store() == nil {
+// AddBlockedHash adds a hash to the blocklist. Implements POST /blocked-hashes.
+func (h *Handler) AddBlockedHash(c *gin.Context) {
+	store := h.resolveStore()
+	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
@@ -594,7 +728,7 @@ func (s *Server) addBlockedHash(c *gin.Context) {
 		return
 	}
 
-	err := s.Store().AddBlockedHash(req.Hash, req.Reason)
+	err := store.AddBlockedHash(req.Hash, req.Reason)
 	if err != nil {
 		httputil.InternalError(c, "failed to add blocked hash", err)
 		return
@@ -607,9 +741,11 @@ func (s *Server) addBlockedHash(c *gin.Context) {
 	})
 }
 
-// removeBlockedHash removes a hash from the blocklist
-func (s *Server) removeBlockedHash(c *gin.Context) {
-	if s.Store() == nil {
+// RemoveBlockedHash removes a hash from the blocklist. Implements DELETE
+// /blocked-hashes/:hash.
+func (h *Handler) RemoveBlockedHash(c *gin.Context) {
+	store := h.resolveStore()
+	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
@@ -620,7 +756,7 @@ func (s *Server) removeBlockedHash(c *gin.Context) {
 		return
 	}
 
-	err := s.Store().RemoveBlockedHash(hash)
+	err := store.RemoveBlockedHash(hash)
 	if err != nil {
 		httputil.InternalError(c, "failed to remove blocked hash", err)
 		return
@@ -632,19 +768,20 @@ func (s *Server) removeBlockedHash(c *gin.Context) {
 	})
 }
 
-// getUserPreference returns a single user preference by key.
+// GetUserPreference returns a single user preference by key.
 // Unset preferences return 200 with an empty value rather than 404 so that
 // browsers don't surface "Failed to load resource" console noise for
 // optional client-side prefs (library_column_config, dialog state, etc.)
 // that legitimately have no saved value yet. Clients should treat an
 // empty `value` as "not set" — matching the existing frontend pattern.
-func (s *Server) getUserPreference(c *gin.Context) {
+// Implements GET /preferences/:key.
+func (h *Handler) GetUserPreference(c *gin.Context) {
 	key := c.Param("key")
 	if key == "" {
 		httputil.RespondWithBadRequest(c, "key is required")
 		return
 	}
-	pref, err := s.Store().GetUserPreference(key)
+	pref, err := h.resolveStore().GetUserPreference(key)
 	if err != nil {
 		httputil.RespondWithInternalError(c, "failed to get preference")
 		return
@@ -656,8 +793,9 @@ func (s *Server) getUserPreference(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"key": pref.Key, "value": pref.Value})
 }
 
-// setUserPreference creates or updates a user preference.
-func (s *Server) setUserPreference(c *gin.Context) {
+// SetUserPreference creates or updates a user preference. Implements PUT
+// /preferences/:key.
+func (h *Handler) SetUserPreference(c *gin.Context) {
 	key := c.Param("key")
 	if key == "" {
 		httputil.RespondWithBadRequest(c, "key is required")
@@ -670,41 +808,43 @@ func (s *Server) setUserPreference(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, "invalid request body")
 		return
 	}
-	if err := s.Store().SetUserPreference(key, body.Value); err != nil {
+	if err := h.resolveStore().SetUserPreference(key, body.Value); err != nil {
 		httputil.RespondWithInternalError(c, "failed to save preference")
 		return
 	}
 	httputil.RespondWithOK(c, gin.H{"key": key, "value": body.Value})
 }
 
-// deleteUserPreference removes a user preference by setting it to empty.
-func (s *Server) deleteUserPreference(c *gin.Context) {
+// DeleteUserPreference removes a user preference by setting it to empty.
+// Implements DELETE /preferences/:key.
+func (h *Handler) DeleteUserPreference(c *gin.Context) {
 	key := c.Param("key")
 	if key == "" {
 		httputil.RespondWithBadRequest(c, "key is required")
 		return
 	}
 	// Set to empty string to "delete" (store doesn't have a delete method)
-	if err := s.Store().SetUserPreference(key, ""); err != nil {
+	if err := h.resolveStore().SetUserPreference(key, ""); err != nil {
 		httputil.RespondWithInternalError(c, "failed to delete preference")
 		return
 	}
 	httputil.RespondWithOK(c, gin.H{"message": "preference deleted"})
 }
 
-// handlePolicyTags returns the catalogue of recognised policy tags.
-// GET /api/v1/policy/tags
-func (s *Server) handlePolicyTags(c *gin.Context) {
+// HandlePolicyTags returns the catalogue of recognised policy tags.
+// Implements GET /policy/tags.
+func (h *Handler) HandlePolicyTags(c *gin.Context) {
 	httputil.RespondWithOK(c, policy.KnownPolicyTags())
 }
 
-// getQuickQueries returns the six preset quick-filter counts for the Library
+// GetQuickQueries returns the six preset quick-filter counts for the Library
 // header kebab menu. Counts are served from the per-query PebbleDB cache when
 // fresh; stale or dirty entries are recomputed inline. broken_files reuses the
 // existing stats:library cache so it never incurs an extra scan.
-// GET /api/v1/library/quick-queries
-func (s *Server) getQuickQueries(c *gin.Context) {
-	if s.Store() == nil {
+// Implements GET /library/quick-queries.
+func (h *Handler) GetQuickQueries(c *gin.Context) {
+	store := h.resolveStore()
+	if store == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
@@ -714,9 +854,9 @@ func (s *Server) getQuickQueries(c *gin.Context) {
 	}
 
 	var getter quickQueryGetter
-	if g, ok := s.Store().(quickQueryGetter); ok {
+	if g, ok := store.(quickQueryGetter); ok {
 		getter = g
-	} else if uw, ok := s.Store().(interface{ Unwrap() database.Store }); ok {
+	} else if uw, ok := store.(interface{ Unwrap() database.Store }); ok {
 		if g, ok2 := uw.Unwrap().(quickQueryGetter); ok2 {
 			getter = g
 		}
