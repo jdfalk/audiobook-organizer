@@ -1,11 +1,36 @@
-// file: internal/server/dedup_handlers.go
-// version: 2.10.0
-// guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-05-29
+// file: internal/server/handlers/dedup/handler.go
+// version: 1.0.0
+// guid: d1b9e024-d28c-4d62-8f90-96d7064559c4
+// last-edited: 2026-06-03
 
-package server
+// Package deduphandler hosts the dedup-domain HTTP handlers extracted from the
+// server package: dedup candidate / cluster / series listing, merge / dismiss /
+// remove, bulk merge, stats, CSV/JSON export, and the dedup / embed / acoustid /
+// book-signature scan triggers, plus the per-segment acoustid compare endpoint.
+//
+// Dependencies that lived on the *Server receiver are reached through narrow
+// interfaces (DedupStore, OperationsRegistry, MergeService, DedupEngine) plus
+// the concrete *database.EmbeddingStore (heavy multi-method use of a clean db
+// type) and two injected funcs (publishEvent / markDuplicatesFlaggedDirty) that
+// wrap *Server methods which stay in package server (they are shared with other
+// domains). As a result package deduphandler never imports package server.
+//
+// The store and the embedding store are reached through LAZY PROVIDER CLOSURES
+// (getStore / getEmbeddingStore) so a value swapped after wireHandlers (a
+// router-integration test swaps server.store post-wire) is still observed at
+// request time, mirroring the system handler's getStore seam. opRegistry /
+// mergeService / dedupEngine are interface snapshots taken at wire time (they
+// are assigned once in registry_wire, before setupRoutes, and never swapped),
+// each guarded against typed-nil boxing by the controller.
+//
+// NAME NOTE: this package is `deduphandler` (dir internal/server/handlers/dedup/)
+// to avoid clashing with the dedup ENGINE package internal/dedup, imported here
+// under its normal `dedup` name.
+
+package deduphandler
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -22,11 +47,91 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 )
 
-// listDedupCandidates handles GET /api/v1/dedup/candidates.
+// Handler hosts the dedup-domain HTTP endpoints.
+type Handler struct {
+	// getStore resolves the database store lazily, at request time. The original
+	// handlers read s.Store() at call time (late binding), and a router
+	// integration test swaps server.store AFTER wiring to inject a mock — so
+	// snapshotting the store at wire time would capture the pre-swap store and
+	// miss the mock's expectations. The provider performs the typed-nil guard.
+	getStore func() DedupStore
+
+	// getEmbeddingStore resolves the concrete *database.EmbeddingStore lazily, at
+	// request time. The original handlers read s.embeddingStore at call time and
+	// nil-checked it; the provider performs the nil-check (a nil concrete pointer
+	// stays nil, no interface boxing involved). Concrete pointer (not interface)
+	// because EmbeddingStore is a clean db type under heavy multi-method use.
+	getEmbeddingStore func() *database.EmbeddingStore
+
+	// opRegistry backs the scan-trigger endpoints. Interface snapshot guarded by
+	// the controller against typed-nil boxing so the in-method `== nil` guards
+	// (mirroring the old `s.opRegistry == nil` checks) hold.
+	opRegistry OperationsRegistry
+
+	// mergeService backs the merge / bulk-merge / cluster / series endpoints.
+	// Interface snapshot, typed-nil guarded by the controller.
+	mergeService MergeService
+
+	// dedupEngine backs mergeDedupCandidate's post-merge orphan sweep. Interface
+	// snapshot, typed-nil guarded by the controller.
+	dedupEngine DedupEngine
+
+	// publishEvent wraps *Server.publishEvent, which stays in package server (it
+	// is shared with the audiobooks / metadata domains). The controller passes
+	// s.publishEvent.
+	publishEvent func(ctx context.Context, event plugin.Event)
+
+	// markDuplicatesFlaggedDirty wraps *Server.markDuplicatesFlaggedDirty, which
+	// stays in package server (shared elsewhere). The controller passes
+	// s.markDuplicatesFlaggedDirty.
+	markDuplicatesFlaggedDirty func(reason string)
+}
+
+// New constructs a dedup Handler from its dependencies.
+func New(
+	getStore func() DedupStore,
+	getEmbeddingStore func() *database.EmbeddingStore,
+	opRegistry OperationsRegistry,
+	mergeService MergeService,
+	dedupEngine DedupEngine,
+	publishEvent func(ctx context.Context, event plugin.Event),
+	markDuplicatesFlaggedDirty func(reason string),
+) *Handler {
+	return &Handler{
+		getStore:                   getStore,
+		getEmbeddingStore:          getEmbeddingStore,
+		opRegistry:                 opRegistry,
+		mergeService:               mergeService,
+		dedupEngine:                dedupEngine,
+		publishEvent:               publishEvent,
+		markDuplicatesFlaggedDirty: markDuplicatesFlaggedDirty,
+	}
+}
+
+// resolveStore returns the live store via the lazy provider, or nil if no
+// provider was supplied or the provider yields nil.
+func (h *Handler) resolveStore() DedupStore {
+	if h.getStore == nil {
+		return nil
+	}
+	return h.getStore()
+}
+
+// resolveEmbeddingStore returns the live *database.EmbeddingStore via the lazy
+// provider, or nil if no provider was supplied or it yields nil.
+func (h *Handler) resolveEmbeddingStore() *database.EmbeddingStore {
+	if h.getEmbeddingStore == nil {
+		return nil
+	}
+	return h.getEmbeddingStore()
+}
+
+// ListDedupCandidates handles GET /api/v1/dedup/candidates.
 //
 // Query params: entity_type, status, layer, min_similarity (float), limit (int, default 50), offset (int).
-func (s *Server) listDedupCandidates(c *gin.Context) {
-	if s.embeddingStore == nil {
+func (h *Handler) ListDedupCandidates(c *gin.Context) {
+	es := h.resolveEmbeddingStore()
+	if es == nil {
 		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
@@ -55,7 +160,7 @@ func (s *Server) listDedupCandidates(c *gin.Context) {
 	filter.Limit = limit
 	filter.Offset = offset
 
-	candidates, total, err := s.embeddingStore.ListCandidates(filter)
+	candidates, total, err := es.ListCandidates(filter)
 	if err != nil {
 		httputil.InternalError(c, "failed to list dedup candidates", err)
 		return
@@ -67,6 +172,7 @@ func (s *Server) listDedupCandidates(c *gin.Context) {
 	// slips through (race, missed delete, crash between cleanup runs),
 	// the UI never shows a candidate that would 404 when clicked.
 	// Non-book entities (e.g. author) skip the existence check.
+	store := h.resolveStore()
 	filtered := candidates[:0]
 	existCache := make(map[string]bool, len(candidates)*2)
 	bookExists := func(id string) bool {
@@ -76,7 +182,7 @@ func (s *Server) listDedupCandidates(c *gin.Context) {
 		if v, ok := existCache[id]; ok {
 			return v
 		}
-		book, gerr := s.Store().GetBookByID(id)
+		book, gerr := store.GetBookByID(id)
 		exists := gerr == nil && book != nil
 		existCache[id] = exists
 		return exists
@@ -110,7 +216,7 @@ func (s *Server) listDedupCandidates(c *gin.Context) {
 	})
 }
 
-// exportDedupCandidates handles GET /api/v1/dedup/candidates/export.
+// ExportDedupCandidates handles GET /api/v1/dedup/candidates/export.
 //
 // Query params:
 //
@@ -127,8 +233,9 @@ func (s *Server) listDedupCandidates(c *gin.Context) {
 // entity_a_id, entity_a_title, entity_a_author,
 // entity_b_id, entity_b_title, entity_b_author,
 // llm_verdict, llm_reason, created_at, updated_at.
-func (s *Server) exportDedupCandidates(c *gin.Context) {
-	if s.embeddingStore == nil {
+func (h *Handler) ExportDedupCandidates(c *gin.Context) {
+	es := h.resolveEmbeddingStore()
+	if es == nil {
 		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
@@ -158,7 +265,7 @@ func (s *Server) exportDedupCandidates(c *gin.Context) {
 		filter.MinSimilarity = &f
 	}
 
-	candidates, _, err := s.embeddingStore.ListCandidates(filter)
+	candidates, _, err := es.ListCandidates(filter)
 	if err != nil {
 		httputil.InternalError(c, "failed to list candidates for export", err)
 		return
@@ -168,6 +275,7 @@ func (s *Server) exportDedupCandidates(c *gin.Context) {
 	// memoized so a book that appears in multiple candidates is only
 	// fetched once. Books-only for now — authors export would need the
 	// author table which we can add later if needed.
+	store := h.resolveStore()
 	type enriched struct {
 		title  string
 		author string
@@ -178,10 +286,10 @@ func (s *Server) exportDedupCandidates(c *gin.Context) {
 			return e
 		}
 		e := enriched{}
-		if book, err := s.Store().GetBookByID(id); err == nil && book != nil {
+		if book, err := store.GetBookByID(id); err == nil && book != nil {
 			e.title = book.Title
 			if book.AuthorID != nil {
-				if a, err := s.Store().GetAuthorByID(*book.AuthorID); err == nil && a != nil {
+				if a, err := store.GetAuthorByID(*book.AuthorID); err == nil && a != nil {
 					e.author = a.Name
 				}
 			}
@@ -294,7 +402,7 @@ func (s *Server) exportDedupCandidates(c *gin.Context) {
 // instead of N clicks.
 
 // dedupSeriesSummary is one entry in the response of
-// listDedupCandidateSeries — one row per series that has pending
+// ListDedupCandidateSeries — one row per series that has pending
 // candidates, with counts so the user can pick a series to merge
 // without having to drill into each one.
 type dedupSeriesSummary struct {
@@ -305,7 +413,7 @@ type dedupSeriesSummary struct {
 	CandidateCount int    `json:"candidate_count"`
 }
 
-// listDedupCandidateSeries handles
+// ListDedupCandidateSeries handles
 // GET /api/v1/dedup/candidates/series-summary.
 //
 // Walks every pending book candidate, looks up both sides' series_id,
@@ -317,13 +425,14 @@ type dedupSeriesSummary struct {
 // Candidates whose two sides belong to different series are excluded
 // from every summary — they're cross-series and don't fit the
 // "series-aware bulk merge" workflow.
-func (s *Server) listDedupCandidateSeries(c *gin.Context) {
-	if s.embeddingStore == nil {
+func (h *Handler) ListDedupCandidateSeries(c *gin.Context) {
+	es := h.resolveEmbeddingStore()
+	if es == nil {
 		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
 
-	cands, _, err := s.embeddingStore.ListCandidates(database.CandidateFilter{
+	cands, _, err := es.ListCandidates(database.CandidateFilter{
 		EntityType: "book",
 		Status:     "pending",
 		Limit:      100000,
@@ -334,12 +443,13 @@ func (s *Server) listDedupCandidateSeries(c *gin.Context) {
 	}
 
 	// Memoize book → series_id lookups across candidates.
+	store := h.resolveStore()
 	bookSeries := make(map[string]int, len(cands)*2)
 	lookup := func(id string) int {
 		if v, ok := bookSeries[id]; ok {
 			return v
 		}
-		book, err := s.Store().GetBookByID(id)
+		book, err := store.GetBookByID(id)
 		if err != nil || book == nil || book.SeriesID == nil {
 			bookSeries[id] = 0
 			return 0
@@ -395,7 +505,7 @@ func (s *Server) listDedupCandidateSeries(c *gin.Context) {
 		}
 
 		name := ""
-		if series, err := s.Store().GetSeriesByID(seriesID); err == nil && series != nil {
+		if series, err := store.GetSeriesByID(seriesID); err == nil && series != nil {
 			name = series.Name
 		}
 		summary = append(summary, dedupSeriesSummary{
@@ -418,7 +528,7 @@ func (s *Server) listDedupCandidateSeries(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"series": summary})
 }
 
-// mergeDedupCandidateSeries handles
+// MergeDedupCandidateSeries handles
 // POST /api/v1/dedup/candidates/merge-series.
 //
 // Body: {"series_id": N}
@@ -432,12 +542,13 @@ func (s *Server) listDedupCandidateSeries(c *gin.Context) {
 // somewhere else) are deliberately untouched — the series filter is
 // a scope, not a selector. If the user wants those pairs merged, they
 // can use the regular Merge Filtered action.
-func (s *Server) mergeDedupCandidateSeries(c *gin.Context) {
-	if s.embeddingStore == nil {
+func (h *Handler) MergeDedupCandidateSeries(c *gin.Context) {
+	es := h.resolveEmbeddingStore()
+	if es == nil {
 		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
-	if s.mergeService == nil {
+	if h.mergeService == nil {
 		httputil.RespondWithServiceUnavailable(c, "merge service not available")
 		return
 	}
@@ -450,7 +561,7 @@ func (s *Server) mergeDedupCandidateSeries(c *gin.Context) {
 		return
 	}
 
-	cands, _, err := s.embeddingStore.ListCandidates(database.CandidateFilter{
+	cands, _, err := es.ListCandidates(database.CandidateFilter{
 		EntityType: "book",
 		Status:     "pending",
 		Limit:      100000,
@@ -461,12 +572,13 @@ func (s *Server) mergeDedupCandidateSeries(c *gin.Context) {
 	}
 
 	// Filter to same-series candidates only.
+	store := h.resolveStore()
 	bookSeries := make(map[string]int, len(cands)*2)
 	lookup := func(id string) int {
 		if v, ok := bookSeries[id]; ok {
 			return v
 		}
-		book, err := s.Store().GetBookByID(id)
+		book, err := store.GetBookByID(id)
 		if err != nil || book == nil || book.SeriesID == nil {
 			bookSeries[id] = 0
 			return 0
@@ -521,7 +633,7 @@ func (s *Server) mergeDedupCandidateSeries(c *gin.Context) {
 		if len(bookIDs) < 2 {
 			continue
 		}
-		if _, err := s.mergeService.MergeBooks(bookIDs, ""); err != nil {
+		if _, err := h.mergeService.MergeBooks(bookIDs, ""); err != nil {
 			failures = append(failures, fmt.Sprintf("cluster of %d: %v", len(bookIDs), err))
 			continue
 		}
@@ -538,7 +650,7 @@ func (s *Server) mergeDedupCandidateSeries(c *gin.Context) {
 			if !aIn || !bIn {
 				continue
 			}
-			if err := s.embeddingStore.UpdateCandidateStatus(cand.ID, "merged"); err != nil {
+			if err := es.UpdateCandidateStatus(cand.ID, "merged"); err != nil {
 				slog.Info("dedup series merge status update", "cand", cand.ID, "err", err)
 				continue
 			}
@@ -557,14 +669,15 @@ func (s *Server) mergeDedupCandidateSeries(c *gin.Context) {
 	})
 }
 
-// getDedupStats handles GET /api/v1/dedup/stats.
-func (s *Server) getDedupStats(c *gin.Context) {
-	if s.embeddingStore == nil {
+// GetDedupStats handles GET /api/v1/dedup/stats.
+func (h *Handler) GetDedupStats(c *gin.Context) {
+	es := h.resolveEmbeddingStore()
+	if es == nil {
 		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
 
-	stats, err := s.embeddingStore.GetCandidateStats()
+	stats, err := es.GetCandidateStats()
 	if err != nil {
 		httputil.InternalError(c, "failed to get dedup stats", err)
 		return
@@ -573,7 +686,7 @@ func (s *Server) getDedupStats(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"stats": stats})
 }
 
-// bulkMergeDedupCandidates handles POST /api/v1/dedup/candidates/bulk-merge.
+// BulkMergeDedupCandidates handles POST /api/v1/dedup/candidates/bulk-merge.
 //
 // Accepts the same filter params as listDedupCandidates in the JSON body
 // (entity_type, status, layer, min_similarity, max_similarity) and merges
@@ -587,12 +700,13 @@ func (s *Server) getDedupStats(c *gin.Context) {
 //
 // Safety: caller should confirm with the user before invoking, because
 // this is destructive and irreversible.
-func (s *Server) bulkMergeDedupCandidates(c *gin.Context) {
-	if s.embeddingStore == nil {
+func (h *Handler) BulkMergeDedupCandidates(c *gin.Context) {
+	es := h.resolveEmbeddingStore()
+	if es == nil {
 		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
-	if s.mergeService == nil {
+	if h.mergeService == nil {
 		httputil.RespondWithServiceUnavailable(c, "merge service not available")
 		return
 	}
@@ -629,7 +743,7 @@ func (s *Server) bulkMergeDedupCandidates(c *gin.Context) {
 		Limit:         100000,
 	}
 
-	candidates, total, err := s.embeddingStore.ListCandidates(filter)
+	candidates, total, err := es.ListCandidates(filter)
 	if err != nil {
 		httputil.InternalError(c, "failed to list candidates for bulk merge", err)
 		return
@@ -643,13 +757,13 @@ func (s *Server) bulkMergeDedupCandidates(c *gin.Context) {
 	merged := 0
 
 	for _, cand := range candidates {
-		_, mergeErr := s.mergeService.MergeBooks([]string{cand.EntityAID, cand.EntityBID}, "")
+		_, mergeErr := h.mergeService.MergeBooks([]string{cand.EntityAID, cand.EntityBID}, "")
 		if mergeErr != nil {
 			failures = append(failures, failure{CandidateID: cand.ID, Reason: mergeErr.Error()})
 			slog.Info("dedup bulk merge candidate failed", "cand", cand.ID, "mergeErr", mergeErr)
 			continue
 		}
-		if err := s.embeddingStore.UpdateCandidateStatus(cand.ID, "merged"); err != nil {
+		if err := es.UpdateCandidateStatus(cand.ID, "merged"); err != nil {
 			// The books were merged on the server side, but we couldn't
 			// update the candidate row — log it and count as merged
 			// since the destructive action already happened.
@@ -668,7 +782,7 @@ func (s *Server) bulkMergeDedupCandidates(c *gin.Context) {
 	})
 }
 
-// mergeDedupCluster handles POST /api/v1/dedup/candidates/merge-cluster.
+// MergeDedupCluster handles POST /api/v1/dedup/candidates/merge-cluster.
 //
 // Body: {"book_ids": ["id1", "id2", "id3", ...]}
 //
@@ -679,12 +793,13 @@ func (s *Server) bulkMergeDedupCandidates(c *gin.Context) {
 // a connected component in the pairwise candidate graph and should be
 // merged together as one logical group rather than one pairwise merge at a
 // time (which would fight the version-group state mid-way).
-func (s *Server) mergeDedupCluster(c *gin.Context) {
-	if s.embeddingStore == nil {
+func (h *Handler) MergeDedupCluster(c *gin.Context) {
+	es := h.resolveEmbeddingStore()
+	if es == nil {
 		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
-	if s.mergeService == nil {
+	if h.mergeService == nil {
 		httputil.RespondWithServiceUnavailable(c, "merge service not available")
 		return
 	}
@@ -717,7 +832,7 @@ func (s *Server) mergeDedupCluster(c *gin.Context) {
 		}
 	}
 
-	mergeResult, err := s.mergeService.MergeBooks(body.BookIDs, body.PrimaryBookID)
+	mergeResult, err := h.mergeService.MergeBooks(body.BookIDs, body.PrimaryBookID)
 	if err != nil {
 		httputil.InternalError(c, "failed to merge books in cluster", err)
 		return
@@ -730,7 +845,7 @@ func (s *Server) mergeDedupCluster(c *gin.Context) {
 	for _, id := range body.BookIDs {
 		inCluster[id] = struct{}{}
 	}
-	candidates, _, listErr := s.embeddingStore.ListCandidates(database.CandidateFilter{
+	candidates, _, listErr := es.ListCandidates(database.CandidateFilter{
 		EntityType: "book",
 		Status:     "pending",
 		Limit:      100000,
@@ -745,7 +860,7 @@ func (s *Server) mergeDedupCluster(c *gin.Context) {
 			if !aIn || !bIn {
 				continue
 			}
-			if err := s.embeddingStore.UpdateCandidateStatus(cand.ID, "merged"); err != nil {
+			if err := es.UpdateCandidateStatus(cand.ID, "merged"); err != nil {
 				slog.Info("dedup cluster merge status update", "cand", cand.ID, "err", err)
 				continue
 			}
@@ -762,15 +877,16 @@ func (s *Server) mergeDedupCluster(c *gin.Context) {
 	})
 }
 
-// dismissDedupCluster handles POST /api/v1/dedup/candidates/dismiss-cluster.
+// DismissDedupCluster handles POST /api/v1/dedup/candidates/dismiss-cluster.
 //
 // Body: {"book_ids": ["id1", "id2", ...]}
 //
 // Marks every dedup_candidate row whose pair is fully contained in the set
 // as status=dismissed. No books are modified — this just removes the pair
 // from the pending queue.
-func (s *Server) dismissDedupCluster(c *gin.Context) {
-	if s.embeddingStore == nil {
+func (h *Handler) DismissDedupCluster(c *gin.Context) {
+	es := h.resolveEmbeddingStore()
+	if es == nil {
 		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
@@ -791,7 +907,7 @@ func (s *Server) dismissDedupCluster(c *gin.Context) {
 	for _, id := range body.BookIDs {
 		inCluster[id] = struct{}{}
 	}
-	candidates, _, err := s.embeddingStore.ListCandidates(database.CandidateFilter{
+	candidates, _, err := es.ListCandidates(database.CandidateFilter{
 		EntityType: "book",
 		Status:     "pending",
 		Limit:      100000,
@@ -807,14 +923,14 @@ func (s *Server) dismissDedupCluster(c *gin.Context) {
 		if !aIn || !bIn {
 			continue
 		}
-		if err := s.embeddingStore.UpdateCandidateStatus(cand.ID, "dismissed"); err != nil {
+		if err := es.UpdateCandidateStatus(cand.ID, "dismissed"); err != nil {
 			slog.Info("dedup cluster dismiss status update", "cand", cand.ID, "err", err)
 			continue
 		}
 		dismissed++
 	}
 	slog.Info("dedup cluster dismiss dismissed candidate row(s) across books", "dismissed", dismissed, "count", len(body.BookIDs))
-	s.markDuplicatesFlaggedDirty("dismiss_cluster")
+	h.markDuplicatesFlaggedDirty("dismiss_cluster")
 
 	httputil.RespondWithOK(c, gin.H{
 		"status":    "dismissed",
@@ -822,7 +938,7 @@ func (s *Server) dismissDedupCluster(c *gin.Context) {
 	})
 }
 
-// removeFromDedupCluster handles POST /api/v1/dedup/candidates/remove-from-cluster.
+// RemoveFromDedupCluster handles POST /api/v1/dedup/candidates/remove-from-cluster.
 //
 //	Body: {
 //	  "cluster_book_ids": [...],
@@ -842,8 +958,9 @@ func (s *Server) dismissDedupCluster(c *gin.Context) {
 //
 // Accepts both singular and plural forms for backwards compatibility.
 // If both are provided, they're merged into a single set.
-func (s *Server) removeFromDedupCluster(c *gin.Context) {
-	if s.embeddingStore == nil {
+func (h *Handler) RemoveFromDedupCluster(c *gin.Context) {
+	es := h.resolveEmbeddingStore()
+	if es == nil {
 		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
@@ -893,7 +1010,7 @@ func (s *Server) removeFromDedupCluster(c *gin.Context) {
 		return
 	}
 
-	candidates, _, err := s.embeddingStore.ListCandidates(database.CandidateFilter{
+	candidates, _, err := es.ListCandidates(database.CandidateFilter{
 		EntityType: "book",
 		Status:     "pending",
 		Limit:      100000,
@@ -929,7 +1046,7 @@ func (s *Server) removeFromDedupCluster(c *gin.Context) {
 			continue
 		}
 
-		if err := s.embeddingStore.UpdateCandidateStatus(cand.ID, "dismissed"); err != nil {
+		if err := es.UpdateCandidateStatus(cand.ID, "dismissed"); err != nil {
 			slog.Info("dedup remove-from-cluster status update", "cand", cand.ID, "err", err)
 			continue
 		}
@@ -944,9 +1061,10 @@ func (s *Server) removeFromDedupCluster(c *gin.Context) {
 	})
 }
 
-// mergeDedupCandidate handles POST /api/v1/dedup/candidates/:id/merge.
-func (s *Server) mergeDedupCandidate(c *gin.Context) {
-	if s.embeddingStore == nil {
+// MergeDedupCandidate handles POST /api/v1/dedup/candidates/:id/merge.
+func (h *Handler) MergeDedupCandidate(c *gin.Context) {
+	es := h.resolveEmbeddingStore()
+	if es == nil {
 		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
@@ -958,7 +1076,7 @@ func (s *Server) mergeDedupCandidate(c *gin.Context) {
 		return
 	}
 
-	candidate, err := s.embeddingStore.GetCandidateByID(id)
+	candidate, err := es.GetCandidateByID(id)
 	if err != nil {
 		httputil.InternalError(c, "failed to get candidate", err)
 		return
@@ -986,8 +1104,8 @@ func (s *Server) mergeDedupCandidate(c *gin.Context) {
 	}
 
 	var result interface{}
-	if candidate.EntityType == "book" && s.mergeService != nil {
-		mergeResult, mergeErr := s.mergeService.MergeBooks([]string{candidate.EntityAID, candidate.EntityBID}, keepID)
+	if candidate.EntityType == "book" && h.mergeService != nil {
+		mergeResult, mergeErr := h.mergeService.MergeBooks([]string{candidate.EntityAID, candidate.EntityBID}, keepID)
 		if mergeErr != nil {
 			// MAYDEPLOY-B2: when one of the source books no longer exists (a previous
 			// merge already absorbed it), the candidate is stale rather than the
@@ -999,13 +1117,13 @@ func (s *Server) mergeDedupCandidate(c *gin.Context) {
 			// exported sentinel error. Switch to errors.Is if/when that error type
 			// becomes exported.
 			if strings.Contains(mergeErr.Error(), "not found") {
-				if statusErr := s.embeddingStore.UpdateCandidateStatus(id, "merged"); statusErr != nil {
+				if statusErr := es.UpdateCandidateStatus(id, "merged"); statusErr != nil {
 					slog.Warn("dedup merge already-merged: failed to update candidate status", "candidate_id", id, "err", statusErr)
 				}
-				s.publishEvent(c.Request.Context(), plugin.NewEvent(plugin.EventDedupMerged, candidate.EntityAID, map[string]any{
-					"entity_b_id":   candidate.EntityBID,
-					"entity_type":   candidate.EntityType,
-					"candidate_id":  id,
+				h.publishEvent(c.Request.Context(), plugin.NewEvent(plugin.EventDedupMerged, candidate.EntityAID, map[string]any{
+					"entity_b_id":    candidate.EntityBID,
+					"entity_type":    candidate.EntityType,
+					"candidate_id":   id,
 					"already_merged": true,
 				}))
 				slog.Info("dedup merge skipped: source book already merged away",
@@ -1031,23 +1149,23 @@ func (s *Server) mergeDedupCandidate(c *gin.Context) {
 		// PR #1160 409-hotfix path. Mark them merged proactively so the UI
 		// drops them on the next refresh rather than the user having to
 		// dismiss each by hand.
-		if s.dedupEngine != nil && mergeResult != nil {
+		if h.dedupEngine != nil && mergeResult != nil {
 			var mergedAway []string
 			for _, bid := range []string{candidate.EntityAID, candidate.EntityBID} {
 				if bid != "" && bid != mergeResult.PrimaryID {
 					mergedAway = append(mergedAway, bid)
 				}
 			}
-			s.dedupEngine.CleanupCandidatesAfterMerge(mergedAway)
+			h.dedupEngine.CleanupCandidatesAfterMerge(mergedAway)
 		}
 	}
 
-	if err := s.embeddingStore.UpdateCandidateStatus(id, "merged"); err != nil {
+	if err := es.UpdateCandidateStatus(id, "merged"); err != nil {
 		httputil.InternalError(c, "failed to update candidate status", err)
 		return
 	}
 
-	s.publishEvent(c.Request.Context(), plugin.NewEvent(plugin.EventDedupMerged, candidate.EntityAID, map[string]any{
+	h.publishEvent(c.Request.Context(), plugin.NewEvent(plugin.EventDedupMerged, candidate.EntityAID, map[string]any{
 		"entity_b_id":  candidate.EntityBID,
 		"entity_type":  candidate.EntityType,
 		"candidate_id": id,
@@ -1056,9 +1174,10 @@ func (s *Server) mergeDedupCandidate(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"status": "merged", "result": result, "keep_id": keepID})
 }
 
-// dismissDedupCandidate handles POST /api/v1/dedup/candidates/:id/dismiss.
-func (s *Server) dismissDedupCandidate(c *gin.Context) {
-	if s.embeddingStore == nil {
+// DismissDedupCandidate handles POST /api/v1/dedup/candidates/:id/dismiss.
+func (h *Handler) DismissDedupCandidate(c *gin.Context) {
+	es := h.resolveEmbeddingStore()
+	if es == nil {
 		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
@@ -1070,23 +1189,23 @@ func (s *Server) dismissDedupCandidate(c *gin.Context) {
 		return
 	}
 
-	if err := s.embeddingStore.UpdateCandidateStatus(id, "dismissed"); err != nil {
+	if err := es.UpdateCandidateStatus(id, "dismissed"); err != nil {
 		httputil.InternalError(c, "failed to dismiss candidate", err)
 		return
 	}
-	s.markDuplicatesFlaggedDirty("dismiss_candidate")
+	h.markDuplicatesFlaggedDirty("dismiss_candidate")
 
 	httputil.RespondWithOK(c, gin.H{"status": "dismissed"})
 }
 
-// triggerDedupScan handles POST /api/v1/dedup/scan.
+// TriggerDedupScan handles POST /api/v1/dedup/scan.
 // Delegates to the UOS registry (dedup.full-scan op) since UOS-09.
-func (s *Server) triggerDedupScan(c *gin.Context) {
-	if s.opRegistry == nil {
+func (h *Handler) TriggerDedupScan(c *gin.Context) {
+	if h.opRegistry == nil {
 		httputil.RespondWithInternalError(c, "operation registry not initialized")
 		return
 	}
-	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.full-scan", nil)
+	opID, err := h.opRegistry.EnqueueOp(c.Request.Context(), "dedup.full-scan", nil)
 	if err != nil {
 		httputil.InternalError(c, "failed to enqueue dedup scan", err)
 		return
@@ -1094,14 +1213,14 @@ func (s *Server) triggerDedupScan(c *gin.Context) {
 	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
 }
 
-// triggerDedupLLM handles POST /api/v1/dedup/scan-llm.
+// TriggerDedupLLM handles POST /api/v1/dedup/scan-llm.
 // Delegates to the UOS registry (dedup.llm-review op) since UOS-09.
-func (s *Server) triggerDedupLLM(c *gin.Context) {
-	if s.opRegistry == nil {
+func (h *Handler) TriggerDedupLLM(c *gin.Context) {
+	if h.opRegistry == nil {
 		httputil.RespondWithInternalError(c, "operation registry not initialized")
 		return
 	}
-	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.llm-review", nil)
+	opID, err := h.opRegistry.EnqueueOp(c.Request.Context(), "dedup.llm-review", nil)
 	if err != nil {
 		httputil.InternalError(c, "failed to enqueue LLM review", err)
 		return
@@ -1109,21 +1228,21 @@ func (s *Server) triggerDedupLLM(c *gin.Context) {
 	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
 }
 
-// triggerDedupRefresh handles POST /api/v1/dedup/refresh.
+// TriggerDedupRefresh handles POST /api/v1/dedup/refresh.
 // Re-runs the full scan as a tracked Operation. Identical behavior to
-// triggerDedupScan — kept as a separate endpoint for backwards compatibility.
-func (s *Server) triggerDedupRefresh(c *gin.Context) {
-	s.triggerDedupScan(c)
+// TriggerDedupScan — kept as a separate endpoint for backwards compatibility.
+func (h *Handler) TriggerDedupRefresh(c *gin.Context) {
+	h.TriggerDedupScan(c)
 }
 
-// triggerDedupAcoustID handles POST /api/v1/dedup/scan-acoustid.
+// TriggerDedupAcoustID handles POST /api/v1/dedup/scan-acoustid.
 // Delegates to the UOS registry (acoustid.scan op) since UOS-09.
-func (s *Server) triggerDedupAcoustID(c *gin.Context) {
-	if s.opRegistry == nil {
+func (h *Handler) TriggerDedupAcoustID(c *gin.Context) {
+	if h.opRegistry == nil {
 		httputil.RespondWithInternalError(c, "operation registry not initialized")
 		return
 	}
-	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "acoustid.scan", nil)
+	opID, err := h.opRegistry.EnqueueOp(c.Request.Context(), "acoustid.scan", nil)
 	if err != nil {
 		httputil.InternalError(c, "failed to enqueue acoustid scan", err)
 		return
@@ -1131,24 +1250,24 @@ func (s *Server) triggerDedupAcoustID(c *gin.Context) {
 	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
 }
 
-// resetAcoustIDFingerprints handles POST /api/v1/dedup/reset-acoustid.
+// ResetAcoustIDFingerprints handles POST /api/v1/dedup/reset-acoustid.
 // Enqueues acoustid.reset-all (clears every stored fingerprint + drops
 // acoustid-layer dedup candidates) immediately followed by a forced
 // fingerprint rescan over the whole library. Both ops share the
 // "acoustid.fingerprint" concurrency key so the rescan queues behind the
 // reset and runs sequentially.
-func (s *Server) resetAcoustIDFingerprints(c *gin.Context) {
-	if s.opRegistry == nil {
+func (h *Handler) ResetAcoustIDFingerprints(c *gin.Context) {
+	if h.opRegistry == nil {
 		httputil.RespondWithInternalError(c, "operation registry not initialized")
 		return
 	}
-	resetID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "acoustid.reset-all", nil)
+	resetID, err := h.opRegistry.EnqueueOp(c.Request.Context(), "acoustid.reset-all", nil)
 	if err != nil {
 		httputil.InternalError(c, "failed to enqueue acoustid reset", err)
 		return
 	}
 	rescanParams := map[string]any{"scope": "all", "force": true}
-	rescanID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "acoustid.fingerprint-rescan", rescanParams)
+	rescanID, err := h.opRegistry.EnqueueOp(c.Request.Context(), "acoustid.fingerprint-rescan", rescanParams)
 	if err != nil {
 		// Reset already enqueued; rescan failure is non-fatal — surface it
 		// in the response so the operator can re-run rescan manually.
@@ -1167,17 +1286,17 @@ func (s *Server) resetAcoustIDFingerprints(c *gin.Context) {
 	})
 }
 
-// purgeStaleCandidates handles POST /api/v1/dedup/purge-stale.
+// PurgeStaleCandidates handles POST /api/v1/dedup/purge-stale.
 // Enqueues the dedup.purge-stale UOS op so the cleanup shows up in the
 // bell with proper start/end log lines, instead of silently running and
 // returning a count. Engine.PurgeStaleCandidates still does the actual
 // work — see internal/plugins/dedup/purge_stale.go.
-func (s *Server) purgeStaleCandidates(c *gin.Context) {
-	if s.opRegistry == nil {
+func (h *Handler) PurgeStaleCandidates(c *gin.Context) {
+	if h.opRegistry == nil {
 		httputil.RespondWithInternalError(c, "operation registry not initialized")
 		return
 	}
-	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.purge-stale", nil)
+	opID, err := h.opRegistry.EnqueueOp(c.Request.Context(), "dedup.purge-stale", nil)
 	if err != nil {
 		httputil.InternalError(c, "failed to enqueue dedup purge-stale", err)
 		return
@@ -1185,14 +1304,14 @@ func (s *Server) purgeStaleCandidates(c *gin.Context) {
 	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
 }
 
-// triggerEmbedScan handles POST /api/v1/dedup/embed.
+// TriggerEmbedScan handles POST /api/v1/dedup/embed.
 // Delegates to the UOS registry (dedup.embed-scan op) since UOS-07.
-func (s *Server) triggerEmbedScan(c *gin.Context) {
-	if s.opRegistry == nil {
+func (h *Handler) TriggerEmbedScan(c *gin.Context) {
+	if h.opRegistry == nil {
 		httputil.RespondWithInternalError(c, "operation registry not initialized")
 		return
 	}
-	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.embed-scan", nil)
+	opID, err := h.opRegistry.EnqueueOp(c.Request.Context(), "dedup.embed-scan", nil)
 	if err != nil {
 		httputil.InternalError(c, "failed to enqueue embed scan", err)
 		return
@@ -1200,14 +1319,14 @@ func (s *Server) triggerEmbedScan(c *gin.Context) {
 	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
 }
 
-// triggerEmbedAsync handles POST /api/v1/dedup/embed-async.
+// TriggerEmbedAsync handles POST /api/v1/dedup/embed-async.
 // Enqueues the nightly embed-async UOS op on demand.
-func (s *Server) triggerEmbedAsync(c *gin.Context) {
-	if s.opRegistry == nil {
+func (h *Handler) TriggerEmbedAsync(c *gin.Context) {
+	if h.opRegistry == nil {
 		httputil.RespondWithInternalError(c, "operation registry not initialized")
 		return
 	}
-	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.embed-async", nil)
+	opID, err := h.opRegistry.EnqueueOp(c.Request.Context(), "dedup.embed-async", nil)
 	if err != nil {
 		httputil.InternalError(c, "failed to enqueue embed-async", err)
 		return
@@ -1215,14 +1334,14 @@ func (s *Server) triggerEmbedAsync(c *gin.Context) {
 	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
 }
 
-// triggerBookSignatureScan handles POST /api/v1/dedup/scan-book-signature.
+// TriggerBookSignatureScan handles POST /api/v1/dedup/scan-book-signature.
 // Delegates to the UOS registry (dedup.book-signature-scan op) since UOS-09.
-func (s *Server) triggerBookSignatureScan(c *gin.Context) {
-	if s.opRegistry == nil {
+func (h *Handler) TriggerBookSignatureScan(c *gin.Context) {
+	if h.opRegistry == nil {
 		httputil.RespondWithInternalError(c, "operation registry not initialized")
 		return
 	}
-	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.book-signature-scan", nil)
+	opID, err := h.opRegistry.EnqueueOp(c.Request.Context(), "dedup.book-signature-scan", nil)
 	if err != nil {
 		httputil.InternalError(c, "failed to enqueue book signature scan", err)
 		return
@@ -1246,9 +1365,10 @@ type AcoustIDCompareResponse struct {
 	SegmentScores []AcoustIDSegmentComparison `json:"segment_scores"` // 7 entries
 }
 
-// handleCompareAcoustID handles POST /api/v1/books/:id/compare-acoustid?other=<bookID2>.
+// HandleCompareAcoustID handles POST /api/v1/audiobooks/:id/compare-acoustid?other=<bookID2>.
 // Computes per-segment fingerprint comparison between two books' primary files.
-func (s *Server) handleCompareAcoustID(c *gin.Context) {
+func (h *Handler) HandleCompareAcoustID(c *gin.Context) {
+	store := h.resolveStore()
 	idA := c.Param("id")
 	idB := c.Query("other")
 	if idB == "" {
@@ -1256,19 +1376,19 @@ func (s *Server) handleCompareAcoustID(c *gin.Context) {
 		return
 	}
 
-	bookA, err := s.Store().GetBookByID(idA)
+	bookA, err := store.GetBookByID(idA)
 	if err != nil || bookA == nil {
 		httputil.RespondWithNotFound(c, "book", idA)
 		return
 	}
-	bookB, err := s.Store().GetBookByID(idB)
+	bookB, err := store.GetBookByID(idB)
 	if err != nil || bookB == nil {
 		httputil.RespondWithNotFound(c, "book", idB)
 		return
 	}
 
-	filesA, _ := s.Store().GetBookFiles(idA)
-	filesB, _ := s.Store().GetBookFiles(idB)
+	filesA, _ := store.GetBookFiles(idA)
+	filesB, _ := store.GetBookFiles(idB)
 
 	primary := func(files []database.BookFile) *database.BookFile {
 		for i := range files {

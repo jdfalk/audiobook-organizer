@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.30.0
+// version: 1.31.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-06-03
 
@@ -1007,28 +1007,20 @@ func (s *Server) setupRoutes() {
 			protected.POST("/dedup/validate", s.perm(auth.PermLibraryEditMetadata), s.validateDedupEntry)
 
 			// Embedding-based dedup
-			protected.GET("/dedup/candidates", s.perm(auth.PermLibraryView), s.listDedupCandidates)
-			protected.GET("/dedup/candidates/export", s.perm(auth.PermLibraryView), s.exportDedupCandidates)
-			protected.GET("/dedup/stats", s.perm(auth.PermLibraryView), s.getDedupStats)
-			protected.POST("/dedup/candidates/:id/merge", s.perm(auth.PermLibraryEditMetadata), s.mergeDedupCandidate)
-			protected.POST("/dedup/candidates/:id/dismiss", s.perm(auth.PermLibraryEditMetadata), s.dismissDedupCandidate)
-			protected.POST("/dedup/candidates/bulk-merge", s.perm(auth.PermLibraryEditMetadata), s.bulkMergeDedupCandidates)
-			protected.POST("/dedup/candidates/merge-cluster", s.perm(auth.PermLibraryEditMetadata), s.mergeDedupCluster)
-			protected.POST("/dedup/candidates/dismiss-cluster", s.perm(auth.PermLibraryEditMetadata), s.dismissDedupCluster)
-			protected.POST("/dedup/candidates/remove-from-cluster", s.perm(auth.PermLibraryEditMetadata), s.removeFromDedupCluster)
-			protected.GET("/dedup/candidates/series-summary", s.perm(auth.PermLibraryView), s.listDedupCandidateSeries)
-			protected.POST("/dedup/candidates/merge-series", s.perm(auth.PermLibraryEditMetadata), s.mergeDedupCandidateSeries)
-			protected.POST("/dedup/scan", s.perm(auth.PermScanTrigger), s.triggerDedupScan)
-			protected.POST("/dedup/scan-llm", s.perm(auth.PermScanTrigger), s.triggerDedupLLM)
-			protected.POST("/dedup/scan-acoustid", s.perm(auth.PermScanTrigger), s.triggerDedupAcoustID)
-			protected.POST("/audiobooks/:id/compare-acoustid", s.perm(auth.PermLibraryView), s.handleCompareAcoustID)
-			protected.POST("/dedup/scan-book-signature", s.perm(auth.PermScanTrigger), s.triggerBookSignatureScan)
+			//
+			// NOTE: the dedup-domain routes (GET /dedup/candidates,
+			// /dedup/candidates/export, /dedup/stats,
+			// /dedup/candidates/series-summary; POST
+			// /dedup/candidates/:id/{merge,dismiss}, /dedup/candidates/
+			// {bulk-merge,merge-cluster,dismiss-cluster,remove-from-cluster,
+			// merge-series}, /dedup/{scan,scan-llm,scan-acoustid,
+			// scan-book-signature,refresh,purge-stale,reset-acoustid,embed,
+			// embed-async} and POST /audiobooks/:id/compare-acoustid) were
+			// migrated to deduphandler.Handler and are now registered in
+			// wireHandlers (wire_handlers.go). The survivor below stays here
+			// because it lives in fingerprint_rescan.go, not the migrated
+			// dedup_handlers.go.
 			protected.POST("/dedup/fingerprint-rescan", s.perm(auth.PermScanTrigger), s.triggerFingerprintRescan)
-			protected.POST("/dedup/refresh", s.perm(auth.PermScanTrigger), s.triggerDedupRefresh)
-			protected.POST("/dedup/purge-stale", s.perm(auth.PermScanTrigger), s.purgeStaleCandidates)
-			protected.POST("/dedup/reset-acoustid", s.perm(auth.PermScanTrigger), s.resetAcoustIDFingerprints)
-			protected.POST("/dedup/embed", s.perm(auth.PermScanTrigger), s.triggerEmbedScan)
-			protected.POST("/dedup/embed-async", s.perm(auth.PermScanTrigger), s.triggerEmbedAsync)
 
 			// Operation routes
 			//

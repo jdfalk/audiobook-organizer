@@ -203,3 +203,14 @@ packages:
       PluginHealthChecker:
       EventStreamer:
       OperationLogsProvider:
+  github.com/jdfalk/audiobook-organizer/internal/server/handlers/dedup:
+    config:
+      dir: internal/server/handlers/dedup/mocks
+      filename: "mock_{{.InterfaceName | snakecase}}.go"
+      pkgname: dedupmocks
+    interfaces:
+      DedupStore:
+      EmbeddingStore:
+      MergeService:
+      DedupEngine:
+      OperationsRegistry:
