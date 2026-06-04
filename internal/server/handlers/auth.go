@@ -1,5 +1,5 @@
 // file: internal/server/handlers/auth.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: c3d4e5f6-a7b8-9012-cdef-012345678901
 // last-edited: 2026-06-04
 
@@ -45,8 +45,22 @@ type AuthStore interface {
 }
 
 const (
-	maxFailedLogins      = 10
-	lockoutWindowMinutes = 15
+	// Per-IP failed-login throttle. Once a single source IP exceeds
+	// maxFailedLoginsPerIP failures inside loginThrottleWindow it is rejected
+	// with 429 until the window rolls over. Keyed on the *attacker's* source —
+	// not the target account — so it cannot be used to lock a victim out
+	// (pen-test finding HIGH-3). This is meaningful now that X-Forwarded-For is
+	// no longer trusted for ClientIP (HIGH-2).
+	maxFailedLoginsPerIP = 15
+	loginThrottleWindow  = 15 * time.Minute
+
+	// Per-account soft slowdown. After accountSoftThreshold failures a small
+	// progressive delay (capped at accountSoftMaxDelay) is added to each *failed*
+	// attempt. The account is never hard-locked: a correct password always
+	// succeeds immediately, so a third party cannot deny a known user access.
+	accountSoftThreshold = 5
+	accountSoftStep      = 200 * time.Millisecond
+	accountSoftMaxDelay  = 2 * time.Second
 
 	// DefaultSessionTTL is the session lifetime for a normal login.
 	DefaultSessionTTL = 24 * time.Hour
@@ -66,49 +80,89 @@ type failedAttempt struct {
 type AuthHandler struct {
 	store      AuthStore
 	enableAuth bool
-	lockout    map[string]*failedAttempt
-	lockoutMu  sync.Mutex
+	acctFails  map[string]*failedAttempt // keyed by user ID — drives the soft delay
+	ipFails    map[string]*failedAttempt // keyed by client IP — drives the hard throttle
+	failMu     sync.Mutex
+	// failureDelay performs the soft per-account slowdown. Defaults to time.Sleep;
+	// tests override it to keep the suite fast and deterministic.
+	failureDelay func(time.Duration)
 }
 
 // NewAuthHandler constructs an AuthHandler.
 // enableAuth should be set from config.AppConfig.EnableAuth at wire time.
 func NewAuthHandler(store AuthStore, enableAuth bool) *AuthHandler {
 	return &AuthHandler{
-		store:      store,
-		enableAuth: enableAuth,
-		lockout:    make(map[string]*failedAttempt),
+		store:        store,
+		enableAuth:   enableAuth,
+		acctFails:    make(map[string]*failedAttempt),
+		ipFails:      make(map[string]*failedAttempt),
+		failureDelay: time.Sleep,
 	}
 }
 
-func (h *AuthHandler) isLockedOut(userID string) bool {
-	h.lockoutMu.Lock()
-	defer h.lockoutMu.Unlock()
-	a, ok := h.lockout[userID]
+// bumpFailureLocked increments the windowed failure counter for key and returns
+// the post-increment count. Caller must hold failMu.
+func bumpFailureLocked(m map[string]*failedAttempt, key string) int {
+	a, ok := m[key]
+	if !ok || time.Since(a.firstAt) > loginThrottleWindow {
+		m[key] = &failedAttempt{count: 1, firstAt: time.Now()}
+		return 1
+	}
+	a.count++
+	return a.count
+}
+
+// ipThrottled reports whether the given source IP has exceeded its failed-login
+// budget within the current window.
+func (h *AuthHandler) ipThrottled(ip string) bool {
+	if ip == "" {
+		return false
+	}
+	h.failMu.Lock()
+	defer h.failMu.Unlock()
+	a, ok := h.ipFails[ip]
 	if !ok {
 		return false
 	}
-	if time.Since(a.firstAt) > lockoutWindowMinutes*time.Minute {
-		delete(h.lockout, userID)
+	if time.Since(a.firstAt) > loginThrottleWindow {
+		delete(h.ipFails, ip)
 		return false
 	}
-	return a.count >= maxFailedLogins
+	return a.count >= maxFailedLoginsPerIP
 }
 
-func (h *AuthHandler) recordFailedLogin(userID string) {
-	h.lockoutMu.Lock()
-	defer h.lockoutMu.Unlock()
-	a, ok := h.lockout[userID]
-	if !ok || time.Since(a.firstAt) > lockoutWindowMinutes*time.Minute {
-		h.lockout[userID] = &failedAttempt{count: 1, firstAt: time.Now()}
-		return
+// recordFailure bumps the per-IP counter and (when userID is non-empty) the
+// per-account counter, returning the soft delay to apply for this account
+// failure. Unknown users still count against the IP so username guessing can't
+// dodge the throttle.
+func (h *AuthHandler) recordFailure(userID, ip string) time.Duration {
+	h.failMu.Lock()
+	defer h.failMu.Unlock()
+	if ip != "" {
+		bumpFailureLocked(h.ipFails, ip)
 	}
-	a.count++
+	if userID == "" {
+		return 0
+	}
+	count := bumpFailureLocked(h.acctFails, userID)
+	if count <= accountSoftThreshold {
+		return 0
+	}
+	d := time.Duration(count-accountSoftThreshold) * accountSoftStep
+	if d > accountSoftMaxDelay {
+		d = accountSoftMaxDelay
+	}
+	return d
 }
 
-func (h *AuthHandler) clearFailedLogins(userID string) {
-	h.lockoutMu.Lock()
-	defer h.lockoutMu.Unlock()
-	delete(h.lockout, userID)
+// clearFailures resets both counters after a successful login.
+func (h *AuthHandler) clearFailures(userID, ip string) {
+	h.failMu.Lock()
+	defer h.failMu.Unlock()
+	delete(h.acctFails, userID)
+	if ip != "" {
+		delete(h.ipFails, ip)
+	}
 }
 
 // buildAuthUserResponse converts a database User to the API response shape.
@@ -259,21 +313,31 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, "username and password are required")
 		return
 	}
-	user, err := h.store.GetUserByUsername(req.Username)
-	if err != nil || user == nil {
-		httputil.RespondWithUnauthorized(c, "invalid credentials")
+	ip := strings.TrimSpace(c.ClientIP())
+	// Per-IP throttle first: a source that has burned through its failure budget
+	// is rejected before any credential work, so it can't keep probing (HIGH-3).
+	if h.ipThrottled(ip) {
+		httputil.RespondWithError(c, http.StatusTooManyRequests, "too many failed login attempts from this source — try again later", "TOO_MANY_REQUESTS")
 		return
 	}
-	if h.isLockedOut(user.ID) {
-		httputil.RespondWithError(c, 429, "account temporarily locked — try again later", "LOCKOUT")
+	user, err := h.store.GetUserByUsername(req.Username)
+	if err != nil || user == nil {
+		// Count the failure against the IP even for unknown users so username
+		// guessing can't dodge the throttle.
+		h.recordFailure("", ip)
+		httputil.RespondWithUnauthorized(c, "invalid credentials")
 		return
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		h.recordFailedLogin(user.ID)
+		// Soft, progressive per-account slowdown — never a hard lock, so the
+		// real user with the correct password is never denied (HIGH-3).
+		if delay := h.recordFailure(user.ID, ip); delay > 0 {
+			h.failureDelay(delay)
+		}
 		httputil.RespondWithUnauthorized(c, "invalid credentials")
 		return
 	}
-	h.clearFailedLogins(user.ID)
+	h.clearFailures(user.ID, ip)
 	ttl := defaultSessionTTL
 	if req.RememberMe {
 		ttl = rememberMeSessionTTL
