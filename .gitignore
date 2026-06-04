@@ -222,6 +222,9 @@ library.bleve/
 # Bootstrap token (auth credential, do not commit)
 .bootstrap-token
 
+# Startup read-only API key (auth credential, do not commit)
+.readonly-key
+
 # API token file (auth credential shared across worktrees, do not commit)
 .claude/.api-token
 

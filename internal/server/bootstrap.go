@@ -1,5 +1,5 @@
 // file: internal/server/bootstrap.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: 3e7c9a12-4f6b-4d8e-b5a1-2c8f0e3d9b47
 // last-edited: 2026-06-04
 
@@ -94,8 +94,21 @@ func InitStartupReadOnlyKey(store database.Store) error {
 	_ = store.SetSetting(readonlyKeyNameSetting, created.ID, "string", false)
 	_ = store.SetSetting(readonlyKeyExpiresSetting, fmt.Sprintf("%d", expiresAt.Unix()), "string", false)
 
-	slog.Info("Read-only API key (library.view, expires 24 h)", "raw", raw)
+	// Never log the raw key — logs are retained by aggregators and would grant
+	// anyone with log access a live read-only credential (pen-test finding
+	// CRIT-1). Instead write it to a 0600 file (like the bootstrap token) so
+	// local tooling can still pick it up, and log only the non-secret ID/expiry.
+	keyPath := ReadOnlyKeyPath(filepath.Dir(config.AppConfig.DatabasePath))
+	if err := os.WriteFile(keyPath, []byte(raw+"\n"), 0o600); err != nil {
+		slog.Warn("could not write read-only key file", "path", keyPath, "err", err)
+	}
+	slog.Info("Read-only API key created (library.view)", "key_id", created.ID, "expires_at", expiresAt.Format(time.RFC3339), "token_file", keyPath)
 	return nil
+}
+
+// ReadOnlyKeyPath returns the path to the on-disk plaintext read-only API key file.
+func ReadOnlyKeyPath(dataDir string) string {
+	return filepath.Join(dataDir, ".readonly-key")
 }
 
 // bootstrapMu prevents two concurrent exchange attempts from both succeeding.
@@ -132,8 +145,12 @@ func InitBootstrapToken(store SettingsReadWriter, dataDir string) error {
 		slog.Info("WARNING could not write token file", "tokenPath", tokenPath, "err", err)
 	}
 
-	slog.Info("Emergency access token", "raw", raw)
-	slog.Info("Token expires in 10 minutes. POST /api/v1/auth/bootstrap to exchange for an API key. Restart required to generate a new token.")
+	// Never log the raw token — anyone with log access could exchange it for a
+	// full-privilege API key (pen-test finding CRIT-1). The raw value lives only
+	// in the 0600 token file above; log its path + expiry so operators (and the
+	// server-bootstrap tooling) know where to read it.
+	slog.Info("Emergency access token written", "token_file", tokenPath, "expires_at", expiresAt.Format(time.RFC3339))
+	slog.Info("Token expires in 10 minutes. Read it from the token_file above, then POST /api/v1/auth/bootstrap to exchange for an API key. Restart required to generate a new token.")
 	return nil
 }
 
