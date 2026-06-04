@@ -1078,7 +1078,11 @@ func (s *Server) setupRoutes() {
 			protected.GET("/maintenance/acoustid-stats", s.perm(auth.PermSettingsManage), s.handleGetAcoustIDStats)
 			// Unified maintenance job dispatcher
 			protected.GET("/maintenance/jobs", s.perm(auth.PermSettingsManage), s.listMaintenanceJobs)
-			protected.POST("/maintenance/jobs/:job_id", s.runMaintenanceJob)
+			// Route-level permission guard (pen-test finding MED-3). The handler
+			// also checks permissions per-job, but only when EnableAuth is true;
+			// gating at the route is defense-in-depth and protects against a
+			// future job that forgets to implement PermissionAware.
+			protected.POST("/maintenance/jobs/:job_id", s.perm(auth.PermSettingsManage), s.runMaintenanceJob)
 
 			// Admin-only destructive endpoints
 			adminOnly := protected.Group("")
