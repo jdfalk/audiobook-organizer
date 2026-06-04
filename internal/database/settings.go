@@ -1,5 +1,5 @@
 // file: internal/database/settings.go
-// version: 1.1.2
+// version: 1.2.0
 // guid: 8a7b6c5d-4e3f-2a1b-0c9d-8e7f6a5b4c3d
 
 package database
@@ -8,8 +8,10 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -19,6 +21,14 @@ import (
 	"github.com/cockroachdb/pebble/v2"
 	"golang.org/x/crypto/argon2"
 )
+
+// ErrSettingNotFound is returned (wrapped) by GetSetting when the requested key
+// does not exist. Callers that must distinguish "missing key" from a real
+// backend error should use errors.Is(err, ErrSettingNotFound) rather than the
+// error string. Pen-test finding HIGH-4a: a missing key previously surfaced as a
+// generic error, causing the bootstrap exchange to return 500 instead of 401
+// once the one-time token had been consumed.
+var ErrSettingNotFound = errors.New("setting not found")
 
 // Setting represents a stored configuration setting
 type Setting struct {
@@ -194,7 +204,7 @@ func (s *PebbleStore) GetSetting(key string) (*Setting, error) {
 	data, closer, err := s.db.Get([]byte("setting:" + key))
 	if err != nil {
 		if err == pebble.ErrNotFound {
-			return nil, fmt.Errorf("setting not found: %s", key)
+			return nil, fmt.Errorf("setting not found: %s: %w", key, ErrSettingNotFound)
 		}
 		return nil, err
 	}
@@ -274,6 +284,9 @@ func (s *SQLiteStore) GetSetting(key string) (*Setting, error) {
 	`, key).Scan(&setting.Key, &setting.Value, &setting.Type, &isSecret)
 
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("setting not found: %s: %w", key, ErrSettingNotFound)
+		}
 		return nil, err
 	}
 
