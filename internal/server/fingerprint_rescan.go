@@ -16,9 +16,9 @@ import (
 // FingerprintRescanRequest controls the scope of a manual fingerprint rescan.
 type FingerprintRescanRequest struct {
 	// Scope selects which book_files to (re)fingerprint.
-	//   "missing" (default) — only files where acoustid_seg0 is empty
-	//   "all"               — every audio file across every book
-	//   "books"             — every audio file across the books listed in BookIDs
+	//   "missing" (default)  only files where acoustid_seg0 is empty
+	//   "all"                every audio file across every book
+	//   "books"              every audio file across the books listed in BookIDs
 	Scope string `json:"scope,omitempty"`
 
 	// BookIDs is required when Scope == "books"; ignored otherwise.
@@ -74,16 +74,12 @@ func (s *Server) triggerFingerprintRescan(c *gin.Context) {
 		return
 	}
 
-	// Convert request to UOS operation params. Pass the MAP directly —
+	// Convert request to UOS operation params. Pass the MAP directly 
 	// Registry.EnqueueOp does its own json.Marshal. If we pre-marshaled
 	// to []byte here, EnqueueOp would marshal the byte slice itself,
 	// producing a base64 string that fails Unmarshal on the worker
 	// side ("failed to unmarshal params").
-	params := map[string]interface{}{
-		"scope":    scope,
-		"book_ids": req.BookIDs,
-		"force":    req.Force,
-	}
+	params := fingerprintRescanParams(scope, req)
 
 	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "acoustid.fingerprint-rescan", params)
 	if err != nil {
@@ -91,4 +87,12 @@ func (s *Server) triggerFingerprintRescan(c *gin.Context) {
 		return
 	}
 	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
+}
+
+func fingerprintRescanParams(scope string, req FingerprintRescanRequest) map[string]interface{} {
+	return map[string]interface{}{
+		"scope":    scope,
+		"book_ids": req.BookIDs,
+		"force":    req.Force,
+	}
 }

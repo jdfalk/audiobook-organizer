@@ -19,7 +19,7 @@ import (
 
 // newRescanTestServer wires a Server with the bare minimum to exercise
 // the request-validation paths of triggerFingerprintRescan. We do NOT wire
-// up an operations queue here — the validation guard rejects requests
+// up an operations queue here  the validation guard rejects requests
 // before the queue is touched, so the queue-nil path is what we assert on
 // happy bodies. (End-to-end queue exercise is covered by the larger
 // integration suites.)
@@ -68,4 +68,19 @@ func TestFingerprintRescan_DefaultsToMissingScope(t *testing.T) {
 	assert.NotEqual(t, http.StatusBadRequest, w.Code,
 		"empty body should default scope=missing, not bad-request; got %d body=%s",
 		w.Code, w.Body.String())
+}
+
+func TestFingerprintRescan_ParamsMap(t *testing.T) {
+	req := FingerprintRescanRequest{
+		Scope:   scopeBooks,
+		BookIDs: []string{"book-123"},
+		Force:   true,
+	}
+	params := fingerprintRescanParams(scopeBooks, req)
+	require.IsType(t, map[string]interface{}{}, params)
+	assert.Equal(t, scopeBooks, params["scope"])
+	bookIDs, ok := params["book_ids"].([]string)
+	require.True(t, ok, "book_ids should remain []string")
+	assert.Equal(t, []string{"book-123"}, bookIDs)
+	assert.Equal(t, true, params["force"])
 }
