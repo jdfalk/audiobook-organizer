@@ -44,26 +44,23 @@ import (
 	chromem "github.com/philippgille/chromem-go"
 )
 
-// ChromemEmbeddingStore wraps chromem-go collections for ANN vector
-// search. One collection per entity type (books, authors).
+const (
+	chromemStoreModeInMemory = "in-memory"
+	chromemStoreModeUnknown  = "unknown"
+)
+
+// ChromemEmbeddingStore wraps chromem-go collections for ANN vector search.
 type ChromemEmbeddingStore struct {
 	db          *chromem.DB
 	collections map[string]*chromem.Collection
 	mu          sync.RWMutex
 	dims        int
+	mode        string
 }
 
 // NewChromemEmbeddingStore returns an in-memory chromem-go store.
-//
-// The `dir` argument is preserved for backwards compatibility with the
-// service-registry wiring (and to make it cheap to swap back to a
-// persistent backend later), but it is currently unused — chromem-go's
-// NewPersistentDB writes one gob file per document on each Upsert,
-// which does not scale to 50K+ books, and the dedup engine already
-// re-hydrates from the SQLite/Pebble embedding store on startup.
-// See the file-level comment for the full rationale (MAYDEPLOY-D2).
 func NewChromemEmbeddingStore(dir string, dims int) (*ChromemEmbeddingStore, error) {
-	_ = dir // intentionally unused; see NewChromemEmbeddingStore doc.
+	_ = dir
 	db := chromem.NewDB()
 	if db == nil {
 		return nil, fmt.Errorf("chromem.NewDB returned nil")
@@ -72,17 +69,27 @@ func NewChromemEmbeddingStore(dir string, dims int) (*ChromemEmbeddingStore, err
 		db:          db,
 		collections: make(map[string]*chromem.Collection),
 		dims:        dims,
+		mode:        chromemStoreModeInMemory,
 	}, nil
 }
 
-// NewInMemoryChromemStore creates an in-memory store for tests.
+// NewInMemoryChromemStore creates an in-memory chromem store for tests.
 func NewInMemoryChromemStore(dims int) *ChromemEmbeddingStore {
 	db := chromem.NewDB()
 	return &ChromemEmbeddingStore{
 		db:          db,
 		collections: make(map[string]*chromem.Collection),
 		dims:        dims,
+		mode:        chromemStoreModeInMemory,
 	}
+}
+
+// StoreMode reports the mode used to construct the chromem store.
+func (s *ChromemEmbeddingStore) StoreMode() string {
+	if s == nil || s.mode == "" {
+		return chromemStoreModeUnknown
+	}
+	return s.mode
 }
 
 func (s *ChromemEmbeddingStore) getOrCreateCollection(entityType string) (*chromem.Collection, error) {
@@ -95,11 +102,9 @@ func (s *ChromemEmbeddingStore) getOrCreateCollection(entityType string) (*chrom
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// Double-check.
 	if col, ok := s.collections[entityType]; ok {
 		return col, nil
 	}
-
 	col, err := s.db.GetOrCreateCollection(entityType, nil, nil)
 	if err != nil {
 		return nil, err
@@ -122,7 +127,7 @@ func (s *ChromemEmbeddingStore) Upsert(ctx context.Context, entityType, entityID
 	return col.AddDocument(ctx, doc)
 }
 
-// Get returns a single embedding's metadata by ID.
+// Get returns metadata for a single embedding.
 func (s *ChromemEmbeddingStore) Get(ctx context.Context, entityType, entityID string) (map[string]string, error) {
 	col, err := s.getOrCreateCollection(entityType)
 	if err != nil {
@@ -130,7 +135,7 @@ func (s *ChromemEmbeddingStore) Get(ctx context.Context, entityType, entityID st
 	}
 	doc, err := col.GetByID(ctx, entityID)
 	if err != nil {
-		return nil, nil // not found
+		return nil, nil
 	}
 	if doc.ID == "" {
 		return nil, nil
@@ -138,7 +143,7 @@ func (s *ChromemEmbeddingStore) Get(ctx context.Context, entityType, entityID st
 	return doc.Metadata, nil
 }
 
-// Delete removes an embedding.
+// Delete removes an embedding with the given ID.
 func (s *ChromemEmbeddingStore) Delete(ctx context.Context, entityType, entityID string) error {
 	col, err := s.getOrCreateCollection(entityType)
 	if err != nil {
@@ -147,21 +152,15 @@ func (s *ChromemEmbeddingStore) Delete(ctx context.Context, entityType, entityID
 	return col.Delete(ctx, nil, nil, entityID)
 }
 
-// ChromemSimilarityResult is a scored match from FindSimilar.
+// ChromemSimilarityResult is a single ANN match.
 type ChromemSimilarityResult struct {
 	EntityID   string
 	Similarity float32
 	Metadata   map[string]string
 }
 
-// FindSimilar performs an ANN query with optional metadata filter.
-func (s *ChromemEmbeddingStore) FindSimilar(
-	ctx context.Context,
-	entityType string,
-	query []float32,
-	maxResults int,
-	filter map[string]string,
-) ([]ChromemSimilarityResult, error) {
+// FindSimilar performs an ANN query with optional metadata filters.
+func (s *ChromemEmbeddingStore) FindSimilar(ctx context.Context, entityType string, query []float32, maxResults int, filter map[string]string) ([]ChromemSimilarityResult, error) {
 	col, err := s.getOrCreateCollection(entityType)
 	if err != nil {
 		return nil, err
@@ -169,7 +168,6 @@ func (s *ChromemEmbeddingStore) FindSimilar(
 	if maxResults <= 0 {
 		maxResults = 20
 	}
-
 	count := col.Count()
 	if maxResults > count {
 		maxResults = count
@@ -177,13 +175,12 @@ func (s *ChromemEmbeddingStore) FindSimilar(
 	if maxResults <= 0 {
 		return nil, nil
 	}
-	results, err := col.QueryEmbedding(ctx, query, maxResults, filter, nil)
+	res, err := col.QueryEmbedding(ctx, query, maxResults, filter, nil)
 	if err != nil {
 		return nil, fmt.Errorf("chromem query: %w", err)
 	}
-
-	out := make([]ChromemSimilarityResult, 0, len(results))
-	for _, r := range results {
+	out := make([]ChromemSimilarityResult, 0, len(res))
+	for _, r := range res {
 		out = append(out, ChromemSimilarityResult{
 			EntityID:   r.ID,
 			Similarity: r.Similarity,
@@ -193,7 +190,7 @@ func (s *ChromemEmbeddingStore) FindSimilar(
 	return out, nil
 }
 
-// CountByType returns the document count in a collection.
+// CountByType returns the document count for a collection.
 func (s *ChromemEmbeddingStore) CountByType(ctx context.Context, entityType string) (int, error) {
 	col, err := s.getOrCreateCollection(entityType)
 	if err != nil {
@@ -202,21 +199,17 @@ func (s *ChromemEmbeddingStore) CountByType(ctx context.Context, entityType stri
 	return col.Count(), nil
 }
 
-// Close is a no-op for the in-memory chromem-go store. The dedup
-// engine re-hydrates from the SQLite/Pebble embedding store on
-// startup, so there is nothing to flush here.
+// Close releases chromem resources (no-op for in-memory store).
 func (s *ChromemEmbeddingStore) Close() error {
 	return nil
 }
 
-// Helper to convert metadata to typed values.
-
-// MetaBool reads a boolean metadata value.
+// MetaBool reads a boolean metadata key.
 func MetaBool(meta map[string]string, key string) bool {
 	return meta[key] == "true"
 }
 
-// MetaInt reads an integer metadata value.
+// MetaInt reads an integer metadata key.
 func MetaInt(meta map[string]string, key string) int {
 	n, _ := strconv.Atoi(meta[key])
 	return n
