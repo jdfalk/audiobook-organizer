@@ -1,7 +1,7 @@
 // file: internal/server/handlers/auth.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: c3d4e5f6-a7b8-9012-cdef-012345678901
-// last-edited: 2026-06-01
+// last-edited: 2026-06-04
 
 package handlers
 
@@ -112,6 +112,8 @@ func (h *AuthHandler) clearFailedLogins(userID string) {
 }
 
 // buildAuthUserResponse converts a database User to the API response shape.
+// It deliberately omits sensitive fields (password_hash, password_hash_algo)
+// so they can never leak into a JSON response.
 func buildAuthUserResponse(user *database.User) AuthUserResponse {
 	return AuthUserResponse{
 		ID:        user.ID,
@@ -121,6 +123,14 @@ func buildAuthUserResponse(user *database.User) AuthUserResponse {
 		Status:    user.Status,
 		CreatedAt: user.CreatedAt,
 	}
+}
+
+// BuildAuthUserResponse is the exported form of buildAuthUserResponse for
+// callers in sibling packages (e.g. the server package's accept-invite handler).
+// Always use this instead of returning a raw *database.User, which would leak
+// the bcrypt password hash (pen-test finding CRIT-2).
+func BuildAuthUserResponse(user *database.User) AuthUserResponse {
+	return buildAuthUserResponse(user)
 }
 
 func isHTTPSRequest(c *gin.Context) bool {

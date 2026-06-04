@@ -1,7 +1,7 @@
 // file: internal/server/auth_accept_invite.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef0123456789
-// last-edited: 2026-06-02
+// last-edited: 2026-06-04
 
 // Rescued from user_handlers.go during Phase 2 handler extraction.
 // handleAcceptInvite remains a *Server method because it bridges auth
@@ -55,5 +55,7 @@ func (s *Server) handleAcceptInvite(c *gin.Context) {
 	handlers.SetSessionCookie(c, sess.ID, sess.ExpiresAt)
 	// Session token is delivered via the HttpOnly cookie only — never in the
 	// JSON body (would expose the bearer token to page JS, defeating HttpOnly).
-	httputil.RespondWithCreated(c, gin.H{"user": user, "expires_at": sess.ExpiresAt})
+	// Return the safe user shape, not the raw *database.User, which would leak
+	// the bcrypt password hash (pen-test finding CRIT-2).
+	httputil.RespondWithCreated(c, gin.H{"user": handlers.BuildAuthUserResponse(user), "expires_at": sess.ExpiresAt})
 }

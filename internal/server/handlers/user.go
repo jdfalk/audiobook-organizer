@@ -1,7 +1,7 @@
 // file: internal/server/handlers/user.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b2c3d4e5-f6a7-8901-bcde-ef0123456789
-// last-edited: 2026-06-02
+// last-edited: 2026-06-04
 
 // Package handlers contains extracted HTTP handler types for the audiobook
 // organizer server. UserHandler covers user management and invite endpoints.
@@ -160,7 +160,9 @@ func (h *UserHandler) AcceptInvite(c *gin.Context) {
 	SetSessionCookie(c, sess.ID, sess.ExpiresAt)
 	// Session token is delivered via the HttpOnly cookie only — never in the
 	// JSON body (would expose the bearer token to page JS, defeating HttpOnly).
-	httputil.RespondWithCreated(c, gin.H{"user": user, "expires_at": sess.ExpiresAt})
+	// Return the safe user shape, not the raw *database.User, which would leak
+	// the bcrypt password hash (pen-test finding CRIT-2).
+	httputil.RespondWithCreated(c, gin.H{"user": buildAuthUserResponse(user), "expires_at": sess.ExpiresAt})
 }
 
 // DeactivateUser handles POST /api/v1/users/:id/deactivate — soft-deactivates a user.
@@ -181,7 +183,8 @@ func (h *UserHandler) DeactivateUser(c *gin.Context) {
 		httputil.InternalError(c, "deactivate user", err)
 		return
 	}
-	httputil.RespondWithOK(c, gin.H{"user": user})
+	// Safe shape only — never echo the raw *database.User (leaks password hash, CRIT-2).
+	httputil.RespondWithOK(c, gin.H{"user": buildAuthUserResponse(user)})
 }
 
 // ReactivateUser handles POST /api/v1/users/:id/reactivate — reactivates a locked user.
@@ -202,7 +205,8 @@ func (h *UserHandler) ReactivateUser(c *gin.Context) {
 		httputil.InternalError(c, "reactivate user", err)
 		return
 	}
-	httputil.RespondWithOK(c, gin.H{"user": user})
+	// Safe shape only — never echo the raw *database.User (leaks password hash, CRIT-2).
+	httputil.RespondWithOK(c, gin.H{"user": buildAuthUserResponse(user)})
 }
 
 // ResetPassword handles POST /api/v1/users/:id/reset-password — generates a
