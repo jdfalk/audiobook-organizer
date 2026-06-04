@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.65.0 -->
+<!-- version: 8.66.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-06-04 -->
 
@@ -267,7 +267,7 @@ Copy + pause-on-hover in #1182.
 
 ### Post-Task Hygiene (per CLAUDE.md)
 
-- [ ] **PD-4** Update `CHANGELOG.md` with full MAYDEPLOY A–I sweep +
+- [ ] **PD-4** [hold] Update `CHANGELOG.md` with full MAYDEPLOY A–I sweep +
   Wave 4 PRs (#1182–#1191), prepending to current section, not
   overwriting.
 
@@ -748,7 +748,7 @@ incrementally:
 
 ### Phase 12: Log Injection (255 alerts, NEW category post-audit)
 
-- [ ] **SEC-AUDIT-12** Investigate and remediate log-injection alerts
+- [ ] **SEC-AUDIT-12** [hold] Investigate and remediate log-injection alerts
   - **Priority:** P1 (review required; likely low-risk false positives)
   - **Alerts:** 255 open (go/log-injection, error severity)
   - **Affected areas:** dedup, server handlers, system services (all files logging bookID, userInput, or paths)
@@ -847,7 +847,7 @@ Bot-tasks: `docs/superpowers/bot-tasks/2026-04-30-*.md`.
 - [x] **FE-7** `fix/frontend-remove-console-logs` — Done: no `console.log` calls in production source; only `console.error`/`console.warn` in catch blocks (appropriate).
 - [x] **FE-8** `fix/frontend-error-boundaries` — Done: `ErrorBoundary` wraps every page route in `App.tsx`.
 - [x] **FE-9** `fix/frontend-localstorage-keys` — Done: `STORAGE_KEYS` constants exported from `lib/storageKeys.ts`.
-- [ ] **FE-10** `chore/frontend-coverage-thresholds` — Add Vitest coverage thresholds
+- [ ] **FE-10** [hold] `chore/frontend-coverage-thresholds` — Add Vitest coverage thresholds
   → [`2026-04-30-fe-10-coverage.md`](docs/superpowers/bot-tasks/2026-04-30-fe-10-coverage.md)
 
 ### STRUCT — Structural Refactors — 2026-05-01
