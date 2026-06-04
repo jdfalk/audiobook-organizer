@@ -436,10 +436,32 @@ func (s *Server) runBulkMetadataFetchForBookIDs(
 		done[r.BookID] = true
 	}
 
-	allAuthors, _ := store.GetAllAuthors()
-	authorByID := make(map[int]string, len(allAuthors))
-	for _, a := range allAuthors {
-		authorByID[a.ID] = a.Name
+	usePerBookAuthorLookup := len(bookIDs) < 100
+	authorByID := make(map[int]string)
+	if usePerBookAuthorLookup {
+		authorByID = make(map[int]string, len(bookIDs))
+	} else {
+		if allAuthors, err := store.GetAllAuthors(); err == nil {
+			authorByID = make(map[int]string, len(allAuthors))
+			for _, a := range allAuthors {
+				authorByID[a.ID] = a.Name
+			}
+		}
+	}
+	lookupAuthorName := func(authorID *int) string {
+		if authorID == nil {
+			return ""
+		}
+		if name, ok := authorByID[*authorID]; ok {
+			return name
+		}
+		if usePerBookAuthorLookup {
+			if author, err := store.GetAuthorByID(*authorID); err == nil && author != nil {
+				authorByID[*authorID] = author.Name
+				return author.Name
+			}
+		}
+		return ""
 	}
 
 	type bookWork struct {
@@ -467,10 +489,7 @@ func (s *Server) runBulkMetadataFetchForBookIDs(
 				continue
 			}
 		}
-		author := ""
-		if b.AuthorID != nil {
-			author = authorByID[*b.AuthorID]
-		}
+		author := lookupAuthorName(b.AuthorID)
 		work = append(work, bookWork{book: *b, authorName: author})
 	}
 
