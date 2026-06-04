@@ -124,3 +124,39 @@ func TestSubprocess_EnvSocketPathConstant(t *testing.T) {
 		t.Logf("note: %s is set in env: %s", registry.EnvSocketPath, os.Getenv(registry.EnvSocketPath))
 	}
 }
+
+// TestSubprocessRoundtrip verifies the parent->child handshake completes
+// successfully end-to-end when the child speaks the wire protocol.
+func TestSubprocessRoundtrip(t *testing.T) {
+	prev := registry.ChildEnvFunc
+	registry.ChildEnvFunc = func() []string {
+		return []string{testChildEnvVar + "=1"}
+	}
+	t.Cleanup(func() { registry.ChildEnvFunc = prev })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	store := newFakeStore()
+	r := registry.New(store, slog.Default(), 1, nil)
+
+	def := makeValidDef("test.subprocess-roundtrip")
+	def.Isolate = true
+	// Parent never calls def.Run for Isolate=true ops; the stub child
+	// short-circuits to ok=true without invoking it.
+	def.Run = func(_ context.Context, _ json.RawMessage, _ registry.Reporter) error {
+		t.Error("def.Run should not be called in-process for Isolate=true")
+		return nil
+	}
+	if err := r.RegisterOp(def); err != nil {
+		t.Fatalf("RegisterOp: %v", err)
+	}
+	r.Start(ctx)
+
+	opID, err := r.EnqueueOp(ctx, "test.subprocess-roundtrip", nil)
+	if err != nil {
+		t.Fatalf("EnqueueOp: %v", err)
+	}
+
+	awaitStatus(t, store, opID, "completed", 15*time.Second)
+}
