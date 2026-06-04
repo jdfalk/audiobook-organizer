@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.61.0 -->
+<!-- version: 8.62.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-06-04 -->
 
@@ -47,7 +47,7 @@ PR `feat/fingerprint-wholefile` (Step 1 + 2) ships:
 - [x] Run `acoustid.reset-all` on prod (retires AQAAAA-poisoned segs) — done 2026-05-31, 28,538 fps cleared
 - [x] Book-level parallelism (PR #1217, FP_PARALLEL_WORKERS=16) — merged + deployed 2026-05-31
 - [x] Run `fingerprint-rescan` on prod — **COMPLETE** 2026-05-31 15:50 UTC-4; 2h45m3s; fp=275,318 skip=0 ineligible=23,826 fail=4,882 (98.3% eligible-file coverage; failures are corrupt/too-short files, unrecoverable)
-- [ ] Verify dedup stops showing 14K false-positive 100% matches
+- [ ] [hold] Verify dedup stops showing 14K false-positive 100% matches
 - [ ] Verify book-sig coverage % shows up for partial books
 
 ---
@@ -66,7 +66,7 @@ PR `feat/fingerprint-wholefile` (Step 1 + 2) ships:
 - [x] Verified fixed by Security run `26727789014`.
 
 **Follow-up PRs (not in this PR):**
-- [ ] **Step 3 — LSH index for whole-file similarity.** Add
+- [ ] **Step 3 — LSH index for whole-file similarity.** [hold] Add
   `fpidx:<subfp>:<bookfile_id>` secondary index in PebbleStore;
   replace dedup's full-scan fuzzy match with candidate-set + Hamming
   refine. Bench target: <100ms per query at 15K files. Includes
@@ -260,7 +260,7 @@ Copy + pause-on-hover in #1182.
 - [ ] **MAYDEPLOY-I1** — Verify D1 (`DEDUP_CHROMEM_LAZY`) and D2
   (`NewDB()`) shipped behaviour matches design. Needs live prod
   observation (`/system/status`, heap dump).
-- [ ] **MAYDEPLOY-I6** — Re-run heap audit with live pprof from prod
+- [ ] **MAYDEPLOY-I6** [hold] — Re-run heap audit with live pprof from prod
   via `pprof_endpoint`. Replace structural estimates in
   `docs/perf-audit-2026-05-29-heap-breakdown.md` with measured bytes.
   Target: baseline ~18 GB → ~10 GB.
