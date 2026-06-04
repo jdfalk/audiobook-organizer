@@ -1,5 +1,5 @@
 # file: .github/workflows/nightly-burndown.yml
-# version: 1.5.0
+# version: 1.6.0
 name: Nightly burndown
 
 on:
@@ -19,7 +19,7 @@ on:
 
 jobs:
   burndown:
-    uses: jdfalk/ghcommon/.github/workflows/reusable-burndown.yml@89b4db45c9b91bf4a7669c867187785c289d3e56
+    uses: jdfalk/ghcommon/.github/workflows/reusable-burndown.yml@2d3ef226277f250cff9f018e1dd874c2f9245e8f
     with:
       mode: ${{ inputs.mode || 'draft-only' }}
     secrets: inherit
