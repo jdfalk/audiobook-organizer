@@ -18,6 +18,7 @@ PROTECTED_FILES=(
     ".api-token"
     ".claude/.api-token"
     ".bootstrap-token"
+    ".readonly-key"
 )
 
 STAGED_FILES=$(git diff --cached --name-only)
@@ -48,6 +49,7 @@ echo "Protected files and directories:"
 echo "  - .api-token (shared API key across worktrees)"
 echo "  - .claude/.api-token (same as above)"
 echo "  - .bootstrap-token (temporary bootstrap auth token)"
+echo "  - .readonly-key (startup read-only API key)"
 echo "  - .claude/.credentials/ (per-worktree username/password)"
 echo ""
 echo "The hook will prevent these from being committed."
