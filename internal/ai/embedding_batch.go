@@ -1,5 +1,5 @@
 // file: internal/ai/embedding_batch.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a7b8c9d0-e1f2-3456-7890-abcdef012345
 // last-edited: 2026-05-17
 
@@ -74,6 +74,7 @@ func (c *EmbeddingClient) CreateEmbeddingBatch(ctx context.Context, items []Embe
 		CompletionWindow: openai.BatchNewParamsCompletionWindow24h,
 		Metadata: map[string]string{
 			"project": "audiobook-organizer",
+			"service": "ao-embedding-batch",
 			"type":    "embed_async",
 		},
 	})

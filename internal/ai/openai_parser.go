@@ -1,5 +1,5 @@
 // file: internal/ai/openai_parser.go
-// version: 13.3.0
+// version: 13.4.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package ai
@@ -174,6 +174,7 @@ Set confidence based on clarity of the filename structure.`
 		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 			OfJSONObject: &jsonObjectFormat,
 		},
+		User: openai.String("ao-metadata"),
 	})
 
 	if err != nil {
@@ -277,6 +278,7 @@ Set confidence based on how much context was available and how unambiguous it is
 		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 			OfJSONObject: &jsonObjectFormat,
 		},
+		User: openai.String("ao-metadata"),
 	})
 
 	if err != nil {
@@ -368,6 +370,7 @@ Set confidence based on clarity of the filename structure.`
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 				OfJSONObject: &jsonObjectFormat,
 			},
+			User: openai.String("ao-metadata"),
 		})
 
 		if err != nil {
@@ -435,6 +438,7 @@ Set confidence based on how clearly the text is readable on the cover.`
 		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 			OfJSONObject: &jsonObjectFormat,
 		},
+		User: openai.String("ao-metadata"),
 	})
 
 	if err != nil {
@@ -583,6 +587,7 @@ The roles object fields are all optional — only include roles that are detecte
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 				OfJSONObject: &jsonObjectFormat,
 			},
+			User: openai.String("ao-metadata"),
 		})
 
 		if err != nil {
@@ -717,6 +722,7 @@ The roles object fields are all optional — only include roles that are detecte
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 				OfJSONObject: &jsonObjectFormat,
 			},
+			User: openai.String("ao-metadata"),
 		})
 
 		if err != nil {

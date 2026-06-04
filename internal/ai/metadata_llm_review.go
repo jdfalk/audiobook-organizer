@@ -1,5 +1,5 @@
 // file: internal/ai/metadata_llm_review.go
-// version: 3.1.0
+// version: 3.2.0
 // guid: e4f92b17-3c8a-4d65-a1f3-9b2e07d84c61
 
 package ai
@@ -161,6 +161,7 @@ Include one score per input candidate, using the same index as the input.`
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 				OfJSONObject: &jsonObjectFormat,
 			},
+			User: openai.String("ao-metadata-review"),
 		})
 
 		if err != nil {
