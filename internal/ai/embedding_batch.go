@@ -14,7 +14,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/v3"
 )
 
 // EmbedBatchItem is one book→text pair submitted for async embedding.
