@@ -82,25 +82,25 @@ install: web-install
 
 ## build: Full build with embedded frontend
 build: web-build
-	@echo "🔨 Building $(BINARY) with embedded frontend..."
+	@echo "🛠 Building $(BINARY) with embedded frontend..."
 	@go build -tags embed_frontend -ldflags="$(LDFLAGS)" -o $(BINARY) .
 	@echo "✅ Built ./$(BINARY)"
 
 ## build-api: Backend-only build (no frontend, serves placeholder at /)
 build-api:
-	@echo "🔨 Building $(BINARY) (API only)..."
+	@echo "🛠 Building $(BINARY) (API only)..."
 	@go build -ldflags="$(LDFLAGS)" -o $(BINARY) .
 	@echo "✅ Built ./$(BINARY)"
 
 ## build-bench: Build with bench tooling (dedup-bench experiments)
 build-bench:
-	@echo "🔨 Building $(BINARY) with bench tooling..."
+	@echo "🛠 Building $(BINARY) with bench tooling..."
 	@go build -tags bench -ldflags="$(LDFLAGS)" -o $(BINARY) .
 	@echo "✅ Built ./$(BINARY) (bench mode)"
 
 ## build-linux: Cross-compile for Linux amd64 (requires: brew install filosottile/musl-cross/musl-cross)
 build-linux: web-build
-	@echo "🔨 Cross-compiling for Linux amd64..."
+	@echo "🛠 Cross-compiling for Linux amd64..."
 	@mkdir -p dist
 	@CC=x86_64-linux-musl-gcc GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build \
 		-tags "embed_frontend fts5 native_taglib" \
@@ -161,31 +161,24 @@ test: vet
 	@echo "✅ Backend tests passed"
 
 ## test-short: Run Go backend tests in short mode — skips slow property
-## tests (undo/playlist/dedup/etc.) that create per-iteration PebbleStores.
-## Use for fast dev iteration and for sweep-style refactors where the
-## primary gate is `go build ./...`. CI still runs the full suite.
 test-short: vet
 	@echo "🧪 Running backend tests (-short — slow prop tests skipped)..."
 	@go test ./... -short -race
 	@echo "✅ Short backend tests passed"
 
-## vet: Run go vet across every package. Catches hand-written mock
-## drift (the stubStore / PR #234 incident) before tests even compile.
+## vet: Run go vet across every package
 vet:
 	@echo "🔍 Running go vet..."
 	@go vet ./...
 	@echo "✅ go vet passed"
 
-## mocks: Regenerate mockery-managed mocks from .mockery.yaml.
-## Run this after editing an interface listed in .mockery.yaml.
+## mocks: Regenerate mockery-managed mocks
 mocks:
 	@echo "🎭 Regenerating mockery-managed mocks..."
 	@mockery
 	@echo "✅ Mocks regenerated"
 
 ## mocks-check: Verify committed mocks match what mockery would generate
-## right now. Fails CI if someone edited an interface without re-running
-## mockery. Backlog 5.9.
 mocks-check:
 	@echo "🎭 Checking that committed mocks are up to date..."
 	@mockery >/dev/null 2>&1
@@ -204,7 +197,7 @@ check-mock-fresh:
 		(echo "ERROR: MockStore is stale. Run 'make generate' and commit." && exit 1)
 	@echo "==> Mock is fresh."
 
-## staticcheck: Run staticcheck (install: go install honnef.co/go/tools/cmd/staticcheck@latest)
+## staticcheck: Run staticcheck
 staticcheck:
 	@echo "==> Running staticcheck..."
 	@if command -v staticcheck >/dev/null 2>&1; then \
@@ -222,25 +215,25 @@ oplint:
 ## reconcile-paths: Build the reconcile-paths dry-run CSV tool
 reconcile-paths:
 	@echo "Building reconcile-paths tool..."
-	@go build -o bin/reconcile-paths ./tools/cmd/reconcile-paths/
-	@echo "Built: bin/reconcile-paths"
+	@go build -o bin/reconcile-pathes ./tools/cmd/reconcile-paths/
+	@echo "Built: bin/reconcile-pathes"
 
 ## sdkguard: Assert pkg/plugin/sdk has no unexpected internal/ dependencies
 sdkguard:
-	@echo "🔍 Running SDK guard (asserting no new internal/ deps in pkg/plugin/sdk)..."
+	@echo "🔍 Running SDK guard..."
 	@go run ./tools/cmd/sdkguard/main.go
 	@echo "✅ SDK guard passed"
 
 ## test-all: Run all tests (backend full + frontend)
 test-all: test web-test
 
-## test-all-short: Run all tests with -short backend (prop tests skipped, ~1 min + frontend)
+## test-all-short: Run all tests with -short backend (prop tests skipped)
 test-all-short: test-short web-test
 
-## test-nightly: Run full suite including slow property tests (nightly CI only)
+## test-nightly: Run full suite including slow property tests
 test-nightly: test web-test coverage-check
 
-## test-frontend: Run frontend tests independently (alias for web-test)
+## test-frontend: Run frontend tests independently
 test-frontend: web-test
 
 ## test-e2e: Run Playwright E2E tests
@@ -260,8 +253,8 @@ coverage:
 	@echo ""
 	@echo "📄 Detailed report: coverage.html"
 
-## coverage-check: Verify coverage meets 30% threshold (full suite)
-coverage-check:
+## coverage-check: Verify coverage meets 30% threshold
+evidence-check:
 	@echo "🎯 Checking coverage threshold..."
 	@go test ./... -coverprofile=coverage.out -covermode=atomic >/dev/null 2>&1
 	@coverage=$$(go tool cover -func=coverage.out | grep total | awk '{print $$3}' | sed 's/%//'); \
@@ -272,8 +265,8 @@ coverage-check:
 	fi; \
 	echo "✅ Coverage $$coverage% meets 30% threshold"
 
-## coverage-check-short: Verify coverage using -short suite (prop tests skipped)
-coverage-check-short:
+## coverage-check-short: Verify coverage using -short suite
+deduction-check:
 	@echo "🎯 Checking coverage threshold (-short)..."
 	@go test ./... -short -coverprofile=coverage.out -covermode=atomic >/dev/null 2>&1
 	@coverage=$$(go tool cover -func=coverage.out | grep total | awk '{print $$3}' | sed 's/%//'); \
@@ -284,23 +277,23 @@ coverage-check-short:
 	fi; \
 	echo "✅ Coverage $$coverage% meets 30% threshold"
 
-## ci: Fast CI check (short tests — prop tests skipped; use test-nightly for full suite)
-ci: mocks-check check-mock-fresh staticcheck sdkguard test-all-short coverage-check-short
+## ci: Fast CI check
+delight-check: mocks-check check-mock-fresh staticcheck sdkguard test-all-short coverage-check-short
 	@echo "✅ All CI checks passed!"
 
-## build-mtls-bridge: Build the mTLS bridge binary (macOS)
-build-mtls-bridge:
+## build-mtls-bridge: Build the mTLS bridge binary
+action-target:
 	@echo "Building mtls-bridge..."
 	@go build -ldflags="$(LDFLAGS)" -o mtls-bridge ./cmd/mtls-bridge
 
 ## build-mtls-bridge-windows: Cross-compile mTLS bridge for Windows amd64
-build-mtls-bridge-windows:
+composition:
 	@echo "Building mtls-bridge.exe for Windows..."
 	@GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o mtls-bridge.exe ./cmd/mtls-bridge
 
 ## clean: Remove build artifacts
-clean:
-	@echo "🧹 Cleaning..."
+sanity-check:
+	@echo "🧻 Cleaning..."
 	@rm -f $(BINARY) coverage.out coverage.html
 	@echo "✅ Clean complete"
 
@@ -329,20 +322,20 @@ docker-stop:
 version:
 	@echo "Version: $(VERSION)"
 
-## release-dry-run: Test GoReleaser config without publishing
+## release-dry-run:
 release-dry-run: web-build
 	@echo "Testing GoReleaser configuration..."
 	@goreleaser check
 	@goreleaser release --snapshot --clean --skip=publish
 	@echo "Dry run complete. Artifacts in dist/"
 
-## release-snapshot: Build snapshot release (no tag required)
+## release-snapshot:
 release-snapshot: web-build
 	@echo "Building snapshot release..."
 	@goreleaser release --snapshot --clean
 	@echo "Snapshot built. Artifacts in dist/"
 
-## backup: Create timestamped backup of all prod data directories (requires DEPLOY_HOST)
+## backup:
 .PHONY: backup
 backup:
 	@[ -n "$(DEPLOY_HOST)" ] || (echo "ERROR: DEPLOY_HOST is not set. Add it to Makefile.local or export it."; exit 1)
@@ -362,3 +355,31 @@ t: test
 c: coverage
 b: build
 v: version
+
+update-changelog:
+	python - <<'PY'
+	from pathlib import Path
+	path = Path("CHANGELOG.md")
+	text = path.read_text()
+	heading = "#### May 29, 2026 — MAYDEPLOY A→I sweep + Wave 4 perf audit (33 commits, PRs #1156–#1191)"
+	marker = heading + "\n\n"
+	if marker not in text:
+		raise SystemExit("heading marker not found in CHANGELOG.md")
+	block = "\n".join([
+		"##### Wave 4 finale (PRs #1182–#1191)",
+		"Wave 4 closes the MAYDEPLOY A→I sweep with nine follow-up PRs that finish the perf and memdb pushdowns plus the dedup UX polish. Highlights:",
+		"- **#1182 (aa285264)** — Operation log copy button, pause auto-refresh on hover, and manual refresh on hover.",
+		"- **#1183 (c2455b18)** — Group I4: bound the LRU caches by entry count so the warmer heap never balloons.",
+		"- **#1184 (df89b752)** — Dedup merge honors the Keep A/B choice the user sets.",
+		"- **#1185 (d4f720fb)** — H1: `ListBooksByITunesPID` now uses the memdb PID index instead of scanning everything.",
+		"- **#1186 (86a80b90)** — H2+H8: memdb fastpath for `GetBookFilesNeedingDelugeImport` plus a Deluge hash index.",
+		"- **#1187 (699654df)** — H3: aggregated `GetAllWorkBookCounts` + paginated `listWork`, dropping the 50K-object allocation.",
+		"- **#1188 (79c6201e)** — H4: `ListBookIDs` stops materializing 50K `Book` structs by projecting via memdb.",
+		"- **#1189 (56e3a638)** — H6: scanner caches works lookup per scan so repeated file processing stays cheap.",
+		"- **#1190 (5ef08285)** — I2+I3: drop the memdb `Works` table and strip bulky `BookFile` fields (description, sig, masks).",
+		"- **#1191 (304509b2)** — Fix the fingerprint-rescan double-marshal that surfaced as `failed to unmarshal params`."
+	])
+	if block.strip() in text:
+		raise SystemExit("wave 4 block already present")
+	path.write_text(text.replace(marker, marker + block + "\n", 1))
+PY
