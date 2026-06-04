@@ -33,6 +33,41 @@ and `rebase-stale` so every new dispatch lands on a clean base.
 `on-hold` testing tasks that were hitting the 90-iteration cap were closed and
 replaced with single-file issues, each completable in ~20 agent iterations.
 
+### Security
+
+#### June 4, 2026 — Pen-test remediation (10 of 11 findings)
+
+Fixes from the 2026-06-04 local penetration test. 10 findings remediated +
+1 documented as accepted risk; 1 (MED-5) deferred pending repro.
+
+- **CRIT-1** — Stopped logging raw bootstrap (`abbs_`) and read-only (`abk_`)
+  tokens at INFO. The bootstrap token is read from the `0600` `.bootstrap-token`
+  file; the read-only key is written to a new `0600` `.readonly-key` file. Logs
+  now carry only the file path + expiry. The `server-bootstrap` skill reads the
+  token file over SSH instead of scraping journalctl.
+- **CRIT-2** — Stopped returning the raw `*database.User` (with `password_hash`)
+  from accept-invite, deactivate, and reactivate handlers; all return the safe
+  `AuthUserResponse` shape now.
+- **HIGH-1** — pprof debug listener is opt-in via `ABK_PPROF_ADDR` even in the
+  `pprof` build (was an auto-started unauthenticated listener on :6060).
+- **HIGH-2** — `router.SetTrustedProxies(nil)` so `X-Forwarded-For` can no
+  longer spoof `ClientIP` and bypass per-IP rate limiters.
+- **HIGH-3** — Replaced the weaponizable hard account lockout with a per-IP
+  failed-login throttle (keyed on attacker source) plus a soft per-account
+  progressive delay that never hard-locks the victim.
+- **HIGH-4a** — Bootstrap exchange returns 401 (not 500) once the one-time token
+  is consumed, via a new `database.ErrSettingNotFound` sentinel.
+- **HIGH-4b** — SQLite RBAC fails loudly (`ErrSQLiteRBACUnsupported`) instead of
+  silently granting empty permissions / 403-ing every request.
+- **MED-2** — `/api/events` SSE stream gated behind auth (cookie-based; the
+  browser UI is unaffected).
+- **MED-3** — Route-level `PermSettingsManage` guard on `POST /maintenance/jobs/:job_id`.
+- **MED-4** — Invite `created_by_user_id` populated for the audit trail.
+- **MED-1** — `/metrics` left unauthenticated by maintainer decision (accepted
+  risk); rationale documented in code.
+- **MED-5** — accept-invite EOF under HTTP/2 — deferred (see TODO.md); could not
+  reproduce statically and it is not accept-invite-specific in code.
+
 ### Fixed
 
 #### June 4, 2026 — Test-suite goroutine-leak races (CI was red on `-race`)

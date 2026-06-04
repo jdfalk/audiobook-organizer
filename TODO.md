@@ -51,6 +51,14 @@ future agent) can scan the entire workspace in one page.
 
 ---
 
+## 🔐 Security (pen-test 2026-06-04)
+
+10 of 11 findings fixed in `fix/security-pentest-findings` (see CHANGELOG). One deferred:
+
+- [ ] **MED-5** `POST /api/v1/auth/accept-invite` reportedly returns `{"error":"EOF"}` under HTTP/2 (curl default); `--http1.1` works. Deferred from the remediation PR — needs empirical repro before a fix. **Findings so far:** the route shares the exact middleware chain (apiRateLimiter + MaxRequestBodySize) and `ShouldBindJSON` pattern as `/auth/login` and `/auth/bootstrap`, which the pen test exercised fine under HTTP/2 — so it is **not accept-invite-specific in code**. Leading hypotheses to check during repro: (1) the tester POSTed to `/api/auth/accept-invite` (non-`v1`) and hit the `/api/*`→`/api/v1/*` 301 redirect, where curl drops the POST body; (2) an h2 stream-reset when the handler returns before the body is fully read. Repro needs the TLS+HTTP/2 server up with a valid invite token seeded. If confirmed as the redirect case, the fix is client-side (use the `/api/v1/` path) or making the redirect 307/308 to preserve the body.
+
+---
+
 ## 🎯 Whole-file fingerprint migration (started May 30, 2026)
 
 PR `feat/fingerprint-wholefile` (Step 1 + 2) ships:
