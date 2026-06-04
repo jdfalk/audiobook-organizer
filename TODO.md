@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.58.0 -->
+<!-- version: 8.59.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-31 -->
+<!-- last-edited: 2026-06-04 -->
 
 # Project TODO
 
@@ -19,12 +19,18 @@ future agent) can scan the entire workspace in one page.
 
 ---
 
-## 🎯 Current Status — May 24, 2026
+## 🎯 Current Status — June 4, 2026
 
 **Library:** ~50K books (~10,891 organized + ~39K iTunes-imported) / 8,837 authors / 21,668 series
-**Production:** PebbleDB primary + ChaiDB SQL (write-through sync active); Linux, HTTPS at `172.16.2.30:8484`
-**Latest activity:** Security workflow repaired (CodeQL JS via ghcommon `build-mode: none`; Go dependency submission with `GOEXPERIMENT=jsonv2`); whole-file fingerprint rescan completed; Chai SQL migration (Phases 1–4 complete, Tasks 3.2–3.4 landed); N+1 query elimination; cache warm-up memory fix; authors/series caching
-**In flight:** Chai SQL Phase 5+ (remaining read migrations), SEC-AUDIT-11 (CodeQL bulk dismiss), FE-10 (Vitest coverage thresholds)
+**Production:** PebbleDB primary; Linux, HTTPS at `172.16.2.30:8484`
+**Latest activity:** Handler extraction complete (PRs #1232/#1233/#1236/#1238 — 12 handler domains off `*Server` into `internal/server/handlers/`); Registry.Shutdown nil-cancel race fixed (PR #1239); triage-poll migrated to Responses API + gpt-5.3-codex
+**In flight:** SEC-AUDIT-11 (CodeQL bulk dismiss), FE-10 (Vitest coverage thresholds), fingerprint identification pipeline (#6–#30 in burndown-tasks)
+
+---
+
+## 📚 Project Documentation (TODO — not yet done)
+
+- [ ] **DOCS-1** Write comprehensive system documentation for `jdfalk/audiobook-organizer` into `docs/` — full process graphs, architecture diagrams, data flow, component inventory, operations runbooks, incident history. Target: ≥9 files, ≥7 Mermaid diagrams (flowchart, sequence, state machine, Gantt). Model after `jdfalk/burndown-tasks/docs/` (PR #73, 2216 lines). Invoke as a dedicated documentation subagent: "write full process graphs, literally all the documentation you can write. The more graphs and charts the better."
 
 ---
 
