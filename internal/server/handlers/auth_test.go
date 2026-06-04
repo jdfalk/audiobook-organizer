@@ -169,29 +169,92 @@ func TestAuthHandler_Login_UserNotFound(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
-func TestAuthHandler_Login_LockedOut(t *testing.T) {
+// HIGH-3: a single source IP that exhausts its failed-login budget is throttled
+// with 429. Uses unknown usernames so the throttle trips without any per-account
+// soft delay (sleep-free, deterministic). The throttle check precedes the store
+// lookup, so the over-budget request makes no GetUserByUsername call.
+func TestAuthHandler_Login_PerIPThrottle(t *testing.T) {
+	store := handlersmocks.NewMockAuthStore(t)
+	store.EXPECT().GetUserByUsername("ghost").Return(nil, nil).Times(15)
+
+	h := handlers.NewAuthHandler(store, true)
+
+	for i := 0; i < 15; i++ {
+		c, w := newAuthCtx("POST", "/auth/login", map[string]any{
+			"username": "ghost", "password": "wrong",
+		})
+		h.Login(c)
+		assert.Equal(t, http.StatusUnauthorized, w.Code, "attempt %d should be 401", i+1)
+	}
+
+	// 16th request from the same IP is over budget → 429, no store call.
+	c, w := newAuthCtx("POST", "/auth/login", map[string]any{
+		"username": "ghost", "password": "wrong",
+	})
+	h.Login(c)
+	assert.Equal(t, http.StatusTooManyRequests, w.Code)
+}
+
+// HIGH-3: the per-account counter is soft — it slows failed attempts but never
+// hard-locks, so the legitimate user with the correct password still gets in
+// after crossing the soft threshold (a third party can no longer lock them out).
+func TestAuthHandler_Login_SoftCounterDoesNotLock(t *testing.T) {
 	hash := testBcryptHash(t, "password123")
 	user := &database.User{ID: "user-1", Username: "alice", PasswordHash: hash}
 
 	store := handlersmocks.NewMockAuthStore(t)
-	// 10 failed attempts + 1 lockout check (11 GetUserByUsername calls)
-	store.EXPECT().GetUserByUsername("alice").Return(user, nil).Times(11)
+	store.EXPECT().GetUserByUsername("alice").Return(user, nil).Times(8) // 7 wrong + 1 right
+	store.EXPECT().CreateSession("user-1", mock.Anything, mock.Anything, mock.Anything).
+		Return(&database.Session{ID: "sess-1", ExpiresAt: time.Now().Add(time.Hour)}, nil)
 
 	h := handlers.NewAuthHandler(store, true)
 
-	for i := 0; i < 10; i++ {
+	// 7 wrong attempts (past the soft threshold of 5) — adds small delays, no lock.
+	for i := 0; i < 7; i++ {
 		c, _ := newAuthCtx("POST", "/auth/login", map[string]any{
 			"username": "alice", "password": "wrong",
 		})
 		h.Login(c)
 	}
 
+	// Correct password still succeeds — the account is not hard-locked.
 	c, w := newAuthCtx("POST", "/auth/login", map[string]any{
 		"username": "alice", "password": "password123",
 	})
 	h.Login(c)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
 
-	assert.Equal(t, http.StatusTooManyRequests, w.Code)
+// HIGH-3: throttling is keyed on the source IP, so an attacker hammering from
+// one IP cannot lock out a victim logging in from a different IP.
+func TestAuthHandler_Login_DifferentIPNotThrottled(t *testing.T) {
+	hash := testBcryptHash(t, "password123")
+	user := &database.User{ID: "user-1", Username: "alice", PasswordHash: hash}
+
+	store := handlersmocks.NewMockAuthStore(t)
+	store.EXPECT().GetUserByUsername("ghost").Return(nil, nil).Times(15) // attacker probes
+	store.EXPECT().GetUserByUsername("alice").Return(user, nil).Times(1) // victim
+	store.EXPECT().CreateSession("user-1", mock.Anything, mock.Anything, mock.Anything).
+		Return(&database.Session{ID: "sess-1", ExpiresAt: time.Now().Add(time.Hour)}, nil)
+
+	h := handlers.NewAuthHandler(store, true)
+
+	// Attacker burns the budget from one IP (unknown user → sleep-free).
+	for i := 0; i < 15; i++ {
+		c, _ := newAuthCtx("POST", "/auth/login", map[string]any{
+			"username": "ghost", "password": "wrong",
+		})
+		c.Request.RemoteAddr = "203.0.113.9:40000"
+		h.Login(c)
+	}
+
+	// Victim logs in from a different IP with the correct password — not throttled.
+	c, w := newAuthCtx("POST", "/auth/login", map[string]any{
+		"username": "alice", "password": "password123",
+	})
+	c.Request.RemoteAddr = "198.51.100.7:50000"
+	h.Login(c)
+	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestAuthHandler_SetupInitialAdmin_AlreadyExists(t *testing.T) {
