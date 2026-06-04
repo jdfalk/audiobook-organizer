@@ -1,7 +1,7 @@
 // file: internal/server/auth_lockout_test.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 8c4e5f3a-9b5a-4a70-b8c5-3d7e0f1b9a99
-// last-edited: 2026-06-01
+// last-edited: 2026-06-04
 
 package server_test
 
@@ -79,16 +79,21 @@ func loginRequest(t *testing.T, h *handlers.AuthHandler, password string) int {
 	return w.Code
 }
 
-func TestLockout_TriggersAfterMaxFailures(t *testing.T) {
-	store := &stubAuthStore{user: newTestUser(t)}
+// HIGH-3: there is no longer a hard per-account lockout (which a third party
+// could weaponize against a known user). Instead a per-IP throttle trips after
+// the source IP exhausts its failure budget. Uses an unknown user so the soft
+// per-account delay never fires (sleep-free, deterministic), and all attempts
+// here share the same source IP.
+func TestThrottle_TriggersAfterMaxIPFailures(t *testing.T) {
+	store := &stubAuthStore{user: nil}
 	h := handlers.NewAuthHandler(store, true)
 
-	const maxFailedLogins = 10
+	const maxFailedPerIP = 15
 
-	for i := 0; i < maxFailedLogins; i++ {
+	for i := 0; i < maxFailedPerIP; i++ {
 		code := loginRequest(t, h, "wrongpassword")
 		if code == http.StatusTooManyRequests {
-			t.Fatalf("locked out after only %d attempts, want %d", i, maxFailedLogins)
+			t.Fatalf("throttled after only %d attempts, want %d", i, maxFailedPerIP)
 		}
 		if code != http.StatusUnauthorized {
 			t.Fatalf("attempt %d: got %d, want 401", i+1, code)
@@ -97,7 +102,7 @@ func TestLockout_TriggersAfterMaxFailures(t *testing.T) {
 
 	code := loginRequest(t, h, "wrongpassword")
 	if code != http.StatusTooManyRequests {
-		t.Errorf("after %d failures: got %d, want 429", maxFailedLogins, code)
+		t.Errorf("after %d failures from one IP: got %d, want 429", maxFailedPerIP, code)
 	}
 }
 
