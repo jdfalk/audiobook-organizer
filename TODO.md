@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.62.0 -->
+<!-- version: 8.63.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-06-04 -->
 
@@ -252,10 +252,10 @@ Copy + pause-on-hover in #1182.
   `stripChapterPrefix(track.Name)` as the album key when Album tag is
   empty. Needs design pass — risks merging unrelated tracks that
   share a stripped prefix.
-- [ ] **MAYDEPLOY-H5** — metadata-fetch-ids: when `len(bookIDs) < 100`,
+- [ ] **MAYDEPLOY-H5** [hold] — metadata-fetch-ids: when `len(bookIDs) < 100`,
   use per-book `GetAuthorByID` instead of materialising 8.8K authors.
   Low priority; defer until profiler shows actual cost.
-- [ ] **MAYDEPLOY-H7** — Cache `isProtectedPath` / `GetAllImportPaths`
+- [ ] **MAYDEPLOY-H7** [hold] — Cache `isProtectedPath` / `GetAllImportPaths`
   with TTL or mutation invalidation. Low priority (~10 rows).
 - [ ] **MAYDEPLOY-I1** — Verify D1 (`DEDUP_CHROMEM_LAZY`) and D2
   (`NewDB()`) shipped behaviour matches design. Needs live prod
@@ -411,7 +411,7 @@ landed in this audit PR; the rest need a new store method or memdb index.
   memory. Acceptance: `GET /api/v1/metadata/candidates?include_unfetched=true`
   uses <10MB peak vs ~50MB today.
 
-- [ ] **H5** `internal/server/metadata_handlers.go:1283` — metadata-fetch-ids
+- [ ] **H5** [hold] `internal/server/metadata_handlers.go:1283` — metadata-fetch-ids
   op always materializes 8.8K authors even for 20-book requests. When
   `len(bookIDs) < 100`, use per-book `GetAuthorByID`. Low priority.
 
@@ -420,7 +420,7 @@ landed in this audit PR; the rest need a new store method or memdb index.
   `map[normalizedTitle+authorID]workID` once at scan start, invalidate
   on new-work creation. Cuts scan time on 50K-work corpus by ~10x.
 
-- [ ] **H7** `internal/server/server_middleware.go:90` and
+- [ ] **H7** [hold] `internal/server/server_middleware.go:90` and
   `internal/audiobooks/helpers.go:248` — `isProtectedPath` calls
   `GetAllImportPaths()` per-file. Cache with TTL or invalidate on
   import-path mutation. Low priority (~10 rows total).
