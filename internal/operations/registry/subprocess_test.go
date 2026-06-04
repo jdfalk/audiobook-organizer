@@ -15,10 +15,14 @@ package registry_test
 // integration test for child mode re-execs the test binary itself.
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"log/slog"
+	"net"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -122,5 +126,96 @@ func TestSubprocess_EnvSocketPathConstant(t *testing.T) {
 	if os.Getenv(registry.EnvSocketPath) != "" {
 		// This is OK in integration scenarios; just log.
 		t.Logf("note: %s is set in env: %s", registry.EnvSocketPath, os.Getenv(registry.EnvSocketPath))
+	}
+}
+
+// TestSubprocess_ChildHandshakeRoundtrip verifies the unix-socket handshake
+// and result roundtrip when re-execing the test binary as a child process.
+func TestSubprocess_ChildHandshakeRoundtrip(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	sockDir := t.TempDir()
+	socketPath := filepath.Join(sockDir, "uos.sock")
+	ln, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("listen unix socket: %v", err)
+	}
+	defer ln.Close()
+
+	if unixLn, ok := ln.(*net.UnixListener); ok {
+		_ = unixLn.SetDeadline(time.Now().Add(5 * time.Second))
+	}
+
+	connCh := make(chan net.Conn, 1)
+	acceptErrCh := make(chan error, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			acceptErrCh <- err
+			return
+		}
+		connCh <- conn
+	}()
+
+	cmd := exec.CommandContext(ctx, os.Args[0], "--operation-runner", "test.handshake-roundtrip")
+	cmd.Env = append(os.Environ(), registry.EnvSocketPath+"="+socketPath, testChildEnvVar+"=1")
+	t.Cleanup(func() {
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+	})
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start child: %v", err)
+	}
+
+	var conn net.Conn
+	select {
+	case conn = <-connCh:
+	case err := <-acceptErrCh:
+		t.Fatalf("accept child connection: %v", err)
+	case <-ctx.Done():
+		t.Fatalf("timeout waiting for child connection: %v", ctx.Err())
+	}
+	defer conn.Close()
+
+	hs := struct {
+		DefID  string          `json:"def_id"`
+		Params json.RawMessage `json:"params"`
+	}{
+		DefID:  "test.subprocess-handshake",
+		Params: json.RawMessage(`{"payload":"test"}`),
+	}
+	payload, err := json.Marshal(hs)
+	if err != nil {
+		t.Fatalf("marshal handshake: %v", err)
+	}
+	payload = append(payload, '\n')
+	if _, err := conn.Write(payload); err != nil {
+		t.Fatalf("write handshake: %v", err)
+	}
+
+	scanner := bufio.NewScanner(conn)
+	if !scanner.Scan() {
+		if err := scanner.Err(); err != nil {
+			t.Fatalf("scan result: %v", err)
+		}
+		t.Fatalf("child closed connection without sending result")
+	}
+
+	var res struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(scanner.Bytes(), &res); err != nil {
+		t.Fatalf("unmarshal child result: %v", err)
+	}
+	if !res.OK {
+		t.Fatalf("child reported failure: %s", res.Error)
+	}
+
+	if err := cmd.Wait(); err != nil {
+		t.Fatalf("child exit error: %v", err)
 	}
 }
