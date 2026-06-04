@@ -302,6 +302,17 @@ func (s *Server) publishEvent(ctx context.Context, event plugin.Event) {
 func NewServer(store database.Store) *Server {
 	router := gin.New() // don't use gin.Default() — we add our own middleware
 
+	// Trust no proxy headers. Without this, Gin honors X-Forwarded-For from any
+	// source, so c.ClientIP() can be spoofed — bypassing every per-IP rate
+	// limiter (bootstrap, login throttle) by cycling the header (pen-test
+	// finding HIGH-2). This deployment is direct-connect (TLS terminated by the
+	// service, no reverse proxy). If a trusted reverse proxy is ever added,
+	// replace nil with its CIDR allowlist, e.g.
+	// router.SetTrustedProxies([]string{"10.0.0.0/8"}).
+	if err := router.SetTrustedProxies(nil); err != nil {
+		slog.Warn("failed to disable trusted proxies", "err", err)
+	}
+
 	// Custom logger that skips noisy polling endpoints
 	// (UOS-14: /operations/active removed; SkipPaths entry removed)
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{
