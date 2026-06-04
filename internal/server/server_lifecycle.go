@@ -861,7 +861,19 @@ func (s *Server) setupRoutes() {
 	s.router.GET("/api/v1/health", func(c *gin.Context) { s.systemHandler.HealthCheck(c) })
 
 	// Real-time events (SSE). Same pre-middleware-ordering rationale as /health.
-	s.router.GET("/api/events", func(c *gin.Context) { s.systemHandler.HandleEvents(c) })
+	// Gated behind auth (pen-test finding MED-2): the stream carries library
+	// events (imports, scan progress, metadata updates) that anonymous clients
+	// must not see. A browser EventSource automatically sends the HttpOnly
+	// session cookie, so the logged-in UI keeps working; anonymous clients get
+	// 401. When auth is disabled (local single-user mode) this is a no-op, like
+	// the rest of the API. Built inline because the shared authMiddleware is
+	// constructed later in this function (and routes registered before a
+	// router.Use() don't inherit it).
+	eventsAuth := gin.HandlerFunc(func(c *gin.Context) { c.Next() })
+	if config.AppConfig.EnableAuth {
+		eventsAuth = servermiddleware.RequireAuth(s.Store())
+	}
+	s.router.GET("/api/events", eventsAuth, func(c *gin.Context) { s.systemHandler.HandleEvents(c) })
 
 	// Public temp-login consumer at the root so URLs are short and
 	// browser-friendly. Validates the token, deletes it (single-use),
