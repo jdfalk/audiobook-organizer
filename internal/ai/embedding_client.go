@@ -1,5 +1,5 @@
 // file: internal/ai/embedding_client.go
-// version: 1.3.1
+// version: 1.4.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package ai
@@ -201,6 +201,7 @@ func (c *EmbeddingClient) embedBatchRaw(ctx context.Context, texts []string) ([]
 				OfArrayOfStrings: texts,
 			},
 			Model: openai.EmbeddingModel(c.model),
+			User:  openai.String("ao-embeddings"),
 		})
 		if err != nil {
 			lastErr = fmt.Errorf("embedding attempt %d: %w", attempt+1, err)

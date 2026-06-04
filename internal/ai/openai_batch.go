@@ -1,5 +1,5 @@
 // file: internal/ai/openai_batch.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: b3c4d5e6-f7a8-9b0c-1d2e-3f4a5b6c7d8e
 
 package ai
@@ -22,6 +22,7 @@ import (
 func batchMetadata(batchType string) shared.Metadata {
 	return shared.Metadata{
 		"project": "audiobook-organizer",
+		"service": "ao-metadata-batch",
 		"type":    batchType,
 	}
 }

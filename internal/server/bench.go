@@ -1,5 +1,5 @@
 // file: internal/server/bench.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 5e6f7a8b-9c0d-1234-ef01-555555555555
 
 //go:build bench
@@ -598,6 +598,9 @@ func benchSubmitBatchJob(ctx context.Context, client *openai.Client, tc benchTes
 		InputFileID:      file.ID,
 		Endpoint:         openai.BatchNewParamsEndpointV1ChatCompletions,
 		CompletionWindow: openai.BatchNewParamsCompletionWindow24h,
+		Metadata: map[string]string{
+			"service": "ao-bench",
+		},
 	})
 	if err != nil {
 		return nil, err
