@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.64.0 -->
+<!-- version: 8.65.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-06-04 -->
 
@@ -48,7 +48,7 @@ PR `feat/fingerprint-wholefile` (Step 1 + 2) ships:
 - [x] Book-level parallelism (PR #1217, FP_PARALLEL_WORKERS=16) — merged + deployed 2026-05-31
 - [x] Run `fingerprint-rescan` on prod — **COMPLETE** 2026-05-31 15:50 UTC-4; 2h45m3s; fp=275,318 skip=0 ineligible=23,826 fail=4,882 (98.3% eligible-file coverage; failures are corrupt/too-short files, unrecoverable)
 - [ ] [hold] Verify dedup stops showing 14K false-positive 100% matches
-- [ ] Verify book-sig coverage % shows up for partial books
+- [ ] [hold] Verify book-sig coverage % shows up for partial books
 
 ---
 
