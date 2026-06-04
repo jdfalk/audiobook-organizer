@@ -13,7 +13,7 @@ Exchanges a one-time bootstrap token for a full-privilege API key.
 }
 ```
 
-- **token** (required): Bootstrap token from journalctl logs (format: `abbs_*`)
+- **token** (required): Bootstrap token read from the `.bootstrap-token` file (format: `abbs_*`; no longer logged in plaintext — pen-test CRIT-1)
 - **key_name** (optional): Human-readable name for the API key. Defaults to "Bootstrap recovery key".
 
 ### Response (200 OK)
@@ -91,12 +91,14 @@ Only one bootstrap token is valid at a time. To get a new token:
 
 ```bash
 sudo systemctl restart audiobook-organizer.service
-sudo journalctl -u audiobook-organizer.service -n 5
+# Wait ~90s for startup, then read the token from the 0600 file (it is no
+# longer logged in plaintext — pen-test CRIT-1):
+sudo cat /var/lib/audiobook-organizer/.bootstrap-token
 ```
 
-Look for:
+The journalctl line now only confirms *when* a token was written and where:
 ```
-msg="Emergency access token" raw=abbs_...
+msg="Emergency access token written" token_file=/var/lib/audiobook-organizer/.bootstrap-token expires_at=...
 msg="Token expires in 10 minutes..."
 ```
 
