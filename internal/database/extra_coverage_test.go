@@ -587,24 +587,24 @@ func TestSQLiteStore_UserAndRoleStubs(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, users)
 
-	// Role stubs
+	// Role methods fail loudly on SQLite (HIGH-4b): every one returns
+	// ErrSQLiteRBACUnsupported rather than silent success, so RBAC can no longer
+	// appear to work while granting no permissions.
 	_, err = s.GetRoleByID("id-1")
-	require.NoError(t, err)
+	assert.ErrorIs(t, err, ErrSQLiteRBACUnsupported)
 
 	_, err = s.GetRoleByName("admin")
-	require.NoError(t, err)
+	assert.ErrorIs(t, err, ErrSQLiteRBACUnsupported)
 
-	roles, err := s.ListRoles()
-	require.NoError(t, err)
-	assert.Nil(t, roles)
+	_, err = s.ListRoles()
+	assert.ErrorIs(t, err, ErrSQLiteRBACUnsupported)
 
 	role := &Role{ID: "r1", Name: "editor"}
-	createdRole, err := s.CreateRole(role)
-	require.NoError(t, err)
-	assert.Equal(t, role, createdRole)
+	_, err = s.CreateRole(role)
+	assert.ErrorIs(t, err, ErrSQLiteRBACUnsupported)
 
-	require.NoError(t, s.UpdateRole(role))
-	require.NoError(t, s.DeleteRole("r1"))
+	assert.ErrorIs(t, s.UpdateRole(role), ErrSQLiteRBACUnsupported)
+	assert.ErrorIs(t, s.DeleteRole("r1"), ErrSQLiteRBACUnsupported)
 }
 
 func TestSQLiteStore_UserPositionAndBookStateStubs(t *testing.T) {
