@@ -849,7 +849,14 @@ func (s *Server) itunesSvcGuard(fn gin.HandlerFunc) gin.HandlerFunc {
 
 func (s *Server) setupRoutes() {
 	// Health check endpoint
-	// Prometheus metrics endpoint (standard path)
+	// Prometheus metrics endpoint (standard path).
+	//
+	// Intentionally left UNAUTHENTICATED (pen-test finding MED-1, accepted risk).
+	// Prometheus scrapers don't send auth/cookies, and the data here is
+	// operational metrics (counts, cache/op rates) — not user data or secrets.
+	// This matches common practice (e.g. internal metrics endpoints). If this
+	// server is ever exposed to an untrusted network, restrict /metrics at the
+	// network layer (firewall / separate internal port) rather than app auth.
 	s.router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	// Health check endpoint (both paths for compatibility). Registered here on
