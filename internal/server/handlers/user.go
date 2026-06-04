@@ -1,5 +1,5 @@
 // file: internal/server/handlers/user.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: b2c3d4e5-f6a7-8901-bcde-ef0123456789
 // last-edited: 2026-06-04
 
@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/falkcorp/audiobook-organizer/internal/database"
 	"github.com/falkcorp/audiobook-organizer/internal/httputil"
+	servermiddleware "github.com/falkcorp/audiobook-organizer/internal/server/middleware"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -90,6 +91,11 @@ func (h *UserHandler) CreateInvite(c *gin.Context) {
 		Username:  strings.TrimSpace(req.Username),
 		RoleID:    req.RoleID,
 		ExpiresAt: time.Now().Add(expiresIn),
+	}
+	// Record which admin created the invite for the audit trail (pen-test
+	// finding MED-4). Empty only if the route somehow ran without an authed user.
+	if creator, ok := servermiddleware.CurrentUser(c); ok && creator != nil {
+		invite.CreatedByUserID = creator.ID
 	}
 	created, err := h.store.CreateInvite(invite)
 	if err != nil {
