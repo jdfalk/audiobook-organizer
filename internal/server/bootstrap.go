@@ -1,7 +1,7 @@
 // file: internal/server/bootstrap.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: 3e7c9a12-4f6b-4d8e-b5a1-2c8f0e3d9b47
-// last-edited: 2026-05-31
+// last-edited: 2026-06-04
 
 package server
 
@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -145,6 +146,12 @@ func ConsumeBootstrapToken(store SettingsReadWriter, dataDir, plaintext string) 
 
 	setting, err := store.GetSetting(bootstrapTokenKey)
 	if err != nil {
+		// A consumed (deleted) token surfaces as ErrSettingNotFound — that's an
+		// invalid token, not a server fault, so the caller should return 401 not
+		// 500 (pen-test finding HIGH-4a).
+		if errors.Is(err, database.ErrSettingNotFound) {
+			return false, nil
+		}
 		return false, fmt.Errorf("bootstrap: read token hash: %w", err)
 	}
 	if setting == nil || setting.Value == "" {
