@@ -16,10 +16,10 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/option"
-	"github.com/openai/openai-go/packages/param"
-	"github.com/openai/openai-go/shared"
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/openai/openai-go/v3/shared"
 )
 
 // ParsedMetadata represents structured metadata extracted from a filename
