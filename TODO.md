@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.59.0 -->
+<!-- version: 8.60.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-06-04 -->
 
@@ -30,7 +30,7 @@ future agent) can scan the entire workspace in one page.
 
 ## 📚 Project Documentation (TODO — not yet done)
 
-- [ ] **DOCS-1** Write comprehensive system documentation for `jdfalk/audiobook-organizer` into `docs/` — full process graphs, architecture diagrams, data flow, component inventory, operations runbooks, incident history. Target: ≥9 files, ≥7 Mermaid diagrams (flowchart, sequence, state machine, Gantt). Model after `jdfalk/burndown-tasks/docs/` (PR #73, 2216 lines). Invoke as a dedicated documentation subagent: "write full process graphs, literally all the documentation you can write. The more graphs and charts the better."
+- [ ] **DOCS-1** [hold] Write comprehensive system documentation for `jdfalk/audiobook-organizer` into `docs/` — full process graphs, architecture diagrams, data flow, component inventory, operations runbooks, incident history. Target: ≥9 files, ≥7 Mermaid diagrams (flowchart, sequence, state machine, Gantt). Model after `jdfalk/burndown-tasks/docs/` (PR #73, 2216 lines). Invoke as a dedicated documentation subagent: "write full process graphs, literally all the documentation you can write. The more graphs and charts the better."
 
 ---
 
