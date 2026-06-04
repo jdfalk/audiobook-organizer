@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.60.0 -->
+<!-- version: 8.61.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-06-04 -->
 
@@ -107,7 +107,7 @@ because the subprocess child-mode handler is never wired into
   that re-execs the test binary as child and verifies handshake +
   result roundtrip via the unix socket. (`testscript` or
   `os/exec.Cmd` with `os.Args[0]`.)
-- [ ] **A3** After A1+A2 pass in CI, revert `Isolate: false` on the
+- [ ] **A3** [hold] After A1+A2 pass in CI, revert `Isolate: false` on the
   7 ops (PR #1155). Restore the original comments. Verify
   acoustid.scan logs both parent "dispatched" AND child stdout
   routed through reporter.
@@ -226,7 +226,7 @@ Copy + pause-on-hover in #1182.
 
 ### Highest-priority remainders
 
-- [ ] **PD-1 / MAYDEPLOY-A revisit** — Subprocess isolation via parent-RPC
+- [ ] **PD-1 / MAYDEPLOY-A revisit** [hold] — Subprocess isolation via parent-RPC
   bridge. Current `Isolate: true` cannot work because PebbleDB is
   single-writer and the child cannot reopen the store
   (`resource temporarily unavailable` on second open). Two viable paths:
@@ -962,7 +962,7 @@ Implementation steps (in order):
 - [x] **DELUGE-2** `protectedPathCache` with TTL refresh + IsProtected() — PR #556
 - [x] **DELUGE-3** `importToLibrary`: reflink `src → library_path`, update DB, call `core.move_storage` if enabled (best-effort). Implemented in fleet branch `fleet/014-deluge-3-import-to-library` (PR #976). Bot-task: [`docs/superpowers/bot-tasks/2026-04-29-deluge-3-import-to-library.md`](docs/superpowers/bot-tasks/2026-04-29-deluge-3-import-to-library.md)
 - [ ] **`WriteTagsSafe`**: pre-flight guard wrapping all tag-write call sites; falls back to `os.Copy` on non-reflink FS
-- [ ] **Migrate all call sites** to `WriteTagsSafe` (bulk write-back, single-file write, cover embed)
+- [ ] **Migrate all call sites** [hold] to `WriteTagsSafe` (bulk write-back, single-file write, cover embed)
 - [x] **Discovery → Import UI**: "Import" button on discovered torrent calls the import flow — PR #562
 - [x] **UI**: "Imported from Deluge" badge on book detail; original path shown in Files tab audit row — PR #561
 - [x] **Config**: add `protected_paths []string` field; expose in Settings UI — PR #562
@@ -1212,7 +1212,7 @@ since it was last edited on 2026-04-11).
 - [ ] **4.7** Per-workload store evaluation: Pebble vs SQLite vs PostgreSQL vs Go-native NoSQL (**L** research)
 - [~] **4.8** Split the `database.Store` interface (ISP refactor) (**L**) — foundation + 3 proof-points shipped (#372, #376, #379, #380, #381, #382); ~38-file sweep + 18-file noop cleanup remain per [`docs/superpowers/plans/2026-04-17-store-iface-sweep.md`](docs/superpowers/plans/2026-04-17-store-iface-sweep.md)
 - [x] **4.9** Eliminate remaining package globals (DI Phase 2) (**M**) — 10 globals replaced with interface injection + Server fields (#386)
-- [ ] **4.10** Service-layer unit tests with mock stores (**L**) — leverage DI + ISP to unit-test AudiobookService, OrganizeService, MetadataFetchService, MergeService with MockStore; test error paths, edge cases, and business logic in isolation without HTTP or real DB
+- [ ] **4.10** [hold] Service-layer unit tests with mock stores (**L**) — leverage DI + ISP to unit-test AudiobookService, OrganizeService, MetadataFetchService, MergeService with MockStore; test error paths, edge cases, and business logic in isolation without HTTP or real DB
 - [x] **4.11** Split `internal/server` into sub-packages (**XL**) — all 8 PKG tasks completed
   - ✅ **PKG-1** `internal/audiobooks/` — audiobook service extracted (#663)
   - ✅ **PKG-2** `internal/aiscan/` — AI scan pipeline extracted (#656)
