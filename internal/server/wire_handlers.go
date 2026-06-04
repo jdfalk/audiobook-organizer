@@ -20,6 +20,7 @@ import (
 	entities "github.com/jdfalk/audiobook-organizer/internal/server/handlers/entities"
 	metadatahandler "github.com/jdfalk/audiobook-organizer/internal/server/handlers/metadata"
 	operations "github.com/jdfalk/audiobook-organizer/internal/server/handlers/operations"
+	plexhandler "github.com/jdfalk/audiobook-organizer/internal/server/handlers/plex"
 	system "github.com/jdfalk/audiobook-organizer/internal/server/handlers/system"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
 	"github.com/jdfalk/audiobook-organizer/internal/undo"
@@ -58,7 +59,7 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 		authProtected.DELETE("/api-keys/:id", apiKeyH.Revoke)
 	}
 
-	// ── Build split-book candidate store ─────────────────────────────────────
+	// ── Build split-book candidate store ─────────────────────────────────────────────
 	var splitBookCands handlers.SplitBookCandidateStore
 	if s.embeddingStore != nil {
 		if db := s.embeddingStore.PebbleDB(); db != nil {
@@ -66,7 +67,7 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 		}
 	}
 
-	// ── Instantiate Phase 2 handlers ─────────────────────────────────────────
+	// ── Instantiate Phase 2 handlers ───────────────────────────────────────────────
 	cacheH := handlers.NewCacheHandler(s.metricsStore, s.Store())
 	activityH := handlers.NewActivityHandler(s.activityService, s.Store())
 	readingH := handlers.NewReadingHandler(s.Store())
@@ -541,7 +542,7 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 		s.publishEvent,
 	)
 
-	// ── Metadata domain (handlers/metadata) ──────────────────────────────────
+	// ── Metadata domain (handlers/metadata) ─────────────────────────────────────────
 	// The 19 metadata HTTP handlers (batch-update / validate / export / import,
 	// external search, per-book fetch / search / apply / mark-no-match / revert,
 	// metadata-rejections, cow-versions(+prune), write-back, bulk fetch + bulk
@@ -595,11 +596,11 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 		s.publishEvent,
 	)
 
-	// ── Public cache routes (no auth) ────────────────────────────────────────
+	// ── Public cache routes (no auth) ──────────────────────────────────────────────
 	api.GET("/cache/stats", cacheH.HandleCacheStats)
 	api.GET("/cache/stats/history", cacheH.HandleCacheStatsHistory)
 
-	// ── Protected routes ─────────────────────────────────────────────────────
+	// ── Protected routes ───────────────────────────────────────────────────────────
 
 	// Activity log
 	protected.GET("/activity", s.perm(auth.PermLibraryView), activityH.ListActivity)
@@ -961,5 +962,17 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 	{
 		adminOnly.GET("/cache/stats/keys", cacheH.HandleCacheKeysIntrospection)
 		adminOnly.POST("/admin/recompact-digests", activityH.RecompactDigests)
+	}
+
+	// ── Plex-style media browsing (minimal) ────────────────────────────────────────
+	plex := protected.Group("/plex")
+	{
+		p := plexhandler.New(s.Store(), "/api/v1/plex")
+		plex.GET("/identity", p.Identity)
+		plex.GET("/library/sections", p.ListSections)
+		plex.GET("/library/sections/:id/all", p.ListSectionAll)
+		plex.GET("/library/metadata/:id", p.GetMetadata)
+		plex.GET("/library/metadata/:id/thumb", p.GetThumb)
+		plex.GET("/library/metadata/:id/file", p.StreamFile)
 	}
 }
