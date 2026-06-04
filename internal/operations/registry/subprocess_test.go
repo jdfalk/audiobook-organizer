@@ -1,9 +1,68 @@
 // file: internal/operations/registry/subprocess_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f90
-// last-edited: 2026-05-06
+// last-edited: 2026-06-04
 
 package registry_test
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"net"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+)
+
+const testChildEnvVar = "TEST_SUBPROCESS_CHILD"
+
+func TestMain(m *testing.M) {
+	if os.Getenv(testChildEnvVar) == "1" && len(os.Args) >= 2 && os.Args[1] == "--operation-runner" {
+		runStubChild()
+		return
+	}
+	os.Exit(m.Run())
+}
+
+func runStubChild() {
+	socket := os.Getenv(registry.EnvSocketPath)
+	if socket == "" {
+		fmt.Fprintln(os.Stderr, "stub child: UOS_SOCKET not set")
+		os.Exit(2)
+	}
+	conn, err := net.Dial("unix", socket)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "stub child: dial: %v\n", err)
+		os.Exit(2)
+	}
+	defer conn.Close()
+
+	scanner := bufio.NewScanner(conn)
+	if !scanner.Scan() {
+		fmt.Fprintln(os.Stderr, "stub child: no handshake")
+		os.Exit(1)
+	}
+	var hs struct {
+		DefID  string          `json:"def_id"`
+		Params json.RawMessage `json:"params"`
+	}
+	if err := json.Unmarshal(scanner.Bytes(), &hs); err != nil {
+		fmt.Fprintf(os.Stderr, "stub child: bad handshake: %v\n", err)
+		os.Exit(1)
+	}
+
+	res := []byte("{\"ok\":true}\n")
+	if _, err := conn.Write(res); err != nil {
+		fmt.Fprintf(os.Stderr, "stub child: write result: %v\n", err)
+		os.Exit(1)
+	}
+	os.Exit(0)
+}
 
 // Subprocess tests verify:
 // 1. Child mode is detected via IsChildMode() when args contain --operation-runner.
@@ -13,17 +72,6 @@ package registry_test
 // Note: RunChildMode is not tested directly in unit tests because it requires
 // a fully initialised Registry with a real store and calls os.Exit(). The
 // integration test for child mode re-execs the test binary itself.
-
-import (
-	"context"
-	"encoding/json"
-	"log/slog"
-	"os"
-	"testing"
-	"time"
-
-	"github.com/jdfalk/audiobook-organizer/internal/operations/registry"
-)
 
 // TestIsChildMode_FalseWithNoArgs verifies IsChildMode is false in normal execution.
 func TestIsChildMode_FalseWithNoArgs(t *testing.T) {
@@ -123,4 +171,40 @@ func TestSubprocess_EnvSocketPathConstant(t *testing.T) {
 		// This is OK in integration scenarios; just log.
 		t.Logf("note: %s is set in env: %s", registry.EnvSocketPath, os.Getenv(registry.EnvSocketPath))
 	}
+}
+
+// TestSubprocessRoundtrip verifies the parent/child handshake over the unix
+// socket by re-execing THIS test binary as a child runner.
+func TestSubprocessRoundtrip(t *testing.T) {
+	prev := registry.ChildEnvFunc
+	registry.ChildEnvFunc = func() []string {
+		return []string{testChildEnvVar + "=1"}
+	}
+	t.Cleanup(func() { registry.ChildEnvFunc = prev })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	store := newFakeStore()
+	r := registry.New(store, slog.Default(), 1, nil)
+
+	def := makeValidDef("test.subprocess-roundtrip")
+	def.Isolate = true
+	// Parent never calls def.Run for Isolate=true ops; the stub child
+	// short-circuits to ok=true without invoking it.
+	def.Run = func(_ context.Context, _ json.RawMessage, _ registry.Reporter) error {
+		t.Error("def.Run should not be called in-process for Isolate=true")
+		return nil
+	}
+	if err := r.RegisterOp(def); err != nil {
+		t.Fatalf("RegisterOp: %v", err)
+	}
+	r.Start(ctx)
+
+	opID, err := r.EnqueueOp(ctx, "test.subprocess-roundtrip", nil)
+	if err != nil {
+		t.Fatalf("EnqueueOp: %v", err)
+	}
+
+	awaitStatus(t, store, opID, "completed", 15*time.Second)
 }
