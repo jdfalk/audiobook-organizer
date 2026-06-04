@@ -361,6 +361,13 @@ func (s *Server) handleBootstrap(c *gin.Context) {
 // one if none exists. Returns (user, generatedPassword, error); generatedPassword
 // is non-empty only when a new user was created.
 func findOrCreateAdminUser(store database.Store) (*database.User, string, error) {
+	// Fail loudly on backends without RBAC (SQLite). Proceeding silently would
+	// create an admin whose role never resolves, so every authenticated request
+	// would then 403 with no explanation (pen-test finding HIGH-4b).
+	if _, err := store.GetRoleByName("admin"); errors.Is(err, database.ErrSQLiteRBACUnsupported) {
+		return nil, "", fmt.Errorf("bootstrap requires a role-capable backend: %w", err)
+	}
+
 	users, err := store.ListUsers()
 	if err != nil {
 		return nil, "", err

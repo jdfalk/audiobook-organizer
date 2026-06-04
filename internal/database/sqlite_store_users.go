@@ -1,19 +1,29 @@
 // file: internal/database/sqlite_store_users.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: c3d4e5f6-a7b8-9012-cdef-g34567890123
-// last-edited: 2026-05-01
+// last-edited: 2026-06-04
 
 package database
 
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	ulid "github.com/oklog/ulid/v2"
 )
+
+// ErrSQLiteRBACUnsupported is returned by every SQLiteStore role method. The
+// SQLite backend has no roles schema, so role-based access control cannot work
+// there. Previously these methods returned silent success / empty results,
+// which let bootstrap "succeed" while creating an admin whose role never
+// resolved — so every authenticated request then 403'd with no explanation
+// (pen-test finding HIGH-4b). Callers should branch on
+// errors.Is(err, ErrSQLiteRBACUnsupported) and direct operators to PebbleDB.
+var ErrSQLiteRBACUnsupported = errors.New("SQLite backend does not support RBAC; use PebbleDB for multi-user/role features")
 
 func (s *SQLiteStore) CreateUser(username, email, passwordHashAlgo, passwordHash string, roles []string, status string) (*User, error) {
 	id := ulid.Make().String()
@@ -164,33 +174,35 @@ func (s *SQLiteStore) CountUsers() (int, error) {
 
 // ---- Roles ----
 //
-// SQLite support for multi-user roles is a no-op. The SQLite backend
-// is deprecated for production use (PebbleDB is canonical); adding a
-// roles schema + migration there is tracked but not worth the cost.
-// Callers hitting SQLite get empty results and silent success.
+// SQLite has no roles schema. The SQLite backend is deprecated for production
+// use (PebbleDB is canonical) and adding a roles schema + migration there is
+// not worth the cost. Rather than silently succeed — which made RBAC appear to
+// work while granting no permissions (pen-test finding HIGH-4b) — every role
+// method now fails loudly with ErrSQLiteRBACUnsupported so callers (bootstrap,
+// role seeding, permission resolution) can surface a clear "use PebbleDB" error.
 
 func (s *SQLiteStore) GetRoleByID(id string) (*Role, error) {
-	return nil, nil
+	return nil, ErrSQLiteRBACUnsupported
 }
 
 func (s *SQLiteStore) GetRoleByName(name string) (*Role, error) {
-	return nil, nil
+	return nil, ErrSQLiteRBACUnsupported
 }
 
 func (s *SQLiteStore) ListRoles() ([]Role, error) {
-	return nil, nil
+	return nil, ErrSQLiteRBACUnsupported
 }
 
 func (s *SQLiteStore) CreateRole(role *Role) (*Role, error) {
-	return role, nil
+	return nil, ErrSQLiteRBACUnsupported
 }
 
 func (s *SQLiteStore) UpdateRole(role *Role) error {
-	return nil
+	return ErrSQLiteRBACUnsupported
 }
 
 func (s *SQLiteStore) DeleteRole(id string) error {
-	return nil
+	return ErrSQLiteRBACUnsupported
 }
 
 // ---- User positions + book state (SQLite no-op stubs, spec 3.6) ----
