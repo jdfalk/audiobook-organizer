@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.63.0 -->
+<!-- version: 8.64.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-06-04 -->
 
@@ -187,7 +187,7 @@ Structural audit (`docs/perf-audit-2026-05-29-heap-breakdown.md`)
 identifies these next-biggest-win targets at the ~18 GB post-strip
 baseline.
 
-- [ ] **I1** Verify MAYDEPLOY-D1 (`DEDUP_CHROMEM_LAZY`) and D2
+- [ ] **I1** [hold] Verify MAYDEPLOY-D1 (`DEDUP_CHROMEM_LAZY`) and D2
   (chromem persistence vs `NewDB()`) ship before any more memdb
   strips. Chromem is the largest remaining bucket (~6 GB live;
   3–6 GB savings projected).
@@ -257,7 +257,7 @@ Copy + pause-on-hover in #1182.
   Low priority; defer until profiler shows actual cost.
 - [ ] **MAYDEPLOY-H7** [hold] — Cache `isProtectedPath` / `GetAllImportPaths`
   with TTL or mutation invalidation. Low priority (~10 rows).
-- [ ] **MAYDEPLOY-I1** — Verify D1 (`DEDUP_CHROMEM_LAZY`) and D2
+- [ ] **MAYDEPLOY-I1** [hold] — Verify D1 (`DEDUP_CHROMEM_LAZY`) and D2
   (`NewDB()`) shipped behaviour matches design. Needs live prod
   observation (`/system/status`, heap dump).
 - [ ] **MAYDEPLOY-I6** [hold] — Re-run heap audit with live pprof from prod
