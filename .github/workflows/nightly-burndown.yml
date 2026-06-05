@@ -19,7 +19,7 @@ on:
 
 jobs:
   burndown:
-    uses: jdfalk/ghcommon/.github/workflows/reusable-burndown.yml@2b9f83e6f0b215e8a7e709e7df9f8aec293f01a7
+    uses: falkcorp/github-common/.github/workflows/reusable-burndown.yml@2b9f83e6f0b215e8a7e709e7df9f8aec293f01a7
     with:
       mode: ${{ inputs.mode || 'draft-only' }}
     secrets: inherit

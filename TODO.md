@@ -30,7 +30,7 @@ future agent) can scan the entire workspace in one page.
 
 ## 📚 Project Documentation (TODO — not yet done)
 
-- [ ] **DOCS-1** [hold] Write comprehensive system documentation for `jdfalk/audiobook-organizer` into `docs/` — full process graphs, architecture diagrams, data flow, component inventory, operations runbooks, incident history. Target: ≥9 files, ≥7 Mermaid diagrams (flowchart, sequence, state machine, Gantt). Model after `jdfalk/burndown-tasks/docs/` (PR #73, 2216 lines). Invoke as a dedicated documentation subagent: "write full process graphs, literally all the documentation you can write. The more graphs and charts the better."
+- [ ] **DOCS-1** [hold] Write comprehensive system documentation for `falkcorp/audiobook-organizer` into `docs/` — full process graphs, architecture diagrams, data flow, component inventory, operations runbooks, incident history. Target: ≥9 files, ≥7 Mermaid diagrams (flowchart, sequence, state machine, Gantt). Model after `falkcorp/burndown-tasks/docs/` (PR #73, 2216 lines). Invoke as a dedicated documentation subagent: "write full process graphs, literally all the documentation you can write. The more graphs and charts the better."
 
 ---
 
@@ -1454,7 +1454,7 @@ CI: disabled Docker in prerelease workflow (was exhausting 14GB GitHub runner di
 
 ### v0.206.0 release (2026-04-13)
 
-See [v0.206.0 release notes](https://github.com/jdfalk/audiobook-organizer/releases/tag/v0.206.0) for the full commit list. Highlights folded into §1, §3, §5, §7 above.
+See [v0.206.0 release notes](https://github.com/falkcorp/audiobook-organizer/releases/tag/v0.206.0) for the full commit list. Highlights folded into §1, §3, §5, §7 above.
 
 <details>
 <summary>Session 12-19 archive — click to expand</summary>

@@ -27,7 +27,7 @@ permissions:
 jobs:
   advanced-security:
     name: Advanced CodeQL Security
-    uses: jdfalk/ghcommon/.github/workflows/reusable-security.yml@main
+    uses: falkcorp/github-common/.github/workflows/reusable-security.yml@main
     with:
       languages: '["go", "javascript", "actions"]'
       skip-codeql: false
