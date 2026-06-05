@@ -1,10 +1,10 @@
-# file: .github/workflows/nightly-burndown.yml
-# version: 1.7.0
-name: Nightly burndown
+# file: .github/workflows/hard-burndown.yml
+# version: 1.0.0
+name: Hard burndown (failed-batch retry)
 
 on:
   schedule:
-    - cron: "0 8 * * *"
+    - cron: "0 10 * * 0"  # Sundays 10:00 UTC
   workflow_dispatch:
     inputs:
       mode:
@@ -22,4 +22,6 @@ jobs:
     uses: jdfalk/ghcommon/.github/workflows/reusable-burndown.yml@cc57f803033a5a77f1f87cbc0ed81ef79863a9e0
     with:
       mode: ${{ inputs.mode || 'draft-only' }}
+      task_filter: failed-batch
+      powerful_only: true
     secrets: inherit
