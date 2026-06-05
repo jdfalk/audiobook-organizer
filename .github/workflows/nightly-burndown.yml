@@ -19,7 +19,7 @@ on:
 
 jobs:
   burndown:
-    uses: falkcorp/github-common/.github/workflows/reusable-burndown.yml@bfb912c8e63e7f8e33df9c20c5c25c04083ec0b4 # v1.10.7
+    uses: falkcorp/github-common/.github/workflows/reusable-burndown.yml@bfb912c850effd1ae9aded26d14856a538d3e5fc # v1.10.7
     with:
       mode: ${{ inputs.mode || 'draft-only' }}
       hub_repo: falkcorp/burndown-tasks
