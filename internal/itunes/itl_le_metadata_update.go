@@ -1,5 +1,5 @@
 // file: internal/itunes/itl_le_metadata_update.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f01234567890
 //
 // Update track metadata (title, artist, album, genre, etc.) in LE-format
@@ -167,13 +167,15 @@ func UpdateMetadataLE(data []byte, updates []ITLMetadataUpdate) ([]byte, int) {
 			replacements[0x0C] = update.Composer
 		}
 
-		// Rebuild mhoh list: replace existing, track which were replaced
+		// Rebuild mhoh list: replace existing, track which were replaced.
+		// Use rewriteHohmLocationLE to preserve the original headerLen — setting
+		// headerLen = totalLen (as buildMhohLE did) corrupts the iTunes library.
 		replaced := make(map[uint32]bool)
 		var newMhohs bytes.Buffer
 		for _, existing := range existingMhohs {
 			if newVal, ok := replacements[existing.hohmType]; ok {
-				// Replace with new value
-				newMhohs.Write(buildMhohLE(existing.hohmType, newVal))
+				// Rewrite preserving the original headerLen.
+				newMhohs.Write(rewriteHohmLocationLE(existing.data, 0, len(existing.data), newVal))
 				replaced[existing.hohmType] = true
 			} else {
 				// Keep existing
