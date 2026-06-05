@@ -1,5 +1,5 @@
 // file: internal/ai/openai_parser.go
-// version: 13.4.0
+// version: 13.5.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package ai
@@ -170,7 +170,8 @@ Set confidence based on clarity of the filename structure.`
 		},
 		Model:               shared.ChatModel(p.filenameParseModel()), // filename parsing uses FilenameParseModel
 		MaxCompletionTokens: param.NewOpt[int64](500),
-		PromptCacheKey:      param.NewOpt("audiobook-filename-parser-v1"),
+		PromptCacheKey:       param.NewOpt("audiobook-filename-parser-v1"),
+		PromptCacheRetention: openai.ChatCompletionNewParamsPromptCacheRetention24h,
 		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 			OfJSONObject: &jsonObjectFormat,
 		},
@@ -274,7 +275,8 @@ Set confidence based on how much context was available and how unambiguous it is
 		},
 		Model:               shared.ChatModel(p.filenameParseModel()), // audiobook context parsing uses FilenameParseModel
 		MaxCompletionTokens: param.NewOpt[int64](500),
-		PromptCacheKey:      param.NewOpt("audiobook-context-parser-v1"),
+		PromptCacheKey:       param.NewOpt("audiobook-context-parser-v1"),
+		PromptCacheRetention: openai.ChatCompletionNewParamsPromptCacheRetention24h,
 		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 			OfJSONObject: &jsonObjectFormat,
 		},
@@ -366,7 +368,8 @@ Set confidence based on clarity of the filename structure.`
 			},
 			Model:               shared.ChatModel(p.filenameParseModel()), // batch filename parsing uses FilenameParseModel
 			MaxCompletionTokens: param.NewOpt[int64](2000),
-			PromptCacheKey:      param.NewOpt("audiobook-batch-parser-v1"),
+			PromptCacheKey:       param.NewOpt("audiobook-batch-parser-v1"),
+			PromptCacheRetention: openai.ChatCompletionNewParamsPromptCacheRetention24h,
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 				OfJSONObject: &jsonObjectFormat,
 			},
@@ -433,8 +436,9 @@ Set confidence based on how clearly the text is readable on the cover.`
 			}),
 		},
 		Model:               shared.ChatModel(p.coverArtModel()), // cover art parsing uses CoverArtModel
-		PromptCacheKey:      param.NewOpt("audiobook-cover-parser-v1"),
-		MaxCompletionTokens: param.NewOpt[int64](500),
+		PromptCacheKey:       param.NewOpt("audiobook-cover-parser-v1"),
+		PromptCacheRetention: openai.ChatCompletionNewParamsPromptCacheRetention24h,
+		MaxCompletionTokens:  param.NewOpt[int64](500),
 		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 			OfJSONObject: &jsonObjectFormat,
 		},
@@ -583,7 +587,8 @@ The roles object fields are all optional — only include roles that are detecte
 			},
 			Model:               shared.ChatModel(p.metadataReviewModel()), // author dedup review uses MetadataReviewModel
 			MaxCompletionTokens: param.NewOpt[int64](32000),
-			PromptCacheKey:      param.NewOpt("audiobook-author-dedup-v4"),
+			PromptCacheKey:       param.NewOpt("audiobook-author-dedup-v4"),
+			PromptCacheRetention: openai.ChatCompletionNewParamsPromptCacheRetention24h,
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 				OfJSONObject: &jsonObjectFormat,
 			},
@@ -718,7 +723,8 @@ The roles object fields are all optional — only include roles that are detecte
 			},
 			Model:               shared.ChatModel(p.metadataReviewModel()), // author discovery review uses MetadataReviewModel
 			MaxCompletionTokens: param.NewOpt[int64](16000),
-			PromptCacheKey:      param.NewOpt("audiobook-author-discover-v4"),
+			PromptCacheKey:       param.NewOpt("audiobook-author-discover-v4"),
+			PromptCacheRetention: openai.ChatCompletionNewParamsPromptCacheRetention24h,
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 				OfJSONObject: &jsonObjectFormat,
 			},
