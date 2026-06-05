@@ -8,7 +8,7 @@ package handlers
 import (
 	"context"
 
-	"github.com/jdfalk/audiobook-organizer/internal/plugin"
+	"github.com/falkcorp/audiobook-organizer/internal/plugin"
 )
 
 // EventPublisher is the narrow interface for publishing domain events to the plugin bus.

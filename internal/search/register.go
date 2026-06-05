@@ -18,8 +18,8 @@ import (
 	"log/slog"
 	"path/filepath"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/serviceregistry"
 )
 
 // IndexService wraps a *BleveIndex with deferred-open semantics so

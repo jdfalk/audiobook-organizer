@@ -6,9 +6,9 @@ package work_test
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
-	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
-	"github.com/jdfalk/audiobook-organizer/internal/work"
+	"github.com/falkcorp/audiobook-organizer/internal/database/mocks"
+	"github.com/falkcorp/audiobook-organizer/internal/serviceregistry"
+	"github.com/falkcorp/audiobook-organizer/internal/work"
 )
 
 func TestWorkRegistration(t *testing.T) {

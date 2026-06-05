@@ -22,11 +22,11 @@
 package itunesservice
 
 import (
-	"github.com/jdfalk/audiobook-organizer/internal/readstatus"
+	"github.com/falkcorp/audiobook-organizer/internal/readstatus"
 	"log/slog"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 const adminUserID = "_local"

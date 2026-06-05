@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	dbmocks "github.com/jdfalk/audiobook-organizer/internal/database/mocks"
+	dbmocks "github.com/falkcorp/audiobook-organizer/internal/database/mocks"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -14,10 +14,10 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	dedupengine "github.com/jdfalk/audiobook-organizer/internal/dedup"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/httputil"
-	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	dedupengine "github.com/falkcorp/audiobook-organizer/internal/dedup"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/httputil"
+	opsregistry "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 )
 
 // SplitBookOpEnqueuer is the narrow interface required to trigger a

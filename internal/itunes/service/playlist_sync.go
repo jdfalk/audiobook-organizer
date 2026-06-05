@@ -25,8 +25,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/itunes"
 )
 
 // playlistSyncStore is the narrow slice of the service's Store that

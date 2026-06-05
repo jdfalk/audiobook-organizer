@@ -8,7 +8,7 @@ package aiscan
 import (
 	"encoding/json"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // CrossValidate compares groups scan suggestions against full scan suggestions.

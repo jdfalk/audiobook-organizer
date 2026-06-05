@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // UpdateService handles applying and persisting config changes.

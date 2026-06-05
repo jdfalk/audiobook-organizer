@@ -7,7 +7,7 @@ package sysinfo
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 func TestSystemService_CollectSystemStatus_Success(t *testing.T) {

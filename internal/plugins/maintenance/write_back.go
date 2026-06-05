@@ -12,7 +12,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // Hard rule: bulk-write-back = ResumeAsk (file writes; operator must confirm).

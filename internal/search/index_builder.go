@@ -16,7 +16,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // defaultDescriptionMaxChars caps the number of UTF-8 characters

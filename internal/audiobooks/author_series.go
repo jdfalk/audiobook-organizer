@@ -5,7 +5,7 @@
 package audiobooks
 
 import (
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // authorSeriesStore is the narrow slice of database.Store this service uses.

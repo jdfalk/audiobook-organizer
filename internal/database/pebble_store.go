@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"github.com/cockroachdb/pebble/v2"
-	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
-	"github.com/jdfalk/audiobook-organizer/internal/util"
+	"github.com/falkcorp/audiobook-organizer/internal/fingerprint"
+	"github.com/falkcorp/audiobook-organizer/internal/util"
 	ulid "github.com/oklog/ulid/v2"
 )
 

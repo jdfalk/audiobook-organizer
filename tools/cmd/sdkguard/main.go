@@ -43,17 +43,17 @@ const defaultModule = "./pkg/plugin/sdk/..."
 // To update this list: run `go list -deps ./pkg/plugin/sdk/... | grep '/internal/'`
 // and verify each entry is an approved backplane package, then add it here.
 var allowedInternals = map[string]bool{
-	"github.com/jdfalk/audiobook-organizer/internal/operations/registry": true,
-	"github.com/jdfalk/audiobook-organizer/internal/auth":                true,
-	"github.com/jdfalk/audiobook-organizer/internal/models":              true,
-	"github.com/jdfalk/audiobook-organizer/internal/database":            true,
-	"github.com/jdfalk/audiobook-organizer/internal/metrics":             true,
-	"github.com/jdfalk/audiobook-organizer/internal/util":                true,
-	"github.com/jdfalk/audiobook-organizer/internal/fingerprint":         true,
-	"github.com/jdfalk/audiobook-organizer/internal/matcher":             true,
+	"github.com/falkcorp/audiobook-organizer/internal/operations/registry": true,
+	"github.com/falkcorp/audiobook-organizer/internal/auth":                true,
+	"github.com/falkcorp/audiobook-organizer/internal/models":              true,
+	"github.com/falkcorp/audiobook-organizer/internal/database":            true,
+	"github.com/falkcorp/audiobook-organizer/internal/metrics":             true,
+	"github.com/falkcorp/audiobook-organizer/internal/util":                true,
+	"github.com/falkcorp/audiobook-organizer/internal/fingerprint":         true,
+	"github.com/falkcorp/audiobook-organizer/internal/matcher":             true,
 	// Added to allow pkg/plugin/sdk to reference the service registry backplane
 	// which is part of the SDK's supported stable surface.
-	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry": true,
+	"github.com/falkcorp/audiobook-organizer/internal/serviceregistry": true,
 }
 
 func main() {
@@ -95,7 +95,7 @@ func run(module string) ([]string, error) {
 		return nil, fmt.Errorf("go list -deps %s: %w\n%s", module, err, string(out))
 	}
 
-	const modulePrefix = "github.com/jdfalk/audiobook-organizer/internal/"
+	const modulePrefix = "github.com/falkcorp/audiobook-organizer/internal/"
 	var violations []string
 	for _, line := range strings.Split(string(out), "\n") {
 		pkg := strings.TrimSpace(line)

@@ -7,8 +7,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/serviceregistry"
 )
 
 // RegistryWrapper wraps *Registry to adapt its Start(ctx) (void) method to

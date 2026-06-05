@@ -18,9 +18,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/auth"
-	"github.com/jdfalk/audiobook-organizer/internal/httputil"
-	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/auth"
+	"github.com/falkcorp/audiobook-organizer/internal/httputil"
+	opsregistry "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 	ulid "github.com/oklog/ulid/v2"
 )
 

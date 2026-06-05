@@ -15,8 +15,8 @@ import (
 	"os"
 
 	"github.com/dhowden/tag"
-	"github.com/jdfalk/audiobook-organizer/internal/mediainfo"
-	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/falkcorp/audiobook-organizer/internal/mediainfo"
+	"github.com/falkcorp/audiobook-organizer/internal/metadata"
 )
 
 const (

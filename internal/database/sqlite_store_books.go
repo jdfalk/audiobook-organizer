@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
+	"github.com/falkcorp/audiobook-organizer/internal/fingerprint"
 	ulid "github.com/oklog/ulid/v2"
 )
 

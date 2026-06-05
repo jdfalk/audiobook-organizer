@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jdfalk/audiobook-organizer/cmd"
-	"github.com/jdfalk/audiobook-organizer/internal/operations/registry"
-	"github.com/jdfalk/audiobook-organizer/internal/server"
+	"github.com/falkcorp/audiobook-organizer/cmd"
+	"github.com/falkcorp/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/server"
 )
 
 // version is set at build time via -ldflags "-X main.version=..."

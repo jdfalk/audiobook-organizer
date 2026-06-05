@@ -11,8 +11,8 @@ package scanner
 import (
 	"context"
 
-	"github.com/jdfalk/audiobook-organizer/internal/activity"
-	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
+	"github.com/falkcorp/audiobook-organizer/internal/activity"
+	"github.com/falkcorp/audiobook-organizer/internal/serviceregistry"
 )
 
 // PostInit wires the activity writer used to batch per-book scan

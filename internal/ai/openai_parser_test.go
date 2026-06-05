@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
 )
 
 func TestNewOpenAIParser_Disabled(t *testing.T) {

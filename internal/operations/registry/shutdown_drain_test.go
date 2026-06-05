@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 )
 
 // TestShutdown_WaitsForOpGoroutineToExit is the regression test for the

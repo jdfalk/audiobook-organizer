@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/scanner"
+	"github.com/falkcorp/audiobook-organizer/internal/scanner"
 	"github.com/stretchr/testify/mock"
 )
 

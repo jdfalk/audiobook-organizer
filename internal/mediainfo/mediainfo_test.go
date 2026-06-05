@@ -886,7 +886,7 @@ func TestGetQualityTier_AboveBoundaries(t *testing.T) {
 
 func TestExtract_RealMP3File(t *testing.T) {
 	// Use actual test file from testdata
-	testFile := "/Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer/testdata/audio/librivox/odyssey_butler_librivox/odyssey_01_homer_butler_64kb.mp3"
+	testFile := "/Users/jdfalk/repos/github.com/falkcorp/audiobook-organizer/testdata/audio/librivox/odyssey_butler_librivox/odyssey_01_homer_butler_64kb.mp3"
 
 	if _, err := os.Stat(testFile); os.IsNotExist(err) {
 		t.Skip("Test file not found")

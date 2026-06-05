@@ -7,7 +7,7 @@ package metafetch
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // TestApplyMetadataCandidate_CategoryTags verifies that category tags from

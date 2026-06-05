@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 )
 
 // makeValidDef returns a valid OperationDef for use in tests.

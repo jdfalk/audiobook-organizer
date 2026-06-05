@@ -5,7 +5,7 @@
 package server
 
 import (
-	"github.com/jdfalk/audiobook-organizer/internal/remux"
+	"github.com/falkcorp/audiobook-organizer/internal/remux"
 )
 
 // remuxMalformedM4BFiles is a thin wrapper that delegates to the remux package.

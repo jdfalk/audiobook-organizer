@@ -8,7 +8,7 @@ package importer
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 func TestImportPathService_CreateImportPath_Success(t *testing.T) {

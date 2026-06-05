@@ -12,9 +12,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
-	"github.com/jdfalk/audiobook-organizer/internal/reconcile"
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	"github.com/falkcorp/audiobook-organizer/internal/operations"
+	"github.com/falkcorp/audiobook-organizer/internal/reconcile"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // Hard rule: reconcile-scan = ResumeDrop (per UOS-12 spec; a full file-hash

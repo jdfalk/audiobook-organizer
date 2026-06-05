@@ -9,7 +9,7 @@
 
 package metadata
 
-import "github.com/jdfalk/audiobook-organizer/internal/tagger"
+import "github.com/falkcorp/audiobook-organizer/internal/tagger"
 
 // packageSafeWriteDeps holds the optional Deluge-guard dependencies wired
 // in at startup by the server via SetSafeWriteDeps. Zero value = no guard

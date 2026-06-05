@@ -10,7 +10,7 @@ package quarantine
 import (
 	"context"
 
-	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
+	"github.com/falkcorp/audiobook-organizer/internal/serviceregistry"
 )
 
 // PostInit wires the iTunes write-back enqueuer (WriteBackEnqueuer

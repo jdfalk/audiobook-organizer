@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/security/pathvalidation"
+	"github.com/falkcorp/audiobook-organizer/internal/security/pathvalidation"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@
 package audiobooksmocks
 
 import (
-	"github.com/jdfalk/audiobook-organizer/internal/activity"
+	"github.com/falkcorp/audiobook-organizer/internal/activity"
 	mock "github.com/stretchr/testify/mock"
 )
 

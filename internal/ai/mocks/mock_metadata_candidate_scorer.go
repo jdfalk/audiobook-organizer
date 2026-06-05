@@ -7,7 +7,7 @@ package mocks
 import (
 	"context"
 
-	"github.com/jdfalk/audiobook-organizer/internal/ai"
+	"github.com/falkcorp/audiobook-organizer/internal/ai"
 	mock "github.com/stretchr/testify/mock"
 )
 

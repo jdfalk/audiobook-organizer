@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
 	ulid "github.com/oklog/ulid/v2"
 )
 

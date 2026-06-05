@@ -13,7 +13,7 @@
 //
 // NAME NOTE: this sub-package is named `deduphandler` (dir
 // internal/server/handlers/dedup/) so it does not clash with the dedup ENGINE
-// package github.com/jdfalk/audiobook-organizer/internal/dedup, which is
+// package github.com/falkcorp/audiobook-organizer/internal/dedup, which is
 // imported under its normal `dedup` name by handler.go (the DedupEngine
 // interface below is the narrow seam onto *dedup.Engine, but it does not need
 // the engine import here).
@@ -23,9 +23,9 @@ package deduphandler
 import (
 	"context"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/merge"
-	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/merge"
+	opsregistry "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 )
 
 // DedupStore is the narrow database.Store subset the dedup handlers require.

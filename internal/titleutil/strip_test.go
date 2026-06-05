@@ -7,7 +7,7 @@ package titleutil_test
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/titleutil"
+	"github.com/falkcorp/audiobook-organizer/internal/titleutil"
 )
 
 func TestStripChapterPrefix(t *testing.T) {

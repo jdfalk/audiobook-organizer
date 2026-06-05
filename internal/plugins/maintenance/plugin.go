@@ -5,7 +5,7 @@
 
 package maintenance
 
-import "github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+import "github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 
 // Plugin is the UOS maintenance plugin. It holds a reference to a ServerDeps
 // implementation (provided by *server.Server at startup) so that Run functions

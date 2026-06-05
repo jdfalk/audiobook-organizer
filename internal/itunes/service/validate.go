@@ -11,7 +11,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	"github.com/falkcorp/audiobook-organizer/internal/itunes"
 )
 
 // ErrLibraryNotFound is returned by Validate when the library file does not exist.

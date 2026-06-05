@@ -32,8 +32,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/fingerprint"
 )
 
 // DiscoveredTorrent is a Deluge torrent not yet tracked in the library.

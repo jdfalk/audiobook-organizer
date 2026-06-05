@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 )
 
 // TestIsChildMode_FalseWithNoArgs verifies IsChildMode is false in normal execution.

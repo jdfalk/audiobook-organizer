@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 func TestMetadataStateService_LoadMetadataState_Empty(t *testing.T) {

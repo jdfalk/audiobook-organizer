@@ -13,10 +13,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/acoustid"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	"github.com/falkcorp/audiobook-organizer/internal/acoustid"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/fingerprint"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // AcoustIDOnlineMinScore is the minimum top-result score we treat as a

@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // SweeperResult captures the outcome of a sweep operation.

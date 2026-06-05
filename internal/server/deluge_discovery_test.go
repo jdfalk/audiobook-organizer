@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/jdfalk/audiobook-organizer/internal/deluge"
+	"github.com/falkcorp/audiobook-organizer/internal/deluge"
 )
 
 // The shared download dir — every torrent has this as save_path.

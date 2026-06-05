@@ -11,7 +11,7 @@
 
 package server
 
-import opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+import opsregistry "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 
 // schedulerExtraOpParams carries the v1 operation ID from a legacy TriggerFn
 // into a UOS v2 Run func. Kept in the server package so server_lifecycle.go

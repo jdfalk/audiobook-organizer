@@ -7,7 +7,7 @@ package activity
 import (
 	"strings"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // batchableTypes is the set of type strings that route through the ActivityBatcher.

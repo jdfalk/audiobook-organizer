@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // drainAll collects up to n entries from ch, waiting at most timeout each time.

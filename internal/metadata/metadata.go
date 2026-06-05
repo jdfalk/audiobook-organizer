@@ -15,8 +15,8 @@ import (
 	"strings"
 
 	"github.com/dhowden/tag"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/logger"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/logger"
 )
 
 var yearPattern = regexp.MustCompile(`(\d{4})`)

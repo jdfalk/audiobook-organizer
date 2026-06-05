@@ -15,12 +15,12 @@ import (
 
 	"path/filepath"
 
-	"github.com/jdfalk/audiobook-organizer/internal/backup"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/logger"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
-	"github.com/jdfalk/audiobook-organizer/internal/policy"
+	"github.com/falkcorp/audiobook-organizer/internal/backup"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/logger"
+	"github.com/falkcorp/audiobook-organizer/internal/operations"
+	"github.com/falkcorp/audiobook-organizer/internal/policy"
 	ulid "github.com/oklog/ulid/v2"
 )
 

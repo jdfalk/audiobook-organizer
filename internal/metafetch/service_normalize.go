@@ -7,7 +7,7 @@ package metafetch
 
 import (
 	"encoding/json"
-	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/falkcorp/audiobook-organizer/internal/metadata"
 	"regexp"
 	"strconv"
 	"strings"

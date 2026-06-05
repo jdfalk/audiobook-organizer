@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // collisionCall records a single OnCollision invocation for test assertions.

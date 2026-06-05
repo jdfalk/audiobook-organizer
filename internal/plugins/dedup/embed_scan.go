@@ -12,8 +12,8 @@ import (
 	"fmt"
 	"time"
 
-	dedupengine "github.com/jdfalk/audiobook-organizer/internal/dedup"
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	dedupengine "github.com/falkcorp/audiobook-organizer/internal/dedup"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 func (p *Plugin) embedScanDef() sdk.OperationDef {

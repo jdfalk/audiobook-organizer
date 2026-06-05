@@ -8,7 +8,7 @@
 
 package server
 
-import opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+import opsregistry "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 
 // opRegistrar is a function that registers one or more OperationDefs with the
 // UOS-02 registry.

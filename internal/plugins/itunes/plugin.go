@@ -11,9 +11,9 @@ package itunes
 import (
 	"fmt"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	itunesservice "github.com/falkcorp/audiobook-organizer/internal/itunes/service"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // Plugin is the iTunes plugin. It wraps the shared iTunes service so that

@@ -22,8 +22,8 @@ import (
 	"strconv"
 	"time"
 
-	audiobookspkg "github.com/jdfalk/audiobook-organizer/internal/audiobooks"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	audiobookspkg "github.com/falkcorp/audiobook-organizer/internal/audiobooks"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // readHeapAllocMB returns the process's current heap allocation in MB.

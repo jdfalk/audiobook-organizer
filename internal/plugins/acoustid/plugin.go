@@ -9,9 +9,9 @@
 package acoustid
 
 import (
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	dedupengine "github.com/jdfalk/audiobook-organizer/internal/dedup"
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	dedupengine "github.com/falkcorp/audiobook-organizer/internal/dedup"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // Plugin is the AcoustID plugin. It wraps the shared dedup.Engine and embedding store so that

@@ -12,8 +12,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/audio"
-	"github.com/jdfalk/audiobook-organizer/internal/httputil"
+	"github.com/falkcorp/audiobook-organizer/internal/audio"
+	"github.com/falkcorp/audiobook-organizer/internal/httputil"
 )
 
 // handleAudioSample streams a short MP3 clip from an audiobook file.

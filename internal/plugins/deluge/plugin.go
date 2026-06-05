@@ -7,9 +7,9 @@
 package deluge
 
 import (
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	delugeclient "github.com/jdfalk/audiobook-organizer/internal/deluge"
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	delugeclient "github.com/falkcorp/audiobook-organizer/internal/deluge"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // Plugin wraps Deluge integration operations for the UOS registry.

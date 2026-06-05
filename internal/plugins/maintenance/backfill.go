@@ -11,7 +11,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // One-shot startup backfills / file repairs. Schedule is nil — they are

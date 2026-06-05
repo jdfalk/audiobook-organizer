@@ -7,7 +7,7 @@ package metadata_test
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/falkcorp/audiobook-organizer/internal/metadata"
 )
 
 func TestExtractMetadataFromFolder_LongEarthExample(t *testing.T) {

@@ -17,7 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jdfalk/audiobook-organizer/internal/security/safepath"
+	"github.com/falkcorp/audiobook-organizer/internal/security/safepath"
 )
 
 // ProxyCoverRequest holds parameters for proxying a cover image.

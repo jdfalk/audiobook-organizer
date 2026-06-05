@@ -14,8 +14,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/backup"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/backup"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
 	"github.com/stretchr/testify/require"
 )
 

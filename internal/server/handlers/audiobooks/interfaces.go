@@ -34,10 +34,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/activity"
-	audiobookspkg "github.com/jdfalk/audiobook-organizer/internal/audiobooks"
-	"github.com/jdfalk/audiobook-organizer/internal/batch"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/activity"
+	audiobookspkg "github.com/falkcorp/audiobook-organizer/internal/audiobooks"
+	"github.com/falkcorp/audiobook-organizer/internal/batch"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // AudiobooksStore is the narrow database.Store subset the audiobooks handlers

@@ -9,7 +9,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // mockRegistry is a test double for sdk.Registry that records registered ops.

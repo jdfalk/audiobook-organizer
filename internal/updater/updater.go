@@ -32,7 +32,7 @@ type UpdateInfo struct {
 // Updater checks for and applies updates from GitHub releases.
 type Updater struct {
 	currentVersion string
-	repo           string // "jdfalk/audiobook-organizer"
+	repo           string // "falkcorp/audiobook-organizer"
 	mu             sync.Mutex
 	lastCheck      *UpdateInfo
 	httpClient     *http.Client
@@ -67,7 +67,7 @@ type githubCommit struct {
 func NewUpdater(currentVersion string) *Updater {
 	return &Updater{
 		currentVersion: currentVersion,
-		repo:           "jdfalk/audiobook-organizer",
+		repo:           "falkcorp/audiobook-organizer",
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},

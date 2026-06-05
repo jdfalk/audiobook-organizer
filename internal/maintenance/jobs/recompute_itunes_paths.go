@@ -8,9 +8,9 @@ package jobs
 import (
 	"context"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/maintenance"
+	"github.com/falkcorp/audiobook-organizer/internal/metafetch"
 	"log/slog")
 
 func init() { maintenance.Register(&recomputeITunesPathsJob{}) }

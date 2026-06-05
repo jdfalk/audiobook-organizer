@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/plugin"
+	"github.com/falkcorp/audiobook-organizer/internal/plugin"
 )
 
 // Plugin delivers lifecycle events to configured webhook URLs via HTTP POST.

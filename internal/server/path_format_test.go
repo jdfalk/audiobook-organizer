@@ -7,7 +7,7 @@ package server
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/organizer"
+	"github.com/falkcorp/audiobook-organizer/internal/organizer"
 	"github.com/stretchr/testify/require"
 )
 

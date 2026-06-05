@@ -7,7 +7,7 @@ package operationsmocks
 import (
 	"context"
 
-	"github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 	mock "github.com/stretchr/testify/mock"
 )
 

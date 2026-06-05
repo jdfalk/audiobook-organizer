@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/jdfalk/audiobook-organizer/internal/logger"
+	"github.com/falkcorp/audiobook-organizer/internal/logger"
 )
 
 const importErrorLimit = 50

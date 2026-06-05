@@ -7,7 +7,7 @@ package scanner
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 func TestShouldSkipFile_MatchingCache(t *testing.T) {

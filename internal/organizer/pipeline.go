@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // FileRenameEntry represents a planned file rename operation.

@@ -5,7 +5,7 @@
 
 package sdk
 
-import "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+import "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 
 // EnqueueOption is the function-option pattern for EnqueueOp.
 type EnqueueOption = registry.EnqueueOption

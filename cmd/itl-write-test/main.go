@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	"github.com/falkcorp/audiobook-organizer/internal/itunes"
 	"os"
 )
 

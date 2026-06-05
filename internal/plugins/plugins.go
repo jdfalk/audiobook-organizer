@@ -13,7 +13,7 @@ package plugins
 
 import (
 	// Dedup plugin — embed-scan, full-scan, llm-review, book-signature-scan ops (UOS-07 + UOS-09).
-	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/dedup"
+	_ "github.com/falkcorp/audiobook-organizer/internal/plugins/dedup"
 	// Deluge plugin — protected-paths-sync, centralize, path-update ops (UOS-11).
-	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/deluge"
+	_ "github.com/falkcorp/audiobook-organizer/internal/plugins/deluge"
 )

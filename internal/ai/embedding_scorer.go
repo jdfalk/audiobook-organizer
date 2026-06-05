@@ -8,7 +8,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // embeddingAPI is the minimal surface EmbeddingScorer needs from an embedding

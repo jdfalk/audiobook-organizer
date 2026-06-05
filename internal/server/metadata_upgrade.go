@@ -9,7 +9,7 @@
 
 package server
 
-import "github.com/jdfalk/audiobook-organizer/internal/metabatch"
+import "github.com/falkcorp/audiobook-organizer/internal/metabatch"
 
 // MetadataUpgradeService is a server-local alias for the metabatch type,
 // preserving backward compatibility for any server wiring that references it.

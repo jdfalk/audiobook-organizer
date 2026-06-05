@@ -7,7 +7,7 @@ package server
 import (
 	"log/slog"
 
-	"github.com/jdfalk/audiobook-organizer/internal/remux"
+	"github.com/falkcorp/audiobook-organizer/internal/remux"
 )
 
 const quarantineKnownBadKey = "quarantine_known_bad_v1_done"

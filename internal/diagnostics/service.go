@@ -11,8 +11,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/itunes"
 )
 
 // Service generates diagnostic ZIP exports for troubleshooting and AI analysis.

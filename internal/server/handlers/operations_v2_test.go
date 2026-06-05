@@ -12,11 +12,11 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	databasemocks "github.com/jdfalk/audiobook-organizer/internal/database/mocks"
-	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
-	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
-	handlersmocks "github.com/jdfalk/audiobook-organizer/internal/server/handlers/mocks"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	databasemocks "github.com/falkcorp/audiobook-organizer/internal/database/mocks"
+	opsregistry "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/server/handlers"
+	handlersmocks "github.com/falkcorp/audiobook-organizer/internal/server/handlers/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )

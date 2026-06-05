@@ -10,8 +10,8 @@ package server
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/httputil"
-	"github.com/jdfalk/audiobook-organizer/internal/importer"
+	"github.com/falkcorp/audiobook-organizer/internal/httputil"
+	"github.com/falkcorp/audiobook-organizer/internal/importer"
 )
 
 // handleImportCollisionPreview checks whether importing a file

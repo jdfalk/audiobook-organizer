@@ -9,8 +9,8 @@
 package server
 
 import (
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/organizer"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/organizer"
 )
 
 // Constants for phase names (forwarded from organizer).

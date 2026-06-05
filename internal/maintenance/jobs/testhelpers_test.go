@@ -13,11 +13,11 @@ package jobs_test
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
+	"github.com/falkcorp/audiobook-organizer/internal/maintenance"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	_ "github.com/jdfalk/audiobook-organizer/internal/maintenance/jobs" // register all jobs
+	_ "github.com/falkcorp/audiobook-organizer/internal/maintenance/jobs" // register all jobs
 )
 
 // noopReporter satisfies maintenance.ProgressReporter for test use.

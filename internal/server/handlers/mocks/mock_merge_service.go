@@ -5,7 +5,7 @@
 package handlersmocks
 
 import (
-	"github.com/jdfalk/audiobook-organizer/internal/merge"
+	"github.com/falkcorp/audiobook-organizer/internal/merge"
 	mock "github.com/stretchr/testify/mock"
 )
 

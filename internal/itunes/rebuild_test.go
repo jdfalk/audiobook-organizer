@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // mockRebuildStore is a mock implementation of RebuildStore for testing.

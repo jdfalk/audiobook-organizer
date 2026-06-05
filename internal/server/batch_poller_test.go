@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/ai"
+	"github.com/falkcorp/audiobook-organizer/internal/ai"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

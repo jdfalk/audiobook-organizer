@@ -7,7 +7,7 @@ package handlersmocks
 import (
 	"context"
 
-	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
+	"github.com/falkcorp/audiobook-organizer/internal/metafetch"
 	mock "github.com/stretchr/testify/mock"
 )
 

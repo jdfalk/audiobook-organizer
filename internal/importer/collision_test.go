@@ -8,7 +8,7 @@ package importer
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/merge"
+	"github.com/falkcorp/audiobook-organizer/internal/merge"
 )
 
 // TestCollisionPreviewRequest_FilePath tests that FilePath is set correctly.

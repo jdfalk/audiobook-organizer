@@ -5,7 +5,7 @@
 
 package sdk
 
-import "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+import "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 
 // Capability is a coarse permission an OperationDef declares it needs.
 type Capability = registry.Capability

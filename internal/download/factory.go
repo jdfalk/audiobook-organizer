@@ -7,7 +7,7 @@ package download
 import (
 	"fmt"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
 )
 
 // NewTorrentClientFromConfig builds a torrent client from application configuration.

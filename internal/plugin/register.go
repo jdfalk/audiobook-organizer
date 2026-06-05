@@ -4,7 +4,7 @@
 package plugin
 
 import (
-	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
+	"github.com/falkcorp/audiobook-organizer/internal/serviceregistry"
 )
 
 func init() {

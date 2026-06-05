@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 )
 
 // TestWatchdog_StuckOpGetStrike verifies that an op with stale last_progress_at

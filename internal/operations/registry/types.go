@@ -13,7 +13,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/auth"
+	"github.com/falkcorp/audiobook-organizer/internal/auth"
 )
 
 // OperationDef is the static registration of a unit of async work.

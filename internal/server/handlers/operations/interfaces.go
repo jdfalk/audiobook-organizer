@@ -16,9 +16,9 @@ package operations
 import (
 	"context"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
-	"github.com/jdfalk/audiobook-organizer/internal/scheduler"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	opsregistry "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/scheduler"
 )
 
 // OperationsStore is the narrow database.Store subset the operations handlers

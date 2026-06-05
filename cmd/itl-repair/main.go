@@ -18,7 +18,7 @@ import (
 	"os"
 	"sort"
 
-	itunes "github.com/jdfalk/audiobook-organizer/internal/itunes"
+	itunes "github.com/falkcorp/audiobook-organizer/internal/itunes"
 )
 
 func main() {

@@ -5,8 +5,8 @@
 package entitiesmocks
 
 import (
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/work"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/work"
 	mock "github.com/stretchr/testify/mock"
 )
 

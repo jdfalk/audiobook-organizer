@@ -16,7 +16,7 @@ import (
 	"path/filepath"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/httputil"
+	"github.com/falkcorp/audiobook-organizer/internal/httputil"
 )
 
 // webFS holds the embedded filesystem passed from main package
