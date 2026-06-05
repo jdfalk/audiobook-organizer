@@ -29,6 +29,10 @@ root cause each, both "a background goroutine outlives the resource it uses":
 
 Each fix has a regression test that fails on the pre-fix code and passes after.
 
+Also de-flaked `TestDispatcher_PriorityOrderingHighBeforeLow` (~25% failure
+under load, also on `main`): it now makes both ops visible to one dispatch
+cycle atomically instead of relying on enqueue timing against a busy worker.
+
 ### Changes
 
 #### June 3, 2026 — Handler extraction Phase 4 (7 large domains → sub-packages)
