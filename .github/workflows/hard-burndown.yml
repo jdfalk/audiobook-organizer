@@ -19,9 +19,10 @@ on:
 
 jobs:
   burndown:
-    uses: falkcorp/github-common/.github/workflows/reusable-burndown.yml@2b9f83e6f0b215e8a7e709e7df9f8aec293f01a7
+    uses: falkcorp/github-common/.github/workflows/reusable-burndown.yml@bfb912c8e63e7f8e33df9c20c5c25c04083ec0b4 # v1.10.7
     with:
       mode: ${{ inputs.mode || 'draft-only' }}
+      hub_repo: falkcorp/burndown-tasks
       task_filter: failed-batch
       powerful_only: true
     secrets: inherit
