@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
 )
 
 // BasicAuth returns a Gin middleware that enforces HTTP Basic Authentication

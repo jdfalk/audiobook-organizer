@@ -9,8 +9,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 )
 
 // newServer is already defined in root.go as a package-level var pointing

@@ -7,7 +7,7 @@ package itunesservice
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	"github.com/falkcorp/audiobook-organizer/internal/itunes"
 	"github.com/stretchr/testify/assert"
 )
 

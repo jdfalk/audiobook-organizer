@@ -12,9 +12,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-	_ "github.com/jdfalk/audiobook-organizer/internal/maintenance/jobs" // register all jobs
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/maintenance"
+	_ "github.com/falkcorp/audiobook-organizer/internal/maintenance/jobs" // register all jobs
 )
 
 // noopReporter is declared once in cleanup_empty_folders_test.go (shared across the package).

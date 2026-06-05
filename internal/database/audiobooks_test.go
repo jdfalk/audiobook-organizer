@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/models"
+	"github.com/falkcorp/audiobook-organizer/internal/models"
 )
 
 // setupLegacyDB initializes the legacy DB connection for audiobooks tests.

@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // UpdateSeriesTags updates the audio files with series metadata tags

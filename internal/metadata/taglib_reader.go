@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jdfalk/audiobook-organizer/internal/logger"
+	"github.com/falkcorp/audiobook-organizer/internal/logger"
 )
 
 // BuildMetadataFromTaglibMap takes the flat key → values map returned by

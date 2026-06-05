@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // Writer is an io.Writer that tees log output to stdout AND sends

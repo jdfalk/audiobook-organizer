@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	"github.com/falkcorp/audiobook-organizer/internal/itunes"
 )
 
 func main() {

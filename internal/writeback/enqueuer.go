@@ -5,7 +5,7 @@
 
 package writeback
 
-import itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
+import itunesservice "github.com/falkcorp/audiobook-organizer/internal/itunes/service"
 
 // Enqueuer is a type alias for itunesservice.Enqueuer. The canonical
 // interface lives in internal/itunes/service/enqueuer.go; this alias

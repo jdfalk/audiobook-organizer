@@ -14,7 +14,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jdfalk/audiobook-organizer/internal/security/safepath"
+	"github.com/falkcorp/audiobook-organizer/internal/security/safepath"
 )
 
 // CoverHistoryEntry represents one saved cover version.

@@ -7,7 +7,7 @@ package server
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 func TestAuthorSeriesService_ListAuthors_Empty(t *testing.T) {

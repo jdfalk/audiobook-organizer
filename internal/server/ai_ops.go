@@ -15,12 +15,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/auth"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/dedup"
-	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
-	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
+	"github.com/falkcorp/audiobook-organizer/internal/auth"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/dedup"
+	opsregistry "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/server/handlers"
 )
 
 // aiReviewOpParams holds the serializable parameters for the ai.author-review op.

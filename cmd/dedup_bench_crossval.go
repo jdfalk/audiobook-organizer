@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
 	"github.com/spf13/cobra"
 )
 

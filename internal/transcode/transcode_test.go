@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 func TestBuildConcatFile(t *testing.T) {

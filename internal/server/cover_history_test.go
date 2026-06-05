@@ -15,9 +15,9 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/covers"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/covers"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 func setupCoverHistoryServer(t *testing.T) (*Server, database.Store, string) {

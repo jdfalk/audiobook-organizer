@@ -7,7 +7,7 @@ package handlersmocks
 import (
 	"context"
 
-	"github.com/jdfalk/audiobook-organizer/internal/fileops"
+	"github.com/falkcorp/audiobook-organizer/internal/fileops"
 	mock "github.com/stretchr/testify/mock"
 )
 

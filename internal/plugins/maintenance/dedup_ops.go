@@ -12,9 +12,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/ai"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	"github.com/falkcorp/audiobook-organizer/internal/ai"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // --- dedup-llm-review ---

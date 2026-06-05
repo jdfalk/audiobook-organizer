@@ -19,10 +19,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/ai"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/plugin"
-	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
+	"github.com/falkcorp/audiobook-organizer/internal/ai"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/plugin"
+	"github.com/falkcorp/audiobook-organizer/internal/serviceregistry"
 )
 
 // dedupChromemLazy reports whether the eager HydrateChromem at startup

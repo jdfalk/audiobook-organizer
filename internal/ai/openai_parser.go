@@ -14,8 +14,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/cache"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/cache"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/param"

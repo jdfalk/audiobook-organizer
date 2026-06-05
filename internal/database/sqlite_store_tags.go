@@ -8,7 +8,7 @@ package database
 import (
 	"fmt"
 
-	"github.com/jdfalk/audiobook-organizer/internal/util"
+	"github.com/falkcorp/audiobook-organizer/internal/util"
 )
 
 // Hash Blocklist Methods

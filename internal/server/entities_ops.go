@@ -17,12 +17,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/auth"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/dedup"
-	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/auth"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/dedup"
+	"github.com/falkcorp/audiobook-organizer/internal/metadata"
+	opsregistry "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 	ulid "github.com/oklog/ulid/v2"
 )
 

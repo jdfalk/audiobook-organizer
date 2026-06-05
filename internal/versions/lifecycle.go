@@ -21,7 +21,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // TrashTTLDays is the number of days a trashed version is kept before

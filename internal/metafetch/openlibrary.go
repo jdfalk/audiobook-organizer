@@ -12,9 +12,9 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/openlibrary"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/openlibrary"
+	"github.com/falkcorp/audiobook-organizer/internal/operations"
 )
 
 // OpenLibraryService manages the Open Library data dump lifecycle.

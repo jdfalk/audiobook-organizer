@@ -31,7 +31,7 @@ package readstatus
 import (
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // RecomputeUserBookState reads positions + segment durations and

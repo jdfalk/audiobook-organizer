@@ -24,12 +24,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/jdfalk/audiobook-organizer/internal/cache"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
-	"github.com/jdfalk/audiobook-organizer/internal/plugin"
-	metadatahandler "github.com/jdfalk/audiobook-organizer/internal/server/handlers/metadata"
-	metadatamocks "github.com/jdfalk/audiobook-organizer/internal/server/handlers/metadata/mocks"
+	"github.com/falkcorp/audiobook-organizer/internal/cache"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/metafetch"
+	"github.com/falkcorp/audiobook-organizer/internal/plugin"
+	metadatahandler "github.com/falkcorp/audiobook-organizer/internal/server/handlers/metadata"
+	metadatamocks "github.com/falkcorp/audiobook-organizer/internal/server/handlers/metadata/mocks"
 )
 
 func init() { gin.SetMode(gin.TestMode) }

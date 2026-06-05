@@ -15,7 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
 )
 
 // DelugeClient implements TorrentClient for Deluge via JSON-RPC.

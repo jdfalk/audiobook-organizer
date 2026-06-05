@@ -15,12 +15,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/activity"
-	"github.com/jdfalk/audiobook-organizer/internal/auth"
-	"github.com/jdfalk/audiobook-organizer/internal/itunes"
-	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
-	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/activity"
+	"github.com/falkcorp/audiobook-organizer/internal/auth"
+	"github.com/falkcorp/audiobook-organizer/internal/itunes"
+	itunesservice "github.com/falkcorp/audiobook-organizer/internal/itunes/service"
+	"github.com/falkcorp/audiobook-organizer/internal/operations"
+	opsregistry "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 )
 
 type itunesImportOpParams struct {

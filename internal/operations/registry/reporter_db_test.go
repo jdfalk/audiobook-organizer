@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 )
 
 // newTestReporter creates a DB reporter bound to a fakeStore with an op pre-inserted.

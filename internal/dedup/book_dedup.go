@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 	ulid "github.com/oklog/ulid/v2"
 )
 

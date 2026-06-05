@@ -9,13 +9,13 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/logger"
-	"github.com/jdfalk/audiobook-organizer/internal/plugin"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/logger"
+	"github.com/falkcorp/audiobook-organizer/internal/plugin"
 
 	// Blank imports trigger each plugin's init() to register with plugin.Global().
-	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/deluge"
-	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/webhook"
+	_ "github.com/falkcorp/audiobook-organizer/internal/plugins/deluge"
+	_ "github.com/falkcorp/audiobook-organizer/internal/plugins/webhook"
 )
 
 // initPlugins enables plugins declared as enabled in config, then initializes

@@ -30,8 +30,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/testutil/rapidgen"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/testutil/rapidgen"
 	"pgregory.net/rapid"
 )
 

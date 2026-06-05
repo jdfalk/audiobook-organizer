@@ -13,8 +13,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/server/handlers"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

@@ -6,9 +6,9 @@ package importer_test
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
-	"github.com/jdfalk/audiobook-organizer/internal/importer"
-	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
+	"github.com/falkcorp/audiobook-organizer/internal/database/mocks"
+	"github.com/falkcorp/audiobook-organizer/internal/importer"
+	"github.com/falkcorp/audiobook-organizer/internal/serviceregistry"
 )
 
 func TestImportPathRegistration(t *testing.T) {

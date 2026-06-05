@@ -8,8 +8,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/logger"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/logger"
 )
 
 func TestOrganizeService_FilterBooksNeedingOrganization(t *testing.T) {

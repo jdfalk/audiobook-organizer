@@ -20,12 +20,12 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/jdfalk/audiobook-organizer/internal/activity"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/itunes"
-	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	"github.com/falkcorp/audiobook-organizer/internal/activity"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/itunes"
+	"github.com/falkcorp/audiobook-organizer/internal/metadata"
+	"github.com/falkcorp/audiobook-organizer/internal/metafetch"
+	"github.com/falkcorp/audiobook-organizer/internal/operations"
 )
 
 // PathRepairConfig holds the immutable inputs the repairer needs:

@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 func (p *Plugin) llmReviewDef() sdk.OperationDef {

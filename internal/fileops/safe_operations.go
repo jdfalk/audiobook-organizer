@@ -14,7 +14,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/security/safepath"
+	"github.com/falkcorp/audiobook-organizer/internal/security/safepath"
 )
 
 // OperationConfig configures safe file operation behavior

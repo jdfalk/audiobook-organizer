@@ -5,7 +5,7 @@
 package mocks
 
 import (
-	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/falkcorp/audiobook-organizer/internal/metadata"
 	mock "github.com/stretchr/testify/mock"
 )
 

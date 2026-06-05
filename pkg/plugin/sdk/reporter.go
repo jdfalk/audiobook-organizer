@@ -5,7 +5,7 @@
 
 package sdk
 
-import "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+import "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 
 // Reporter is the per-run API surface an in-flight operation uses to emit
 // progress, logs, and checkpoints.

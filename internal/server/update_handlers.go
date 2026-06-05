@@ -6,8 +6,8 @@ package server
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/httputil"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/httputil"
 )
 
 // getUpdateStatus returns the last update check info.

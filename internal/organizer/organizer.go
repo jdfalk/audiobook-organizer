@@ -15,8 +15,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // ErrTargetOccupied is returned from OrganizeBook when the computed

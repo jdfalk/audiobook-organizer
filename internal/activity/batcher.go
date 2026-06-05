@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // BatchItem is one sub-entry within a batched ActivityEntry.

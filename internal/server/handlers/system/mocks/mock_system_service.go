@@ -5,7 +5,7 @@
 package systemmocks
 
 import (
-	"github.com/jdfalk/audiobook-organizer/internal/sysinfo"
+	"github.com/falkcorp/audiobook-organizer/internal/sysinfo"
 	mock "github.com/stretchr/testify/mock"
 )
 

@@ -12,9 +12,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/operations"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // ServerDeps is the narrow interface that *server.Server satisfies implicitly.

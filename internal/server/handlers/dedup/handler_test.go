@@ -25,11 +25,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/merge"
-	"github.com/jdfalk/audiobook-organizer/internal/plugin"
-	deduphandler "github.com/jdfalk/audiobook-organizer/internal/server/handlers/dedup"
-	dedupmocks "github.com/jdfalk/audiobook-organizer/internal/server/handlers/dedup/mocks"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/merge"
+	"github.com/falkcorp/audiobook-organizer/internal/plugin"
+	deduphandler "github.com/falkcorp/audiobook-organizer/internal/server/handlers/dedup"
+	dedupmocks "github.com/falkcorp/audiobook-organizer/internal/server/handlers/dedup/mocks"
 )
 
 func init() { gin.SetMode(gin.TestMode) }

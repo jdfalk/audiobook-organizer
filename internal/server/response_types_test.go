@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/httputil"
+	"github.com/falkcorp/audiobook-organizer/internal/httputil"
 )
 
 func TestNewListResponse(t *testing.T) {

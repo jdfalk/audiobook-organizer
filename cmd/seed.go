@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 	"github.com/oklog/ulid/v2"
 	"github.com/spf13/cobra"
 )

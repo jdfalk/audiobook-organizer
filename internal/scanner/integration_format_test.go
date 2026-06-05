@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
 )
 
 // TestIntegrationRealWorldMixedFormats tests scanner with realistic mixed format audiobook directories

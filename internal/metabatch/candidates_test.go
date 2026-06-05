@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/metabatch"
-	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/metabatch"
+	"github.com/falkcorp/audiobook-organizer/internal/metafetch"
 )
 
 // ---------------------------------------------------------------------------

@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/jdfalk/audiobook-organizer/internal/logger"
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	"github.com/falkcorp/audiobook-organizer/internal/logger"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // loggerWrapper wraps an SDK reporter and implements logger.Logger.

@@ -7,9 +7,9 @@ package server
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/util"
+	"github.com/falkcorp/audiobook-organizer/internal/util"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 func TestAudiobookUpdateService_ExtractStringField(t *testing.T) {

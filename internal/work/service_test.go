@@ -8,7 +8,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // MockWorkStore is a mock implementation of database.WorkStore for testing

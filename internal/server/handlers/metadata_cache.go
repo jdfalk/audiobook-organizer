@@ -18,10 +18,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/httputil"
-	"github.com/jdfalk/audiobook-organizer/internal/metabatch"
-	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/httputil"
+	"github.com/falkcorp/audiobook-organizer/internal/metabatch"
+	"github.com/falkcorp/audiobook-organizer/internal/metafetch"
 )
 
 // MetadataCacheBookStore is the narrow persistence interface required by

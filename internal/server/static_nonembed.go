@@ -12,7 +12,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/httputil"
+	"github.com/falkcorp/audiobook-organizer/internal/httputil"
 )
 
 // SetEmbeddedFS is a no-op when not embedding frontend
@@ -89,7 +89,7 @@ func (s *Server) setupPlaceholder() {
         </p>
 
         <p style="color: #666; margin-top: 40px; border-top: 1px solid #ddd; padding-top: 20px;">
-            <strong>Documentation:</strong> See <a href="https://github.com/jdfalk/audiobook-organizer">GitHub Repository</a> for full API documentation.
+            <strong>Documentation:</strong> See <a href="https://github.com/falkcorp/audiobook-organizer">GitHub Repository</a> for full API documentation.
         </p>
     </div>
 </body>

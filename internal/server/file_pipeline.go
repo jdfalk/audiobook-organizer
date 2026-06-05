@@ -9,7 +9,7 @@
 package server
 
 import (
-	"github.com/jdfalk/audiobook-organizer/internal/organizer"
+	"github.com/falkcorp/audiobook-organizer/internal/organizer"
 )
 
 // Type aliases for backward compatibility.

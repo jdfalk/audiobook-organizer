@@ -10,7 +10,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // metadataStateStore is the narrow slice of database.Store that

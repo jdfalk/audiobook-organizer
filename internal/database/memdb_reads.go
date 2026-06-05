@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
+	"github.com/falkcorp/audiobook-organizer/internal/fingerprint"
 )
 
 // Read-side implementations for the queries previously handled by Chai SQL.

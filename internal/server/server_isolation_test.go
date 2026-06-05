@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	opsregistry "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 )
 
 // TestSetupTestServerCleanup_DrainsRunningOpBeforeReturning is the server-level

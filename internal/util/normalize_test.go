@@ -8,7 +8,7 @@ package util_test
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/util"
+	"github.com/falkcorp/audiobook-organizer/internal/util"
 )
 
 func TestNormalizePath(t *testing.T) {

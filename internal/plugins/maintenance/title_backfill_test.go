@@ -10,10 +10,10 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
-	"github.com/jdfalk/audiobook-organizer/internal/operations/registry"
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/operations"
+	"github.com/falkcorp/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // fakeReporter satisfies sdk.Reporter (= registry.Reporter) for tests.

@@ -8,7 +8,7 @@ package handlers
 import (
 	"encoding/json"
 
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	"github.com/falkcorp/audiobook-organizer/internal/operations"
 )
 
 // BulkMetadataFetchV2Params is the JSON params for the v2 bulk_metadata_fetch op.

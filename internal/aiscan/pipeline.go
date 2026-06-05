@@ -14,9 +14,9 @@ import (
 
 	ulid "github.com/oklog/ulid/v2"
 
-	"github.com/jdfalk/audiobook-organizer/internal/ai"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/dedup"
+	"github.com/falkcorp/audiobook-organizer/internal/ai"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/dedup"
 )
 
 // Store is the narrow slice of database.Store this service uses.

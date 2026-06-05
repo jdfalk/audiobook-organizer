@@ -11,7 +11,7 @@
 // See docs/superpowers/specs/2026-04-18-itunes-service-extraction-design.md.
 package itunesservice
 
-import "github.com/jdfalk/audiobook-organizer/internal/database"
+import "github.com/falkcorp/audiobook-organizer/internal/database"
 
 // Store is the narrow slice of database.Store that the iTunes service
 // uses. Wide because iTunes is a hub — books, authors, series, files,

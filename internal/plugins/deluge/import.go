@@ -13,7 +13,7 @@ import (
 
 	"log/slog"
 
-	delugeclient "github.com/jdfalk/audiobook-organizer/internal/deluge"
+	delugeclient "github.com/falkcorp/audiobook-organizer/internal/deluge"
 )
 
 // importToLibrary reflinks src into dst (falls back to copy), updates the DB,

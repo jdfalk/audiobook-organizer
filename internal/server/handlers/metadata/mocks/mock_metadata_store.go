@@ -7,7 +7,7 @@ package metadatamocks
 import (
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 	mock "github.com/stretchr/testify/mock"
 )
 

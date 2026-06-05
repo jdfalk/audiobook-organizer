@@ -10,9 +10,9 @@ import (
 	"os"
 	"reflect"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/fileops"
-	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/fileops"
+	"github.com/falkcorp/audiobook-organizer/internal/metadata"
 )
 
 // revertServiceStore is the narrow slice of database.Store this service uses.

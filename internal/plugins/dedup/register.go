@@ -17,10 +17,10 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	dedupengine "github.com/jdfalk/audiobook-organizer/internal/dedup"
-	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
-	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	dedupengine "github.com/falkcorp/audiobook-organizer/internal/dedup"
+	opsregistry "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/serviceregistry"
 )
 
 func init() {

@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // --- purge-deleted ---

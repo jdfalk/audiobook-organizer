@@ -10,8 +10,8 @@ package audiobooks
 import (
 	"context"
 
-	"github.com/jdfalk/audiobook-organizer/internal/activity"
-	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
+	"github.com/falkcorp/audiobook-organizer/internal/activity"
+	"github.com/falkcorp/audiobook-organizer/internal/serviceregistry"
 )
 
 // PostInit wires:

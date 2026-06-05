@@ -6,9 +6,9 @@ package sysinfo_test
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
-	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
-	"github.com/jdfalk/audiobook-organizer/internal/sysinfo"
+	"github.com/falkcorp/audiobook-organizer/internal/database/mocks"
+	"github.com/falkcorp/audiobook-organizer/internal/serviceregistry"
+	"github.com/falkcorp/audiobook-organizer/internal/sysinfo"
 )
 
 func TestDashboardRegistration(t *testing.T) {

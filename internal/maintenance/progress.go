@@ -6,7 +6,7 @@
 package maintenance
 
 import (
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	"github.com/falkcorp/audiobook-organizer/internal/operations"
 )
 
 // ProgressAdapter adapts operations.ProgressReporter to maintenance.ProgressReporter.

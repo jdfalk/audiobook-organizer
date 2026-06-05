@@ -8,8 +8,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/jdfalk/audiobook-organizer/internal/ai/aijobs"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/ai/aijobs"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 	"log/slog"
 )
 

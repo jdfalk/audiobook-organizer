@@ -12,8 +12,8 @@ import (
 	"strings"
 
 	"github.com/cockroachdb/pebble/v2"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 	"github.com/spf13/cobra"
 )
 

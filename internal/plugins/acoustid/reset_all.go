@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // resetAllDef registers acoustid.reset-all — the "nuke everything and start

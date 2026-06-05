@@ -15,7 +15,7 @@
 
 package versions
 
-import "github.com/jdfalk/audiobook-organizer/internal/database"
+import "github.com/falkcorp/audiobook-organizer/internal/database"
 
 // FingerprintMatch describes a match between an incoming file/torrent
 // and a previously-seen version in the library. The caller uses this

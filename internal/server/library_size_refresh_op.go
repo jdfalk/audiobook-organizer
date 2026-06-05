@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/auth"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/auth"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	opsregistry "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 )
 
 // RegisterLibrarySizeRefreshOp registers the "library.size-refresh"

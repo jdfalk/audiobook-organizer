@@ -12,9 +12,9 @@
 package server
 
 import (
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/deluge"
-	"github.com/jdfalk/audiobook-organizer/internal/undo"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/deluge"
+	"github.com/falkcorp/audiobook-organizer/internal/undo"
 )
 
 // UndoResult is re-exported from the undo package.

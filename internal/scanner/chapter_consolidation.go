@@ -11,8 +11,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/mediainfo"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/mediainfo"
 )
 
 // chapterPrefixRe matches leading track/chapter numbers like "01 - ", "02. ",

@@ -8,8 +8,8 @@ package server
 import (
 	"log/slog"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/itunes"
 )
 
 // ExternalIDStore defines the external ID mapping operations.

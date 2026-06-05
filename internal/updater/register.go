@@ -19,8 +19,8 @@ package updater
 import (
 	"context"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/serviceregistry"
 )
 
 // SchedulerStarterAdapter wraps *Scheduler to implement the Starter/Stopper interfaces.

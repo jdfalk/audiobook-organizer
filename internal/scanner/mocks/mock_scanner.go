@@ -7,8 +7,8 @@ package mocks
 import (
 	"context"
 
-	"github.com/jdfalk/audiobook-organizer/internal/logger"
-	"github.com/jdfalk/audiobook-organizer/internal/scanner"
+	"github.com/falkcorp/audiobook-organizer/internal/logger"
+	"github.com/falkcorp/audiobook-organizer/internal/scanner"
 	mock "github.com/stretchr/testify/mock"
 )
 

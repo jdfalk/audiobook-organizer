@@ -10,7 +10,7 @@
 // rather than repeated string comparisons.
 package policy
 
-import "github.com/jdfalk/audiobook-organizer/internal/database"
+import "github.com/falkcorp/audiobook-organizer/internal/database"
 
 // Known policy tag strings.
 const (

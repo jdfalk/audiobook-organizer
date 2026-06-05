@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // Bus is satisfied by the EventHub in UOS-06. A nil Bus is safe; all

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	"github.com/falkcorp/audiobook-organizer/internal/itunes"
 )
 
 // withFakeITLHooks replaces the package-level itunes hooks with

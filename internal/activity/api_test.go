@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // newTestWriter builds a Writer that writes to an in-memory channel only

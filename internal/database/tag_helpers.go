@@ -7,7 +7,7 @@ package database
 import (
 	"strings"
 
-	"github.com/jdfalk/audiobook-organizer/internal/util"
+	"github.com/falkcorp/audiobook-organizer/internal/util"
 )
 
 // Tag helpers for the "exactly one tag in this namespace" idiom.

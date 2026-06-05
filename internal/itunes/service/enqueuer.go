@@ -4,7 +4,7 @@
 
 package itunesservice
 
-import "github.com/jdfalk/audiobook-organizer/internal/itunes"
+import "github.com/falkcorp/audiobook-organizer/internal/itunes"
 
 // Enqueuer is the narrow slice of *WriteBackBatcher that callers use.
 // Defined here so sub-components inside internal/itunes/service/ (e.g.

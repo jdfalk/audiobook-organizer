@@ -8,7 +8,7 @@ package deluge
 import (
 	"testing"
 
-	delugeclient "github.com/jdfalk/audiobook-organizer/internal/deluge"
+	delugeclient "github.com/falkcorp/audiobook-organizer/internal/deluge"
 )
 
 func TestPlugin_Metadata(t *testing.T) {

@@ -15,8 +15,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/merge"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/merge"
 )
 
 func setupImportCollisionServer(t *testing.T) (*Server, database.Store) {

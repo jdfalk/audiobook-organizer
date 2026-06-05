@@ -24,8 +24,8 @@ import (
 	"path/filepath"
 	"unsafe"
 
-	"github.com/jdfalk/audiobook-organizer/internal/fileops"
-	"github.com/jdfalk/audiobook-organizer/internal/tagger"
+	"github.com/falkcorp/audiobook-organizer/internal/fileops"
+	"github.com/falkcorp/audiobook-organizer/internal/tagger"
 )
 
 var taglibAvailable = true

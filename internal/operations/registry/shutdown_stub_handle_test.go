@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	databasemocks "github.com/jdfalk/audiobook-organizer/internal/database/mocks"
+	databasemocks "github.com/falkcorp/audiobook-organizer/internal/database/mocks"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )

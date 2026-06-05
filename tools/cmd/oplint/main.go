@@ -74,11 +74,11 @@ func checkFile(path string, violations *[]string) error {
 			continue
 		}
 
-		// Reject imports from the jdfalk/audiobook-organizer internal/ except allowed ones.
-		if strings.HasPrefix(importPath, "github.com/jdfalk/audiobook-organizer/internal/") {
-			if importPath == "github.com/jdfalk/audiobook-organizer/internal/operations/registry" ||
-				importPath == "github.com/jdfalk/audiobook-organizer/internal/database/iface" ||
-				importPath == "github.com/jdfalk/audiobook-organizer/internal/auth" {
+		// Reject imports from the falkcorp/audiobook-organizer internal/ except allowed ones.
+		if strings.HasPrefix(importPath, "github.com/falkcorp/audiobook-organizer/internal/") {
+			if importPath == "github.com/falkcorp/audiobook-organizer/internal/operations/registry" ||
+				importPath == "github.com/falkcorp/audiobook-organizer/internal/database/iface" ||
+				importPath == "github.com/falkcorp/audiobook-organizer/internal/auth" {
 				// Allowed
 				continue
 			}

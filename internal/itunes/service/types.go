@@ -4,7 +4,7 @@
 
 package itunesservice
 
-import "github.com/jdfalk/audiobook-organizer/internal/database"
+import "github.com/falkcorp/audiobook-organizer/internal/database"
 
 // BookOrganizer is the narrow interface the import pipeline needs from
 // internal/organizer. Injected via Deps.OrganizerFactory so this

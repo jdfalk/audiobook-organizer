@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/jdfalk/audiobook-organizer/internal/fileops"
+	"github.com/falkcorp/audiobook-organizer/internal/fileops"
 	taglib "go.senan.xyz/taglib"
 )
 

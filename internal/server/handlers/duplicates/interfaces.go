@@ -22,12 +22,12 @@ package duplicates
 import (
 	"context"
 
-	audiobookspkg "github.com/jdfalk/audiobook-organizer/internal/audiobooks"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/dedup"
-	"github.com/jdfalk/audiobook-organizer/internal/merge"
-	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	audiobookspkg "github.com/falkcorp/audiobook-organizer/internal/audiobooks"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/dedup"
+	"github.com/falkcorp/audiobook-organizer/internal/merge"
+	"github.com/falkcorp/audiobook-organizer/internal/metadata"
+	opsregistry "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 )
 
 // DuplicatesStore is the narrow database.Store subset the duplicates handlers

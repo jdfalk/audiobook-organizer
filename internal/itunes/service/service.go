@@ -8,11 +8,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/logger"
-	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
-	"github.com/jdfalk/audiobook-organizer/internal/plugin"
-	"github.com/jdfalk/audiobook-organizer/internal/realtime"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/logger"
+	"github.com/falkcorp/audiobook-organizer/internal/metafetch"
+	"github.com/falkcorp/audiobook-organizer/internal/plugin"
+	"github.com/falkcorp/audiobook-organizer/internal/realtime"
 )
 
 // Deps is the explicit dependency set for Service. No globals, no Server,

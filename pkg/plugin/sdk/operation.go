@@ -5,7 +5,7 @@
 
 package sdk
 
-import "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+import "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 
 // Type aliases for operation definition and control types.
 type OperationDef = registry.OperationDef

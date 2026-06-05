@@ -12,8 +12,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/logging"
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	"github.com/falkcorp/audiobook-organizer/internal/logging"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 func (p *Plugin) batchPollerDef() sdk.OperationDef {

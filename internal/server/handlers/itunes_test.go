@@ -12,11 +12,11 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
-	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
-	handlersmocks "github.com/jdfalk/audiobook-organizer/internal/server/handlers/mocks"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	itunesservice "github.com/falkcorp/audiobook-organizer/internal/itunes/service"
+	"github.com/falkcorp/audiobook-organizer/internal/server/handlers"
+	handlersmocks "github.com/falkcorp/audiobook-organizer/internal/server/handlers/mocks"
 	"github.com/stretchr/testify/assert"
 )
 

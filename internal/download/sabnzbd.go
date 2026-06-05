@@ -13,7 +13,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
 )
 
 // SABnzbdClient implements UsenetClient for SABnzbd via its REST API.

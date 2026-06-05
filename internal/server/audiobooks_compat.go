@@ -11,8 +11,8 @@
 package server
 
 import (
-	audiobookspkg "github.com/jdfalk/audiobook-organizer/internal/audiobooks"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	audiobookspkg "github.com/falkcorp/audiobook-organizer/internal/audiobooks"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 	"strings"
 )
 

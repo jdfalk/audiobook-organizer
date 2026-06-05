@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/metrics"
+	"github.com/falkcorp/audiobook-organizer/internal/metrics"
 )
 
 // entryNode is the value stored in each LRU list element. The key is denormalized

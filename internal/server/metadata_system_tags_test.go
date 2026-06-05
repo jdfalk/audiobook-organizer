@@ -7,7 +7,7 @@ package server
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
+	"github.com/falkcorp/audiobook-organizer/internal/metafetch"
 )
 
 // TestMetadataSourceTag locks in the slug format for the

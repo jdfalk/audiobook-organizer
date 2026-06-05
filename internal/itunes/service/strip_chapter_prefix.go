@@ -4,7 +4,7 @@
 
 package itunesservice
 
-import "github.com/jdfalk/audiobook-organizer/internal/titleutil"
+import "github.com/falkcorp/audiobook-organizer/internal/titleutil"
 
 // stripChapterPrefix delegates to titleutil.StripChapterPrefix so the pattern
 // list is maintained in one place. See titleutil for documentation and examples.

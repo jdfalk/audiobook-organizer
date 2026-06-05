@@ -14,10 +14,10 @@ package entities
 import (
 	"context"
 
-	"github.com/jdfalk/audiobook-organizer/internal/audiobooks"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
-	"github.com/jdfalk/audiobook-organizer/internal/work"
+	"github.com/falkcorp/audiobook-organizer/internal/audiobooks"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	opsregistry "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/work"
 )
 
 // EntitiesStore is the narrow database.Store subset the entities handlers

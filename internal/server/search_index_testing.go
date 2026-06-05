@@ -9,7 +9,7 @@
 
 package server
 
-import "github.com/jdfalk/audiobook-organizer/internal/search"
+import "github.com/falkcorp/audiobook-organizer/internal/search"
 
 // setSearchIndex replaces the server's search index. Intended for
 // test setup only — production code opens the index inside Start().

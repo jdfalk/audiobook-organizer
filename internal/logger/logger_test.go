@@ -7,7 +7,7 @@ package logger
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/logger/mocks"
+	"github.com/falkcorp/audiobook-organizer/internal/logger/mocks"
 	"github.com/stretchr/testify/mock"
 )
 

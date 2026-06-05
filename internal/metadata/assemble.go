@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jdfalk/audiobook-organizer/internal/logger"
+	"github.com/falkcorp/audiobook-organizer/internal/logger"
 )
 
 // AssembledMetadata is the combined, priority-resolved metadata for an audiobook.

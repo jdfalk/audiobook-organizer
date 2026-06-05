@@ -15,8 +15,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // LibraryImporterAdapter satisfies tagger.LibraryImporter using the

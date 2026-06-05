@@ -35,7 +35,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 )
 
 // testChildEnvVar gates the in-test child-mode handler installed by TestMain.

@@ -11,10 +11,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/diagnosis"
-	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
-	"github.com/jdfalk/audiobook-organizer/internal/logger"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/diagnosis"
+	"github.com/falkcorp/audiobook-organizer/internal/fingerprint"
+	"github.com/falkcorp/audiobook-organizer/internal/logger"
 )
 
 // fingerprintFileOutcome is the result of attempting to fingerprint a single

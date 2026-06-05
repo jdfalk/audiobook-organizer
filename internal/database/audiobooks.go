@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jdfalk/audiobook-organizer/internal/models"
+	"github.com/falkcorp/audiobook-organizer/internal/models"
 )
 
 // GetAudiobooks returns paginated list of audiobooks with filtering and sorting

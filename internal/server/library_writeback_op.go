@@ -11,9 +11,9 @@ import (
 	"time"
 
 
-	"github.com/jdfalk/audiobook-organizer/internal/activity"
-	"github.com/jdfalk/audiobook-organizer/internal/auth"
-	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/falkcorp/audiobook-organizer/internal/activity"
+	"github.com/falkcorp/audiobook-organizer/internal/auth"
+	opsregistry "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 	ulid "github.com/oklog/ulid/v2"
 )
 

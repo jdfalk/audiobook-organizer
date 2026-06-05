@@ -9,8 +9,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
-	"github.com/jdfalk/audiobook-organizer/internal/httputil"
+	"github.com/falkcorp/audiobook-organizer/internal/fingerprint"
+	"github.com/falkcorp/audiobook-organizer/internal/httputil"
 )
 
 // FingerprintRescanRequest controls the scope of a manual fingerprint rescan.

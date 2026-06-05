@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"time"
 
-	dedupengine "github.com/jdfalk/audiobook-organizer/internal/dedup"
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	dedupengine "github.com/falkcorp/audiobook-organizer/internal/dedup"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // splitBookScanDef registers the split-book backfill scan op. It walks

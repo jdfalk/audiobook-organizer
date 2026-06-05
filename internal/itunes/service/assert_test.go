@@ -5,8 +5,8 @@
 package itunesservice_test
 
 import (
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	itunesservice "github.com/falkcorp/audiobook-organizer/internal/itunes/service"
 )
 
 // Compile-time proof that *database.PebbleStore satisfies

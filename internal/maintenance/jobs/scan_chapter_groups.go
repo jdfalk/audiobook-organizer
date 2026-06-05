@@ -9,9 +9,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-	"github.com/jdfalk/audiobook-organizer/internal/scanner"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/maintenance"
+	"github.com/falkcorp/audiobook-organizer/internal/scanner"
 	"log/slog"
 )
 

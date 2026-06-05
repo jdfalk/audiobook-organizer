@@ -8,7 +8,7 @@ package metafetch
 import (
 	"fmt"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // CandidateBookInfo contains summary info about a book used in candidate results.

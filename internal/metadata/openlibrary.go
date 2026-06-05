@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/openlibrary"
+	"github.com/falkcorp/audiobook-organizer/internal/openlibrary"
 )
 
 // OpenLibraryClient handles metadata fetching from Open Library API.

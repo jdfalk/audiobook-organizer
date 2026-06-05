@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // purgeStaleDef defines the dedup.purge-stale operation. It's a fast,
