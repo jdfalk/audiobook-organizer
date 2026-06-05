@@ -84,7 +84,7 @@ done
 echo ""
 echo "=== BSR ==="
 check "buf.build/falkcorp/gcommon exists" \
-    "buf registry module get buf.build/falkcorp/gcommon"
+    "buf registry module info buf.build/falkcorp/gcommon"
 
 echo ""
 echo "==============================="
