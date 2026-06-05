@@ -1,11 +1,33 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.10.0 -->
+<!-- version: 3.11.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-06-03 -->
+<!-- last-edited: 2026-06-04 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Fixed
+
+#### June 4, 2026 — Test-suite goroutine-leak races (CI was red on `-race`)
+
+Two leaked-goroutine bugs that made the backend test suite fail/panic — one
+root cause each, both "a background goroutine outlives the resource it uses":
+
+- **Ops registry** — `Registry.Shutdown` reported "all workers drained" while an
+  abandoned op goroutine was still running (it released the run handle before the
+  goroutine exited). That goroutine then raced the next test's `config.AppConfig`
+  write (data race in `internal/server`) and wrote to a closed store
+  (`pebble: closed`). Shutdown now keeps the handle registered until the
+  goroutine truly exits, so it genuinely drains. Adds `Options.AbandonGrace` for
+  fast, deterministic tests.
+- **PebbleDB warmup** — `NewPebbleStore` launched an untracked memdb-warmup
+  goroutine that iterated the DB; `Close()` closed the DB out from under it,
+  panicking the `internal/database` package on every non-`-race` run. `Close()`
+  now cancels and waits for the warmup before closing; warmup starts last (after
+  the construction error paths) and checks ctx before each iterator.
+
+Each fix has a regression test that fails on the pre-fix code and passes after.
 
 ### Changes
 
