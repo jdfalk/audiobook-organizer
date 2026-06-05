@@ -1,5 +1,5 @@
 // file: internal/itunes/itl_le_mutate.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: d5e6f7a8-b9c0-1d2e-3f4a-5b6c7d8e9f00
 //
 // LE-format ITL mutation: add and remove tracks from v10+ (msdh/mith/mhoh)
@@ -263,14 +263,20 @@ func buildMithLE(trackID int, tr ITLNewTrack) []byte {
 	return buf
 }
 
+// mhohFixedHeaderLen is the correct headerLen value for LE mhoh chunks.
+// iTunes uses this fixed value to locate type-specific data within the chunk.
+// Setting headerLen = totalLen (the full chunk size) corrupts the library —
+// see regression test TestRewriteHohmLocationLE_PreservesHeaderLen.
+const mhohFixedHeaderLen = 24
+
 // buildMhohLE builds an LE metadata chunk (mhoh) for a given type and string.
 func buildMhohLE(mhohType uint32, value string) []byte {
 	encodedStr, encFlag := encodeHohmString(value)
 	chunkLen := 40 + len(encodedStr)
 	buf := make([]byte, chunkLen)
 	copy(buf[0:4], "mhoh")
-	writeUint32LE(buf, 4, uint32(chunkLen)) // headerLen
-	writeUint32LE(buf, 8, uint32(chunkLen)) // totalLen
+	writeUint32LE(buf, 4, mhohFixedHeaderLen) // headerLen: fixed 24-byte header (NOT totalLen)
+	writeUint32LE(buf, 8, uint32(chunkLen))   // totalLen: full chunk size
 	writeUint32LE(buf, 12, mhohType)
 	buf[16+11] = encFlag
 	writeUint32LE(buf, 28, uint32(len(encodedStr)))
