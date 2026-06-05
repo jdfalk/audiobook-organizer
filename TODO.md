@@ -1131,7 +1131,7 @@ Proposed chain: **DownloadHash** (as-downloaded) → **OriginalFileHash** (after
 AcoustID segment fingerprints already exist in the schema (`acoustid_seg0`–`seg6`). Needs the same coverage-stats + backfill-trigger treatment as file hashes.
 
 - [ ] **ACOUSTID-STATS-1** `GetAcoustIDStats()` — count books/files with ≥1 fingerprint segment populated, by-library breakdown. Add to interface + SQLite + PebbleDB + mock.
-- [ ] **ACOUSTID-STATS-2** `GET /maintenance/acoustid-stats` handler + route.
+- [x] **ACOUSTID-STATS-2** `GET /maintenance/acoustid-stats` handler + route.
 - [ ] **ACOUSTID-STATS-3** UI card on Maintenance tab (same tile style as SHA Duplicate Detection): shows coverage %, "Fingerprint Library" trigger button, status chip.
 - [x] **ACOUSTID-DEDUP-1** Acoustic Duplicates tab in BookDedup — fingerprint-based candidate pairs with similarity scores (PR #998)
 - [x] **ACOUSTID-COMPARE-1** Manual two-book fingerprint comparison — `GET /api/v1/acoustid/compare?a=&b=` with per-segment Hamming distance; comparison panel in UI (PR #999)
