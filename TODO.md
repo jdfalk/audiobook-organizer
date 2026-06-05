@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.68.0 -->
+<!-- version: 8.69.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-06-04 -->
 
@@ -97,7 +97,7 @@ because the subprocess child-mode handler is never wired into
 `main.go`. Without it, the child process re-execs with
 `--operation-runner` and cobra root errors out with "unknown flag".
 
-- [ ] **A1** `main.go`: before `cmd.Execute`, call
+- [ ] **A1** [hold] `main.go`: before `cmd.Execute`, call
   `registry.IsChildMode()`. If true, build a minimal Registry with all
   plugin defs (NO server init, NO memdb warm — just defs + store
   access), then call `registry.RunChildMode(r)` which never returns.
@@ -1102,7 +1102,7 @@ Operations or the notification bell. These need the same treatment as `composer_
   - Worker: iterate all books, checkpoint every N; skip-on-resume by `PhaseIndex`
   - `activity.EmitInfo` + `activity.LogBatch` on finish
 
-- [ ] **BACKFILL-ASYNC-3** `MetadataHashDuplicateCard` UI — add coverage stats panel + backfill button matching the SHA Duplicate Detection card style:
+- [ ] **BACKFILL-ASYNC-3** [hold] `MetadataHashDuplicateCard` UI — add coverage stats panel + backfill button matching the SHA Duplicate Detection card style:
   - `GET /maintenance/metadata-hash-stats` endpoint: total books, with/without `metadata_source_hash`, by-library breakdown
   - `BookMetadataHashStats` struct in `store.go`; `GetBookMetadataHashStats` in interface + SQLite + PebbleDB + mock
   - Auto-load stats on mount; status chip ("N missing hashes" / "✓ All hashed"); "Backfill Missing Hashes" button
@@ -1116,7 +1116,7 @@ Track the full lifecycle of a file's hash so we can answer "has this file change
 Proposed chain: **DownloadHash** (as-downloaded) → **OriginalFileHash** (after iTunes/external tagger) → **FileHash** (current, after AO).
 
 - [ ] **HASH-CHAIN-1** Add `download_hash` column to `book_files` (SQLite migration + PebbleDB field). Populate it from Deluge import data (already have `deluge_hash`) and allow manual set via API.
-- [ ] **HASH-CHAIN-2** UI: show hash chain in book file detail view so users can see when/where a file changed.
+- [ ] **HASH-CHAIN-2** [hold] UI: show hash chain in book file detail view so users can see when/where a file changed.
 - [ ] **HASH-CHAIN-3** Integrity alert: flag files where `file_hash != original_file_hash` and no AO tag-write is on record (possible external modification / bit-rot).
 
 *Low priority — AcoustID fingerprinting covers the identity-across-re-encode case better. Useful mainly for strict download-integrity auditing.*
