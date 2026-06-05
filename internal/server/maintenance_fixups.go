@@ -578,19 +578,3 @@ func (s *Server) handleGetBookMetadataHashStats(c *gin.Context) {
 	httputil.RespondWithOK(c, stats)
 }
 
-// handleGetAcoustIDStats returns AcoustID fingerprint coverage stats.
-// GET /api/v1/maintenance/acoustid-stats
-func (s *Server) handleGetAcoustIDStats(c *gin.Context) {
-	store := s.Store()
-	if store == nil {
-		httputil.RespondWithInternalError(c, "database not initialized")
-		return
-	}
-	stats, err := store.GetAcoustIDStats()
-	if err != nil {
-		httputil.InternalError(c, "failed to get acoustid stats", err)
-		return
-	}
-	httputil.RespondWithOK(c, stats)
-}
-
