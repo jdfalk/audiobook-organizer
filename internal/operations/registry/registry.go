@@ -46,6 +46,9 @@ type Registry struct {
 
 	// Tunable intervals for testing. Zero means use defaults.
 	watchdogInterval time.Duration
+	// abandonGrace is how long a ctx-canceled op goroutine has to return before
+	// it is classified as abandoned. Zero means use defaultAbandonGrace.
+	abandonGrace time.Duration
 }
 
 // Options contains optional tunable parameters for a Registry. Zero values
@@ -55,6 +58,10 @@ type Options struct {
 	WatchdogInterval time.Duration
 	// AbandonedCap overrides the per-plugin abandoned goroutine cap (default 4).
 	AbandonedCap int
+	// AbandonGrace overrides how long a ctx-canceled op goroutine has to return
+	// before it is classified as abandoned (default 5s). Zero = default.
+	// Primarily used in tests to make shutdown-drain behavior fast.
+	AbandonGrace time.Duration
 	// Bus is the SSE event bus (UOS-06). Nil is safe.
 	Bus Bus
 }
@@ -86,6 +93,7 @@ func NewWithOptions(store database.OpsV2Store, logger *slog.Logger, workers int,
 		workers:          workers,
 		abandoned:        newAbandonedTracker(opts.AbandonedCap),
 		watchdogInterval: opts.WatchdogInterval,
+		abandonGrace:     opts.AbandonGrace,
 	}
 }
 
