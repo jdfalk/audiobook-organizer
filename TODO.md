@@ -234,9 +234,12 @@ Copy + pause-on-hover in #1182.
   back through a unix-socket RPC to the parent's writer, or
   (b) drop subprocess isolation entirely and rely on in-process panic
   recovery + memory caps. Spec: `docs/specs/subprocess-isolation-rpc.md`.
-- [ ] **PD-2 / BUG-ITUNES-WRITEBACK-CORRUPTS-LIBRARY** — see open-bugs
-  section. Bisect candidate `f2856e45` flagged as last known-good.
-  No progress yet; tool is unusable for the user until fixed.
+- [x] **PD-2 / BUG-ITUNES-WRITEBACK-CORRUPTS-LIBRARY** — Fixed in PR #1319.
+  Root cause: `buildMhohLE` set `headerLen = totalLen` instead of the fixed
+  iTunes value of 24. iTunes uses `headerLen` to locate type-specific data
+  within mhoh chunks; wrong value caused corrupt-library on next open. Also
+  fixed `UpdateMetadataLE` to preserve original `headerLen` via
+  `rewriteHohmLocationLE` when replacing existing mhoh chunks.
 - [ ] **PD-3 / Post-deploy verification** — confirm in prod:
   (1) fingerprint-rescan from UI now actually runs (no
   "failed to unmarshal params"), (2) op-log Copy + Refresh buttons work,
@@ -443,7 +446,7 @@ must sequence, but A and B are parallelizable. Spawn:
 
 ## 🐛 Open Bugs — May 17, 2026
 
-- [ ] **BUG-ITUNES-WRITEBACK-CORRUPTS-LIBRARY** (2026-05-25 — PRIORITY) iTunes library writeback is corrupting the .itl file. After our writeback runs, iTunes opens, declares the library corrupt, and rebuilds/changes it, making the integration unusable. Investigate: (1) recent changes to `internal/itunes/` writeback (XML/binary mode, atomic write, lock semantics, byte-order, header version), (2) whether we're writing while iTunes still has the file mapped, (3) whether the .itl plist format we're emitting still matches the iTunes version in use. Reproduce on the Windows iTunes host. Block: user explicitly says this makes the whole tool useless to them until fixed.
+- [x] **BUG-ITUNES-WRITEBACK-CORRUPTS-LIBRARY** — Fixed in PR #1319 (2026-06-05). See PD-2.
 
   **Bisect hint (user, 2026-05-28):** iTunes writeback was working at some point in the past. Find when active feature work on `internal/itunes/` stopped — the breaking change is most likely in the refactor/security/perf commits that came AFTER the last functional feature commit. Candidates to bisect first (newest → oldest):
   - `ee180f84 perf(itunes): implement streaming XML parser for backfill operation` — most likely. Streaming XML changes how we read/emit plist structures; subtle byte-output differences would corrupt .itl.
