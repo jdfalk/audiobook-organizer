@@ -71,6 +71,18 @@ func (f *fakeStore) InsertOperationV2(row database.OperationV2Row) error {
 	return nil
 }
 
+// insertQueuedAtomic inserts several ops under a single lock, so a concurrent
+// ListQueuedOperationsV2 observes all of them or none. Used to test priority
+// ordering deterministically: the dispatcher only guarantees priority among ops
+// visible within one cycle, so both ops must become visible atomically.
+func (f *fakeStore) insertQueuedAtomic(rows ...database.OperationV2Row) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, row := range rows {
+		f.ops[row.ID] = row
+	}
+}
+
 func (f *fakeStore) ListQueuedOperationsV2() ([]database.OperationV2Row, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
