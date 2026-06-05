@@ -259,6 +259,12 @@ func sumInts(m map[string]int) int {
 // Returns the number of times the callback was invoked. Stops early if ctx
 // is cancelled or the callback returns an error.
 func warmIter(ctx context.Context, db *pebble.DB, prefix string, fn func(key string, val []byte) error) (int, error) {
+	// Bail before creating an iterator if the warmup was canceled (Close). This
+	// keeps cancellation prompt and avoids calling NewIter on a DB that is about
+	// to be closed.
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	upper := append([]byte(nil), []byte(prefix)...)
 	// Replace trailing ':' with ';' so the upper bound sorts immediately past
 	// all keys starting with prefix.
