@@ -130,6 +130,14 @@ type PebbleStore struct {
 	rootDir                  string     // organized library root; set via SetRootDir after config load
 	libraryCountsRecomputeMu sync.Mutex // gates recompute to prevent stampede when N callers see dirty cache
 	UseMemDB                 bool       // feature flag: use in-memory query layer for aggregations / filtered reads
+
+	// warmupCancel cancels the async memdb warmup goroutine; warmupDone is
+	// closed when that goroutine exits. Close() cancels and waits on these
+	// before closing the underlying Pebble DB — otherwise the warmup's db.NewIter
+	// races the close and panics ("pebble: closed" / nil-pointer deref). Set once
+	// in NewPebbleStore before the store is returned, so no mutex is needed.
+	warmupCancel context.CancelFunc
+	warmupDone   chan struct{}
 }
 
 // mem returns the active in-memory query layer or nil if warmup hasn't
@@ -224,27 +232,6 @@ func NewPebbleStore(path string) (*PebbleStore, error) {
 		return nil, fmt.Errorf("failed to migrate import path keys: %w", err)
 	}
 
-	// Initialize in-memory query layer. Warmup runs in a goroutine so the
-	// server is available immediately — reads transparently fall back to
-	// Pebble until memdb is ready (couple of minutes for ~50K books).
-	// store.memPtr is only published once warmup completes successfully.
-	if memStore, memErr := NewMemStore(); memErr != nil {
-		slog.Warn("memdb init failed, in-memory queries disabled", "error", memErr)
-	} else {
-		go func() {
-			started := time.Now()
-			slog.Info("memdb warmup starting (async)")
-			if warmErr := memStore.WarmFromPebble(context.Background(), store); warmErr != nil {
-				slog.Warn("memdb warmup failed, will stay on Pebble for reads",
-					"error", warmErr, "duration_ms", time.Since(started).Milliseconds())
-				return
-			}
-			store.memPtr.Store(memStore)
-			slog.Info("memdb warmup published",
-				"duration_ms", time.Since(started).Milliseconds())
-		}()
-	}
-
 	// Initialize counters if they don't exist
 	counters := []string{"author", "author_alias", "series", "book", "import_path", "operationlog", "playlist", "playlistitem", "preference"}
 	for _, counter := range counters {
@@ -262,11 +249,55 @@ func NewPebbleStore(path string) (*PebbleStore, error) {
 		}
 	}
 
+	// Initialize in-memory query layer. Warmup runs in a goroutine so the
+	// server is available immediately — reads transparently fall back to
+	// Pebble until memdb is ready (couple of minutes for ~50K books).
+	// store.memPtr is only published once warmup completes successfully.
+	//
+	// Started LAST — after every early-return error path that calls db.Close()
+	// directly — so a construction failure can never close the DB while the
+	// warmup goroutine is iterating it. The goroutine iterates store.db, so
+	// Close() must cancel it and wait for it to exit before closing the DB (else
+	// NewIter races the close and panics). warmupDone is always non-nil so Close
+	// can wait unconditionally; it is closed immediately when there is no warmup
+	// goroutine to wait for.
+	store.warmupDone = make(chan struct{})
+	if memStore, memErr := NewMemStore(); memErr != nil {
+		slog.Warn("memdb init failed, in-memory queries disabled", "error", memErr)
+		close(store.warmupDone)
+	} else {
+		warmupCtx, warmupCancel := context.WithCancel(context.Background())
+		store.warmupCancel = warmupCancel
+		go func() {
+			defer close(store.warmupDone)
+			started := time.Now()
+			slog.Info("memdb warmup starting (async)")
+			if warmErr := memStore.WarmFromPebble(warmupCtx, store); warmErr != nil {
+				slog.Warn("memdb warmup failed, will stay on Pebble for reads",
+					"error", warmErr, "duration_ms", time.Since(started).Milliseconds())
+				return
+			}
+			store.memPtr.Store(memStore)
+			slog.Info("memdb warmup published",
+				"duration_ms", time.Since(started).Milliseconds())
+		}()
+	}
+
 	return store, nil
 }
 
 // Close closes the database
 func (p *PebbleStore) Close() error {
+	// Stop the async memdb warmup before closing the DB. The warmup goroutine
+	// iterates p.db; closing the DB out from under it races warmIter's NewIter
+	// and panics ("pebble: closed" / nil-pointer deref). Cancel it and wait for
+	// it to fully exit first.
+	if p.warmupCancel != nil {
+		p.warmupCancel()
+	}
+	if p.warmupDone != nil {
+		<-p.warmupDone
+	}
 	return p.db.Close()
 }
 
