@@ -1,7 +1,7 @@
 // file: internal/operations/registry/dispatcher_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: e1f2a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b
-// last-edited: 2026-05-06
+// last-edited: 2026-06-04
 
 package registry_test
 
@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 )
 
@@ -162,18 +163,16 @@ func TestDispatcher_PriorityOrderingHighBeforeLow(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Use a single worker so we get strict ordering.
+	// Single worker so ordering is strict.
 	store := newFakeStore()
 	r := registry.New(store, slog.Default(), 1, nil)
 
 	order := make([]string, 0, 2)
 	var mu sync.Mutex
-	gate := make(chan struct{})
-
 	makeOrderedDef := func(id string, prio registry.Priority) registry.OperationDef {
 		d := makeValidDef(id)
 		d.DefaultPriority = prio
-		d.Run = func(runCtx context.Context, _ json.RawMessage, _ registry.Reporter) error {
+		d.Run = func(_ context.Context, _ json.RawMessage, _ registry.Reporter) error {
 			mu.Lock()
 			order = append(order, id)
 			mu.Unlock()
@@ -181,44 +180,45 @@ func TestDispatcher_PriorityOrderingHighBeforeLow(t *testing.T) {
 		}
 		return d
 	}
-
 	_ = r.RegisterOp(makeOrderedDef("test.prio-low", registry.PriorityLow))
 	_ = r.RegisterOp(makeOrderedDef("test.prio-high", registry.PriorityHigh))
 
-	// Block the worker so both ops are queued before dispatch starts.
-	// blocking is closed by the blocker's Run when it actually starts executing,
-	// replacing a time.Sleep that was racy under CI load.
-	blocking := make(chan struct{})
-	blockDef := makeValidDef("test.prio-blocker")
-	blockDef.Run = func(runCtx context.Context, _ json.RawMessage, _ registry.Reporter) error {
-		close(blocking) // signal: worker has picked us up
-		<-gate
-		return nil
-	}
-	_ = r.RegisterOp(blockDef)
-
-	// Enqueue the blocker first, then wait until the worker is provably running it.
 	r.Start(ctx)
-	_, _ = r.EnqueueOp(ctx, "test.prio-blocker", nil)
-	select {
-	case <-blocking:
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for blocker to start")
-	}
 
-	// Enqueue low priority first, then high — worker is blocked, both will queue.
-	opLow, _ := r.EnqueueOp(ctx, "test.prio-low", nil)
-	opHigh, _ := r.EnqueueOp(ctx, "test.prio-high", nil)
+	// Make BOTH ops visible to the dispatcher atomically (single store lock), so
+	// the first dispatch cycle that sees them orders them strictly by priority
+	// (DESC) and sends high to the worker first.
+	//
+	// The previous version enqueued them separately (low then high) via
+	// EnqueueOp against a deliberately-busy worker — racy (~25% flake under
+	// load): each EnqueueOp triggers a dispatch cycle, so the dispatcher claimed
+	// the low-priority op into the buffered (FIFO) nextRun channel before the
+	// high-priority op was even enqueued, and the worker then ran low first.
+	// Priority is only guaranteed among ops visible within ONE cycle; inserting
+	// both atomically makes that precondition deterministic. (Inserting directly
+	// rather than via EnqueueOp also sidesteps resumeAfterStartup, which would
+	// drop/requeue ops enqueued before Start.)
+	now := time.Now().UTC()
+	store.insertQueuedAtomic(
+		database.OperationV2Row{
+			ID: "op-prio-low", DefID: "test.prio-low", Plugin: "test",
+			Status: "queued", Priority: int(registry.PriorityLow), QueuedAt: now,
+		},
+		database.OperationV2Row{
+			ID: "op-prio-high", DefID: "test.prio-high", Plugin: "test",
+			Status: "queued", Priority: int(registry.PriorityHigh), QueuedAt: now,
+		},
+	)
 
-	// Release the blocker.
-	close(gate)
-
-	awaitStatus(t, store, opLow, "completed", 5*time.Second)
-	awaitStatus(t, store, opHigh, "completed", 5*time.Second)
+	awaitStatus(t, store, "op-prio-low", "completed", 5*time.Second)
+	awaitStatus(t, store, "op-prio-high", "completed", 5*time.Second)
 
 	mu.Lock()
 	defer mu.Unlock()
-	if len(order) == 2 && order[0] != "test.prio-high" {
+	if len(order) != 2 {
+		t.Fatalf("expected 2 ops to run, got %d: %v", len(order), order)
+	}
+	if order[0] != "test.prio-high" {
 		t.Errorf("expected high-priority op first, got order %v", order)
 	}
 }
