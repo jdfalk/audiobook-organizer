@@ -26,9 +26,18 @@ var operationTracer = otel.Tracer("audiobook-organizer/operations")
 // dispatched. Subprocess execution lands in UOS-03.
 var ErrSubprocessNotImplemented = errors.New("subprocess runner not yet wired (UOS-03)")
 
-// abandonGrace is the time a ctx-canceled goroutine has to return before
-// it is classified as abandoned and the worker slot is freed.
-const abandonGrace = 5 * time.Second
+// defaultAbandonGrace is the time a ctx-canceled goroutine has to return before
+// it is classified as abandoned and the worker slot is freed. Overridable per
+// Registry via Options.AbandonGrace (tests shorten it).
+const defaultAbandonGrace = 5 * time.Second
+
+// graceDuration returns the configured abandon grace, or the default.
+func (r *Registry) graceDuration() time.Duration {
+	if r.abandonGrace > 0 {
+		return r.abandonGrace
+	}
+	return defaultAbandonGrace
+}
 
 // runHandle tracks a single in-flight operation.
 type runHandle struct {
@@ -231,29 +240,41 @@ func (r *Registry) executeRun(parentCtx context.Context, qr *queuedRun) (wasAban
 		select {
 		case runErr = <-done:
 			// Goroutine returned within grace — not abandoned, but ctx was canceled.
-		case <-time.After(abandonGrace):
-			// Goroutine is stuck. Classify as abandoned.
-			r.releaseRunHandle(qr.opID)
+		case <-time.After(r.graceDuration()):
+			// Goroutine didn't return within the grace period.
 			r.abandoned.increment(qr.plugin)
-			// During Shutdown, do NOT spawn a replacement worker — the
-			// pool is on its way out and a new worker would race against
-			// store close (pebble: closed panic). Just log and exit.
 			if r.shuttingDown.Load() {
-				r.logger.Info("registry: op goroutine abandoned during shutdown; not respawning",
+				// During Shutdown, do NOT spawn a replacement worker — the pool
+				// is on its way out and a new worker would race against store
+				// close (pebble: closed panic).
+				//
+				// Critically, keep the run handle REGISTERED until the goroutine
+				// actually exits. Releasing it now would let Shutdown's drain
+				// poll report "all workers drained" while this goroutine is still
+				// alive and touching shared state (the global config it reads,
+				// the store it writes). That premature release was the root cause
+				// of the test-suite data race AND the "pebble: closed" panic: the
+				// abandoned goroutine outlived the caller and collided with the
+				// next test's config write / the store being closed. Release the
+				// handle in the monitor below, after the goroutine truly returns,
+				// so Shutdown (bounded by its own context) genuinely drains.
+				r.logger.Info("registry: op goroutine abandoned during shutdown; waiting for it to exit before freeing slot",
 					"op_id", qr.opID, "plugin", qr.plugin)
-				// Still monitor the goroutine so the abandoned counter
-				// drains correctly if it eventually returns.
 				go func() {
 					<-done
+					r.releaseRunHandle(qr.opID)
 					r.abandoned.decrement(qr.plugin)
 				}()
 				return true
 			}
+			// Not shutting down: the op is genuinely abandoned. Free the slot now
+			// and spawn a replacement so the pool doesn't shrink; the runaway
+			// goroutine is monitored so the abandoned counter drains when it
+			// eventually returns.
+			r.releaseRunHandle(qr.opID)
 			r.logger.Warn("registry: op goroutine abandoned; spawning replacement worker",
 				"op_id", qr.opID, "plugin", qr.plugin)
-			// Spawn a replacement so the pool doesn't shrink.
 			go r.startWorker(parentCtx, -1)
-			// Monitor the goroutine; when it returns, decrement abandoned count.
 			go func() {
 				<-done
 				r.abandoned.decrement(qr.plugin)
