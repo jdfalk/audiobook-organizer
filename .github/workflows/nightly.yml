@@ -28,7 +28,7 @@ permissions:
 jobs:
   full-ci:
     name: Full CI Suite
-    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@fe1e3081e230dd5ac3d358f9c6a3e4dc0b209529 # v1.12.0
+    uses: falkcorp/github-common/.github/workflows/reusable-ci.yml@fe1e3081e230dd5ac3d358f9c6a3e4dc0b209529 # v1.12.0
     with:
       go-version: '1.26'
       go-experiment: 'jsonv2'

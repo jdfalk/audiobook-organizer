@@ -12,7 +12,7 @@ Scanner panic and test issues resolved
 ### 1. Start the Server
 
 ```bash
-cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer.worktrees/worktree-2025-12-22T04-03-46
+cd /Users/jdfalk/repos/github.com/falkcorp/audiobook-organizer.worktrees/worktree-2025-12-22T04-03-46
 ./audiobook-organizer-test serve --port 8888 --dir /path/to/audiobooks
 ```
 

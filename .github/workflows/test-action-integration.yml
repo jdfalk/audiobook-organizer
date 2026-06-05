@@ -38,7 +38,7 @@ jobs:
 
       - name: Get frontend configuration
         id: frontend-config
-        uses: jdfalk/get-frontend-config-action@9a5882d405edad2f4f48c3f584fee779d478f4a4 # v1.1.3
+        uses: falkcorp/gha-get-frontend-config@9a5882d405edad2f4f48c3f584fee779d478f4a4 # v1.1.3
         with:
           repository-config: ''
           config-file: '.github/repository-config.yml'

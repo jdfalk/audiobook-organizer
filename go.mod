@@ -1,4 +1,4 @@
-module github.com/jdfalk/audiobook-organizer
+module github.com/falkcorp/audiobook-organizer
 
 go 1.26.0
 

@@ -47,8 +47,8 @@ All AI agent instructions live in `.github/`. This file is the entry point.
 ## Quick Start
 
 - **Architecture & workflows:** [.github/copilot-instructions.md](.github/copilot-instructions.md)
-- **Coding standards:** [.github/instructions/](https://github.com/jdfalk/audiobook-organizer/tree/main/.github/instructions/)
-- **Prompts:** [.github/prompts/](https://github.com/jdfalk/audiobook-organizer/tree/main/.github/prompts/)
+- **Coding standards:** [.github/instructions/](https://github.com/falkcorp/audiobook-organizer/tree/main/.github/instructions/)
+- **Prompts:** [.github/prompts/](https://github.com/falkcorp/audiobook-organizer/tree/main/.github/prompts/)
 - **Full file index:** [AGENTS.md](AGENTS.md)
 
 ## Build & Test Commands

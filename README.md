@@ -22,7 +22,7 @@ The app is available at `http://localhost:8484`.
 ### From Source
 
 ```bash
-git clone https://github.com/jdfalk/audiobook-organizer.git
+git clone https://github.com/falkcorp/audiobook-organizer.git
 cd audiobook-organizer
 make build   # builds frontend + backend into a single binary
 ./audiobook-organizer serve --dir /path/to/audiobooks --host 0.0.0.0
