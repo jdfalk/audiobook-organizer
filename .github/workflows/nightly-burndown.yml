@@ -1,5 +1,5 @@
 # file: .github/workflows/nightly-burndown.yml
-# version: 1.7.0
+# version: 1.8.0
 name: Nightly burndown
 
 on:
@@ -23,4 +23,5 @@ jobs:
     with:
       mode: ${{ inputs.mode || 'draft-only' }}
       hub_repo: falkcorp/burndown-tasks
+      cheapest_only: true
     secrets: inherit
