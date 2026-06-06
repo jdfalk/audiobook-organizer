@@ -25,21 +25,23 @@
 package registry_test
 
 import (
-	"bufio"
-	"context"
-	"encoding/json"
-	"fmt"
-	"log/slog"
-	"net"
-	"os"
-	"testing"
-	"time"
+    "bufio"
+    "context"
+    "encoding/json"
+    "fmt"
+    "log/slog"
+    "net"
+    "os"
+    "testing"
+    "time"
 
-	"github.com/falkcorp/audiobook-organizer/internal/operations/registry"
+    "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 )
 
-// testChildEnvVar gates the in-test child-mode handler installed by TestMain.
-const testChildEnvVar = "TEST_SUBPROCESS_CHILD"
+const (
+	testChildEnvVar           = "TEST_SUBPROCESS_CHILD"
+	testChildHandshakePathEnv = "TEST_SUBPROCESS_HANDSHAKE_PATH"
+)
 
 // TestMain installs a stub child-mode handler when the gate env var is set.
 // Otherwise it runs the test suite normally.
@@ -81,6 +83,14 @@ func runStubChild() {
 	if err := json.Unmarshal(scanner.Bytes(), &hs); err != nil {
 		fmt.Fprintf(os.Stderr, "stub child: bad handshake: %v\n", err)
 		os.Exit(1)
+	}
+
+	if path := os.Getenv(testChildHandshakePathEnv); path != "" {
+		snapshot := append([]byte(nil), scanner.Bytes()...)
+		if err := os.WriteFile(path, snapshot, 0o600); err != nil {
+			fmt.Fprintf(os.Stderr, "stub child: write handshake: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	// Reply with success.

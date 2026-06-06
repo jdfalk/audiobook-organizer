@@ -15,10 +15,12 @@ package registry_test
 // integration test for child mode re-execs the test binary itself.
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -111,6 +113,65 @@ func TestSubprocess_CancelSendsTermToChild(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Errorf("subprocess op did not reach terminal status within deadline; final: %s", store.statusOf(opID))
+}
+
+func TestSubprocess_HandshakeRoundtrip(t *testing.T) {
+	handshakeDir := t.TempDir()
+	handshakePath := filepath.Join(handshakeDir, "handshake.json")
+
+	prev := registry.ChildEnvFunc
+	registry.ChildEnvFunc = func() []string {
+		return []string{
+			testChildEnvVar + "=1",
+			testChildHandshakePathEnv + "=" + handshakePath,
+		}
+	}
+	t.Cleanup(func() { registry.ChildEnvFunc = prev })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	store := newFakeStore()
+	r := registry.New(store, slog.Default(), 1, nil)
+
+	def := makeValidDef("test.subprocess-handshake")
+	def.Isolate = true
+	def.Run = func(_ context.Context, _ json.RawMessage, _ registry.Reporter) error {
+		t.Fatal("def.Run should not be called in-process for Isolate=true")
+		return nil
+	}
+	if err := r.RegisterOp(def); err != nil {
+		t.Fatalf("RegisterOp: %v", err)
+	}
+	r.Start(ctx)
+
+	params := json.RawMessage(`{"handshake":"roundtrip","value":42}`)
+	opID, err := r.EnqueueOp(ctx, def.ID, params)
+	if err != nil {
+		t.Fatalf("EnqueueOp: %v", err)
+	}
+
+	awaitStatus(t, store, opID, "completed", 15*time.Second)
+
+	handshakeBytes, err := os.ReadFile(handshakePath)
+	if err != nil {
+		t.Fatalf("read handshake: %v", err)
+	}
+
+	wantHandshake, err := json.Marshal(struct {
+		DefID  string          `json:"def_id"`
+		Params json.RawMessage `json:"params"`
+	}{
+		DefID:  def.ID,
+		Params: params,
+	})
+	if err != nil {
+		t.Fatalf("marshal handshake: %v", err)
+	}
+
+	if !bytes.Equal(bytes.TrimSpace(handshakeBytes), wantHandshake) {
+		t.Fatalf("handshake mismatch: got %q want %q", bytes.TrimSpace(handshakeBytes), wantHandshake)
+	}
 }
 
 // TestSubprocess_EnvSocketPathConstant verifies the exported constant.
