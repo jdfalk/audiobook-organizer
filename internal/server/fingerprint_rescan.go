@@ -1,7 +1,7 @@
 // file: internal/server/fingerprint_rescan.go
-// version: 1.4.0
+// version: 1.4.1
 // guid: e8cf338d-2d99-47ae-a4b8-d31d8772d955
-// last-edited: 2026-05-06
+// last-edited: 2026-06-06
 
 package server
 
@@ -27,6 +27,15 @@ type FingerprintRescanRequest struct {
 	// Force, when true, ignores any existing acoustid_seg0..seg6 values and
 	// recomputes them. Default false (existing fingerprints are kept).
 	Force bool `json:"force,omitempty"`
+
+	// OnlineLookup, when true, posts the freshly-computed whole-file fingerprint
+	// to acoustid.org to try to fetch a MusicBrainz recording ID. Requires the
+	// AcoustID API key to be configured.
+	OnlineLookup bool `json:"online_lookup,omitempty"`
+
+	// OnlineLookupForce, when true, re-queries acoustid.org even if a previous
+	// lookup already recorded a timestamp. Defaults to false.
+	OnlineLookupForce bool `json:"online_lookup_force,omitempty"`
 }
 
 const (
@@ -80,9 +89,11 @@ func (s *Server) triggerFingerprintRescan(c *gin.Context) {
 	// producing a base64 string that fails Unmarshal on the worker
 	// side ("failed to unmarshal params").
 	params := map[string]interface{}{
-		"scope":    scope,
-		"book_ids": req.BookIDs,
-		"force":    req.Force,
+		"scope":               scope,
+		"book_ids":            req.BookIDs,
+		"force":               req.Force,
+		"online_lookup":       req.OnlineLookup,
+		"online_lookup_force": req.OnlineLookupForce,
 	}
 
 	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "acoustid.fingerprint-rescan", params)

@@ -1,7 +1,7 @@
 // file: internal/plugins/acoustid/fingerprint_rescan.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: a7b8c9d0-e1f2-3456-def0-123456789abc
-// last-edited: 2026-05-31
+// last-edited: 2026-06-06
 
 package acoustid
 
@@ -9,7 +9,9 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -18,6 +20,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/falkcorp/audiobook-organizer/internal/acoustid"
+	"github.com/falkcorp/audiobook-organizer/internal/config"
 	"github.com/falkcorp/audiobook-organizer/internal/database"
 	"github.com/falkcorp/audiobook-organizer/internal/fingerprint"
 	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
@@ -28,6 +32,14 @@ type FingerprintRescanParams struct {
 	Scope   string   `json:"scope,omitempty"`    // "missing" (default), "all", or "books"
 	BookIDs []string `json:"book_ids,omitempty"` // required when scope=="books"
 	Force   bool     `json:"force,omitempty"`    // ignore existing fingerprints and recompute
+
+	// OnlineLookup, when true, posts the freshly computed whole-file fingerprint
+	// to acoustid.org to try to fetch a MusicBrainz recording ID.
+	OnlineLookup bool `json:"online_lookup,omitempty"`
+
+	// OnlineLookupForce, when true, re-queries acoustid.org even if a previous
+	// lookup already recorded a timestamp.
+	OnlineLookupForce bool `json:"online_lookup_force,omitempty"`
 }
 
 const (
@@ -100,7 +112,7 @@ func (p *Plugin) runFingerprintRescan(ctx context.Context, params json.RawMessag
 		return fmt.Errorf("scope must be one of: missing, all, books")
 	}
 
-	_ = reporter.UpdateProgress(0, 1, "Loading books for fingerprint rescan...")
+	_ = reporter.UpdateProgress(0, 1, "Loading books for fingerprint rescan…")
 
 	books, lerr := loadBooksForRescan(p.store, scope, req.BookIDs)
 	if lerr != nil {
@@ -115,15 +127,33 @@ func (p *Plugin) runFingerprintRescan(ctx context.Context, params json.RawMessag
 	}
 
 	workers := fpRescanWorkers()
+	log := reporter.Logger()
+
+	var lookupExec *onlineLookupExecutor
+	if req.OnlineLookup {
+		apiKey := config.AppConfig.AcoustIDAPIKey
+		if apiKey == "" {
+			apiKey = os.Getenv("ACOUSTID_API_KEY")
+		}
+		if apiKey == "" {
+			log.Info("acoustid online lookup requested but API key is not configured, skipping lookup")
+		} else {
+			lookupExec = newOnlineLookupExecutor(apiKey)
+		}
+	}
 
 	var (
-		fingerprinted  atomic.Int64
-		skipped        atomic.Int64
-		ineligible     atomic.Int64
-		failed         atomic.Int64
-		completedBooks atomic.Int64
-		totalFiles     atomic.Int64
-		filesDone      atomic.Int64
+		fingerprinted           atomic.Int64
+		skipped                 atomic.Int64
+		ineligible              atomic.Int64
+		failed                  atomic.Int64
+		completedBooks          atomic.Int64
+		totalFiles              atomic.Int64
+		filesDone               atomic.Int64
+		onlineLookupMatched     atomic.Int64
+		onlineLookupNoMatch     atomic.Int64
+		onlineLookupFailed      atomic.Int64
+		onlineLookupSkipped     atomic.Int64
 	)
 	startedAt := time.Now()
 
@@ -208,9 +238,14 @@ func (p *Plugin) runFingerprintRescan(ctx context.Context, params json.RawMessag
 						ineligibleMu.Unlock()
 					}
 				} else {
-					switch doFingerprintFile(p.store, f, req.Force) {
+					outcome, updated := doFingerprintFile(p.store, f, req.Force)
+					switch outcome {
 					case fingerprintOutcomeFingerprinted:
 						fingerprinted.Add(1)
+						if lookupExec != nil && updated != nil {
+							maybePerformOnlineLookup(ctx, p.store, log, lookupExec, updated, req.OnlineLookupForce,
+								&onlineLookupMatched, &onlineLookupNoMatch, &onlineLookupFailed, &onlineLookupSkipped)
+						}
 					case fingerprintOutcomeFailed:
 						failed.Add(1)
 					}
@@ -249,10 +284,21 @@ func (p *Plugin) runFingerprintRescan(ctx context.Context, params json.RawMessag
 		reporter.Logger().Info("ineligible reason breakdown", "reasons", counts)
 	}
 
-	_ = reporter.UpdateProgress(total, total,
-		fmt.Sprintf("Fingerprint rescan complete in %s — fp=%d skip=%d ineligible=%d fail=%d (of %d books, %d files)",
-			time.Since(startedAt).Round(time.Second),
-			fingerprinted.Load(), skipped.Load(), ineligible.Load(), failed.Load(), total, filesDone.Load()))
+	summary := fmt.Sprintf("Fingerprint rescan complete in %s — fp=%d skip=%d ineligible=%d fail=%d (of %d books, %d files)",
+		time.Since(startedAt).Round(time.Second),
+		fingerprinted.Load(), skipped.Load(), ineligible.Load(), failed.Load(), total, filesDone.Load())
+	if lookupExec != nil {
+		summary = fmt.Sprintf("%s online_lookup matched=%d no_match=%d failed=%d skipped=%d",
+			summary,
+			onlineLookupMatched.Load(), onlineLookupNoMatch.Load(), onlineLookupFailed.Load(), onlineLookupSkipped.Load())
+		log.Info("acoustid online lookup summary",
+			"matched", onlineLookupMatched.Load(),
+			"no_match", onlineLookupNoMatch.Load(),
+			"failed", onlineLookupFailed.Load(),
+			"skipped", onlineLookupSkipped.Load())
+	}
+
+	_ = reporter.UpdateProgress(total, total, summary)
 	return nil
 }
 
@@ -319,5 +365,125 @@ func loadBooksForRescan(store database.Store, scope string, bookIDs []string) ([
 		return out, nil
 	default:
 		return nil, fmt.Errorf("unknown scope %q", scope)
+	}
+}
+
+// onlineLookupExecutor serializes acoustid.org calls to respect the free-tier rate limit.
+type onlineLookupExecutor struct {
+	client      *acoustid.Client
+	throttle    time.Duration
+	maxThrottle time.Duration
+	lastRequest time.Time
+	mu          sync.Mutex
+}
+
+func newOnlineLookupExecutor(apiKey string) *onlineLookupExecutor {
+	return &onlineLookupExecutor{
+		client:      acoustid.NewClient(apiKey),
+		throttle:    onlineLookupThrottleMin,
+		maxThrottle: onlineLookupThrottleMax,
+	}
+}
+
+func (e *onlineLookupExecutor) lookup(ctx context.Context, fingerprint string, duration int) (acoustid.LookupResult, error) {
+	if err := e.waitForSlot(ctx); err != nil {
+		return acoustid.LookupResult{}, err
+	}
+	res, err := e.client.Lookup(ctx, fingerprint, duration)
+	e.mu.Lock()
+	if err != nil {
+		if errors.Is(err, acoustid.ErrRateLimited) && e.throttle < e.maxThrottle {
+			e.throttle = e.maxThrottle
+		}
+	}
+	e.mu.Unlock()
+	return res, err
+}
+
+func (e *onlineLookupExecutor) waitForSlot(ctx context.Context) error {
+	e.mu.Lock()
+	if e.lastRequest.IsZero() {
+		e.lastRequest = time.Now()
+		e.mu.Unlock()
+		return nil
+	}
+	since := time.Since(e.lastRequest)
+	if since >= e.throttle {
+		e.lastRequest = time.Now()
+		e.mu.Unlock()
+		return nil
+	}
+	wait := e.throttle - since
+	e.mu.Unlock()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(wait):
+	}
+
+	e.mu.Lock()
+	e.lastRequest = time.Now()
+	e.mu.Unlock()
+	return nil
+}
+
+func maybePerformOnlineLookup(ctx context.Context, store database.Store, log *slog.Logger, executor *onlineLookupExecutor, f *database.BookFile, force bool, matched, noMatch, failed, skipped *atomic.Int64) {
+	if executor == nil || f == nil {
+		return
+	}
+	if len(f.AcoustIDFingerprint) == 0 {
+		if skipped != nil {
+			skipped.Add(1)
+		}
+		return
+	}
+	if !force && f.AcoustIDOnlineLookedUpAt != nil {
+		if skipped != nil {
+			skipped.Add(1)
+		}
+		return
+	}
+	duration := int(f.AcoustIDFingerprintDurationSec)
+	if duration <= 0 {
+		duration = f.Duration
+	}
+	fp := fingerprint.EncodeWholeFingerprint(f.AcoustIDFingerprint)
+	if fp == "" {
+		if skipped != nil {
+			skipped.Add(1)
+		}
+		return
+	}
+	res, err := executor.lookup(ctx, fp, duration)
+	if err != nil {
+		if failed != nil {
+			failed.Add(1)
+		}
+		log.Warn("acoustid online lookup: request failed", "file_id", f.ID, "err", err)
+		return
+	}
+	now := time.Now().UTC()
+	f.AcoustIDOnlineLookedUpAt = &now
+	if res.Score >= AcoustIDOnlineMinScore {
+		f.AcoustIDOnlineRecordingID = res.RecordingID
+		f.AcoustIDOnlineScore = res.Score
+		if matched != nil {
+			matched.Add(1)
+		}
+		log.Info("acoustid online lookup: matched",
+			"file_id", f.ID,
+			"book_id", f.BookID,
+			"recording_id", res.RecordingID,
+			"score", fmt.Sprintf("%.3f", res.Score))
+	} else {
+		f.AcoustIDOnlineRecordingID = ""
+		f.AcoustIDOnlineScore = 0
+		if noMatch != nil {
+			noMatch.Add(1)
+		}
+	}
+	if err := store.UpdateBookFile(f.ID, f); err != nil {
+		log.Warn("acoustid online lookup: persist failed", "file_id", f.ID, "err", err)
 	}
 }

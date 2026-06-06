@@ -1,7 +1,7 @@
 // file: internal/plugins/acoustid/backfill.go
-// version: 1.3.0
+// version: 1.3.1
 // guid: f6a7b8c9-d0e1-2345-def0-123456789abc
-// last-edited: 2026-05-31
+// last-edited: 2026-06-06
 
 package acoustid
 
@@ -126,7 +126,7 @@ func (p *Plugin) runBackfill(ctx context.Context, params json.RawMessage, report
 
 		bookModified := false
 		for _, f := range files {
-			outcome := fingerprintBookFile(p.store, f, false)
+			outcome, _ := fingerprintBookFile(p.store, f, false)
 			switch outcome {
 			case fingerprintOutcomeFingerprinted:
 				fingerprinted++
@@ -224,9 +224,9 @@ func fingerprintEligibility(f database.BookFile, force bool) (fingerprintFileOut
 // to 7-segment ffmpeg mode when fpcalc is not installed. In segment mode only
 // Seg0-Seg6 are written; AcoustIDFingerprint stays empty until fpcalc is
 // installed and a force-rescan is run.
-func fingerprintBookFile(store database.Store, f database.BookFile, force bool) fingerprintFileOutcome {
+func fingerprintBookFile(store database.Store, f database.BookFile, force bool) (fingerprintFileOutcome, *database.BookFile) {
 	if outcome, _, stop := fingerprintEligibility(f, force); stop {
-		return outcome
+		return outcome, nil
 	}
 	return doFingerprintFile(store, f, force)
 }
@@ -234,11 +234,11 @@ func fingerprintBookFile(store database.Store, f database.BookFile, force bool) 
 // doFingerprintFile runs fpcalc/ffmpeg and persists the result. Callers must
 // have already confirmed eligibility via fingerprintEligibility. force=true
 // additionally clears legacy Seg1..6 fields.
-func doFingerprintFile(store database.Store, f database.BookFile, force bool) fingerprintFileOutcome {
+func doFingerprintFile(store database.Store, f database.BookFile, force bool) (fingerprintFileOutcome, *database.BookFile) {
 	wf, err := fingerprint.FileWholeFingerprint(f.FilePath)
 	if err != nil && !errors.Is(err, fingerprint.ErrNotAvailable) {
 		slog.Warn("fingerprint", "path", f.FilePath, "err", err)
-		return fingerprintOutcomeFailed
+		return fingerprintOutcomeFailed, nil
 	}
 
 	updated := f
@@ -261,7 +261,7 @@ func doFingerprintFile(store database.Store, f database.BookFile, force bool) fi
 		segs, serr := fingerprint.FileSegments(f.FilePath, f.Duration)
 		if serr != nil {
 			slog.Warn("fingerprint segments", "path", f.FilePath, "err", serr)
-			return fingerprintOutcomeFailed
+			return fingerprintOutcomeFailed, nil
 		}
 		updated.AcoustIDSeg0 = fingerprint.NormalizeForStorage(segs[0])
 		updated.AcoustIDSeg1 = fingerprint.NormalizeForStorage(segs[1])
@@ -274,9 +274,9 @@ func doFingerprintFile(store database.Store, f database.BookFile, force bool) fi
 
 	if err := store.UpdateBookFile(f.ID, &updated); err != nil {
 		slog.Warn("fingerprint update", "id", f.ID, "err", err)
-		return fingerprintOutcomeFailed
+		return fingerprintOutcomeFailed, nil
 	}
-	return fingerprintOutcomeFingerprinted
+	return fingerprintOutcomeFingerprinted, &updated
 }
 
 // synthesizeBookSignatureForBook generates and persists the unified book
