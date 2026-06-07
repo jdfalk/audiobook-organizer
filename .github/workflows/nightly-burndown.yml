@@ -1,5 +1,5 @@
 # file: .github/workflows/nightly-burndown.yml
-# version: 2.1.0
+# version: 2.2.0
 name: Nightly burndown
 
 on:
@@ -24,7 +24,7 @@ on:
 
 jobs:
   burndown:
-    uses: falkcorp/github-common/.github/workflows/reusable-burndown.yml@cf478e0ede8ec82d9b954b5c2b5f2830725c4499 # v1.10.7
+    uses: falkcorp/github-common/.github/workflows/reusable-burndown.yml@f602707c96a8c979ecb9d2f4b0b95874673b2392 # v1.10.0
     with:
       mode: ${{ inputs.mode || 'draft-only' }}
       hub_repo: falkcorp/burndown-tasks
