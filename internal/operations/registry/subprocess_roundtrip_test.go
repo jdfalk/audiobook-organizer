@@ -38,8 +38,12 @@ import (
 	"github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 )
 
-// testChildEnvVar gates the in-test child-mode handler installed by TestMain.
-const testChildEnvVar = "TEST_SUBPROCESS_CHILD"
+const (
+	testChildEnvVar          = "TEST_SUBPROCESS_CHILD"
+	testChildExpectDefVar    = "TEST_SUBPROCESS_EXPECT_DEF"
+	testChildExpectParamsVar = "TEST_SUBPROCESS_EXPECT_PARAMS"
+	testChildResultErrorVar  = "TEST_SUBPROCESS_RESULT_ERROR"
+)
 
 // TestMain installs a stub child-mode handler when the gate env var is set.
 // Otherwise it runs the test suite normally.
@@ -83,13 +87,36 @@ func runStubChild() {
 		os.Exit(1)
 	}
 
-	// Reply with success.
-	res := []byte(`{"ok":true}` + "\n")
-	if _, err := conn.Write(res); err != nil {
-		fmt.Fprintf(os.Stderr, "stub child: write result: %v\n", err)
+	if expectedDef := os.Getenv(testChildExpectDefVar); expectedDef != "" && hs.DefID != expectedDef {
+		fmt.Fprintf(os.Stderr, "stub child: unexpected def_id: got %s want %s\n", hs.DefID, expectedDef)
+		writeStubChildResult(conn, fmt.Sprintf("unexpected def_id: %s", hs.DefID))
 		os.Exit(1)
 	}
+	if expectedParams := os.Getenv(testChildExpectParamsVar); expectedParams != "" && string(hs.Params) != expectedParams {
+		fmt.Fprintf(os.Stderr, "stub child: unexpected params: got %s want %s\n", string(hs.Params), expectedParams)
+		writeStubChildResult(conn, fmt.Sprintf("unexpected params: %s", string(hs.Params)))
+		os.Exit(1)
+	}
+
+	if errMsg := os.Getenv(testChildResultErrorVar); errMsg != "" {
+		writeStubChildResult(conn, errMsg)
+		os.Exit(0)
+	}
+	writeStubChildResult(conn, "")
 	os.Exit(0)
+}
+
+func writeStubChildResult(conn net.Conn, errMsg string) {
+	res := struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error,omitempty"`
+	}{
+		OK:    errMsg == "",
+		Error: errMsg,
+	}
+	b, _ := json.Marshal(res)
+	b = append(b, '\n')
+	_, _ = conn.Write(b)
 }
 
 // TestSubprocessRoundtrip verifies the parent->child handshake completes

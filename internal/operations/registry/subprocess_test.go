@@ -17,6 +17,7 @@ package registry_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"testing"
@@ -27,7 +28,6 @@ import (
 
 // TestIsChildMode_FalseWithNoArgs verifies IsChildMode is false in normal execution.
 func TestIsChildMode_FalseWithNoArgs(t *testing.T) {
-	// In normal test execution, os.Args[1] is not "--operation-runner".
 	if registry.IsChildMode() {
 		t.Error("IsChildMode() should be false in normal test execution")
 	}
@@ -58,16 +58,12 @@ func TestSubprocess_ChildExitsWithErrorWhenNoBinaryKnowsRunner(t *testing.T) {
 		t.Fatalf("EnqueueOp: %v", err)
 	}
 
-	// The subprocess will fail to connect (test binary doesn't handle --operation-runner),
-	// so the op must land in "failed".
 	awaitStatus(t, store, opID, "failed", 10*time.Second)
 
-	// def.Run must NOT have been called in-process.
 	if ranCount > 0 {
 		t.Error("def.Run was called in-process for Isolate=true op; should not happen")
 	}
 
-	// error_message must be set.
 	row, _ := store.GetOperationV2(opID)
 	if row == nil {
 		t.Fatal("op row not found")
@@ -100,7 +96,6 @@ func TestSubprocess_CancelSendsTermToChild(t *testing.T) {
 		t.Fatalf("EnqueueOp: %v", err)
 	}
 
-	// The subprocess will fail fast. Just verify it reaches a terminal state.
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		s := store.statusOf(opID)
@@ -118,9 +113,65 @@ func TestSubprocess_EnvSocketPathConstant(t *testing.T) {
 	if registry.EnvSocketPath == "" {
 		t.Error("EnvSocketPath constant is empty")
 	}
-	// Verify it's not accidentally set in the test env.
 	if os.Getenv(registry.EnvSocketPath) != "" {
-		// This is OK in integration scenarios; just log.
 		t.Logf("note: %s is set in env: %s", registry.EnvSocketPath, os.Getenv(registry.EnvSocketPath))
+	}
+}
+
+// TestSubprocess_HandshakeRoundtrip verifies the parent/child handshake and
+// result roundtrip over the unix socket when the child re-execs the binary.
+func TestSubprocess_HandshakeRoundtrip(t *testing.T) {
+	const (
+		defID             = "test.subprocess-handshake"
+		paramsPayload     = "{\"handshake\":\"params\"}"
+		childErrorMessage = "child handshake failure"
+	)
+
+	prev := registry.ChildEnvFunc
+	registry.ChildEnvFunc = func() []string {
+		return []string{
+			testChildEnvVar + "=1",
+			testChildExpectDefVar + "=" + defID,
+			testChildExpectParamsVar + "=" + paramsPayload,
+			testChildResultErrorVar + "=" + childErrorMessage,
+		}
+	}
+	t.Cleanup(func() { registry.ChildEnvFunc = prev })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	store := newFakeStore()
+	r := registry.New(store, slog.Default(), 1, nil)
+
+	def := makeValidDef(defID)
+	def.Isolate = true
+	def.Run = func(_ context.Context, _ json.RawMessage, _ registry.Reporter) error {
+		t.Error("def.Run should not be called in-process for Isolate=true op")
+		return nil
+	}
+	if err := r.RegisterOp(def); err != nil {
+		t.Fatalf("RegisterOp: %v", err)
+	}
+	r.Start(ctx)
+
+	params := json.RawMessage(paramsPayload)
+	opID, err := r.EnqueueOp(ctx, defID, params)
+	if err != nil {
+		t.Fatalf("EnqueueOp: %v", err)
+	}
+
+	awaitStatus(t, store, opID, "failed", 15*time.Second)
+
+	row, _ := store.GetOperationV2(opID)
+	if row == nil {
+		t.Fatal("op row not found")
+	}
+	if row.ErrorMessage == nil {
+		t.Fatal("expected error_message to be set")
+	}
+	expected := fmt.Sprintf("subprocess op failed: %s", childErrorMessage)
+	if *row.ErrorMessage != expected {
+		t.Fatalf("unexpected error_message: got %q want %q", *row.ErrorMessage, expected)
 	}
 }
