@@ -1,5 +1,5 @@
 # file: .github/workflows/nightly.yml
-# version: 1.0.1
+# version: 1.0.2
 # guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 # last-edited: 2026-05-01
 
@@ -28,7 +28,7 @@ permissions:
 jobs:
   full-ci:
     name: Full CI Suite
-    uses: falkcorp/github-common/.github/workflows/reusable-ci.yml@fe1e3081e230dd5ac3d358f9c6a3e4dc0b209529 # v1.12.0
+    uses: falkcorp/github-common/.github/workflows/reusable-ci.yml@f602707c96a8c979ecb9d2f4b0b95874673b2392 # v1.12.1
     with:
       go-version: '1.26'
       go-experiment: 'jsonv2'
