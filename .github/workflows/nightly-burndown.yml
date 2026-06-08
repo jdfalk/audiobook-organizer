@@ -1,10 +1,11 @@
 # file: .github/workflows/nightly-burndown.yml
-# version: 2.3.0
+# version: 2.4.0
 name: Nightly burndown
 
 on:
   schedule:
-    - cron: "0 8 * * *"
+    - cron: "0 8 * * *"   # 08:00 UTC morning run
+    - cron: "0 20 * * *"  # 20:00 UTC evening run (backup + catches GitHub scheduler drift)
   workflow_dispatch:
     inputs:
       mode:
@@ -26,7 +27,9 @@ jobs:
   burndown:
     uses: falkcorp/github-common/.github/workflows/reusable-burndown.yml@f602707c96a8c979ecb9d2f4b0b95874673b2392 # v1.10.0
     with:
-      mode: ${{ inputs.mode || 'draft-only' }}
+      # Scheduled runs always use full mode (auto-merge ready PRs).
+      # Manual dispatch respects the input selection (default: draft-only for safety).
+      mode: ${{ github.event_name == 'schedule' && 'full' || inputs.mode || 'draft-only' }}
       hub_repo: falkcorp/burndown-tasks
       cheapest_only: true
       triage_model: gpt-4.1
