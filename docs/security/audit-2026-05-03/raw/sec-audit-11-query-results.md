@@ -4,6 +4,10 @@
 - `gh api repos/jdfalk/audiobook-organizer/code-scanning/alerts --state=open --summary` (captured on 2026-05-18 after Phases 0–10 merged).
 - The counts below represent the open alerts reported by CodeQL on that date.
 
+## Query details
+- The summary data above was captured on 2026-05-18 using `gh api repos/jdfalk/audiobook-organizer/code-scanning/alerts --state=open --summary`; the same dataset powers the table below.
+- CodeQL dismissal comments reference this snapshot (and the accompanying closeout narrative) so reviewers can trace each accepted-risk rationale back to the recorded counts.
+
 ## Open alert counts
 | Category | Open alerts | Notes |
 |----------|-------------|-------|
@@ -15,6 +19,7 @@
 1. **Path-injection delta:** Comments read "Path built with SafeJoin/SafePath; sanitized before consumption" and the alert state is `accepted-risk`.
 2. **Log-injection:** Comments read "`%s`-only logging; format string is literal, so this is not a format-string injection" with a reference to this closeout and the structured logging initiative.
 3. **Other categories:** Comments describe the feature-specific context (e.g., authenticated request, bounded allocation) and set the state to `accepted-risk` or `false-positive` accordingly.
+4. **Traceability:** Every dismissal comment now links to this snapshot (or the closeout it references) so future reviewers can correlate a dismissal with the aggregated counts before re-running the query.
 
 ## Next steps
 - Phase 12 will review the log-injection cluster if CodeQL adjusts its heuristics or if we decide to migrate additional logging statements to structured `slog` attributes.
