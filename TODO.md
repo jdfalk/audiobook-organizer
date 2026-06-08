@@ -310,6 +310,8 @@ Copy + pause-on-hover in #1182.
   "failed to unmarshal params"), (2) op-log Copy + Refresh buttons work,
   (3) RSS post-I2/I3/I4/I5 holds steady or drops further, (4) chromem
   switch from `NewPersistentDB` → `NewDB` doesn't regress dedup recall.
+  See `docs/pd3-prod-verification.md` for the actionable plan and the
+  verification table where results should be recorded.
 
 ### Deferred from MAYDEPLOY
 
