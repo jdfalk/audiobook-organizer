@@ -852,7 +852,13 @@ func (imp *Importer) groupTracksByAlbum(library *itunes.Library) []albumGroup {
 		artist := strings.TrimSpace(track.Artist)
 		album := strings.TrimSpace(track.Album)
 		if album == "" {
-			album = strings.TrimSpace(track.Name)
+			trackName := strings.TrimSpace(track.Name)
+			stripped := stripChapterPrefix(trackName)
+			if stripped != "" {
+				album = stripped
+			} else {
+				album = trackName
+			}
 		}
 		key := artist + "|" + album
 		if _, exists := groupMap[key]; !exists {
