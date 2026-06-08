@@ -26,11 +26,12 @@
 3. **Other categories (17 alerts):** Request-forgery, allocation, workflow permission, and miscellaneous alerts were triggered by recent feature code. Each has a short rationalization (e.g., "authenticated client configuration only", "bounded by `MaxScanBufferBytes`", "workflow state machine enforces permissions"). States are set to `accepted-risk` or `false-positive` as appropriate.
 
 ## CodeQL dashboard updates
-- Every new alert now has a dismissal comment linking back to this closeout when practical. The comments name the sanitizing pattern (`SafeJoin`, `%s` logging, etc.) and explain why the behavior is harmless or accepted.
-- These dismissals are grouped under the dashboard's "Bulk-dismissal rationale" so future reviewers can map each alert number to the textual explanation without re-tracing the code.
+- Every new alert now has a dismissal comment linking back to this closeout when practical. The comments name the sanitizing pattern (`SafeJoin`, `%s` logging, etc.), explain why the behavior is harmless or accepted, and include a link to `docs/security/audit-2026-05-03/raw/sec-audit-11-query-results.md` so reviewers can verify the supporting counts.
+- These dismissals are grouped under the dashboard's "Bulk-dismissal rationale" so future reviewers can map each alert number to the textual explanation without re-tracing the code; the rationale refers to this document and the raw snapshot for traceability.
 
 ## Raw data snapshot
 - The aggregated query output that produced the 492 alerts is archived at `docs/security/audit-2026-05-03/raw/sec-audit-11-query-results.md`, including the status of each category and the accepted-risk rationale used in the dashboard.
+- The snapshot was generated with `gh api repos/jdfalk/audiobook-organizer/code-scanning/alerts --state=open --summary` on 2026-05-18 (post-Phases 0–10). The Markdown table inside that document is the same dataset referenced by the CodeQL dismissal comments.
 
 ## Next steps
 - Phase 12 remains open to reassess the log-injection category if CodeQL or our structured logging strategy evolves; the closeout deliberately leaves the rationale conservative so future auditors can either accept it or re-open the alerts.
