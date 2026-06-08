@@ -1,7 +1,7 @@
 // file: internal/server/activity_handlers_test.go
-// version: 5.0.0
+// version: 5.1.0
 // guid: d4e5f6a7-b8c9-0123-defa-234567890123
-// last-edited: 2026-06-10
+// last-edited: 2026-06-13
 
 // Updated for Phase 2 handler extraction: tests now use handlers.ActivityHandler
 // directly instead of *Server methods.
@@ -11,6 +11,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -284,9 +285,9 @@ func TestListOperationActivity_FallbackToOpLogs(t *testing.T) {
 
 	var resp struct {
 		Data struct {
-			OperationID string                       `json:"operation_id"`
-			Entries     []operationActivityEntry     `json:"entries"`
-			Total       int                          `json:"total"`
+			OperationID string                   `json:"operation_id"`
+			Entries     []operationActivityEntry `json:"entries"`
+			Total       int                      `json:"total"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
@@ -305,4 +306,99 @@ func TestListOperationActivity_FallbackToOpLogs(t *testing.T) {
 	}
 	assert.True(t, hasOpTag, "expected op: tag in fallback entry tags")
 	assert.Equal(t, 2, resp.Data.Total)
+}
+
+func TestListOperationActivity_WithRecordedEntries(t *testing.T) {
+	dir := t.TempDir()
+	store, err := database.NewNutsActivityStore(dir)
+	require.NoError(t, err)
+	defer store.Close()
+
+	svc := activity.NewService(store)
+	gin.SetMode(gin.TestMode)
+	h := handlers.NewActivityHandler(svc, nil)
+	r := gin.New()
+	r.GET("/api/v1/operations/:id/activity", h.ListOperationActivity)
+
+	opID := "metadata-fetch-op-001"
+	baseTime := time.Now().UTC().Truncate(time.Second)
+
+	records := []database.ActivityEntry{
+		{
+			Timestamp:   baseTime,
+			Tier:        "change",
+			Type:        "metadata-fetch",
+			Level:       "info",
+			Source:      "scheduler",
+			OperationID: opID,
+			Summary:     "metadata fetch queued",
+			Details: map[string]any{
+				"stage": "queued",
+			},
+		},
+		{
+			Timestamp:   baseTime.Add(time.Minute),
+			Tier:        "change",
+			Type:        "metadata-fetch",
+			Level:       "info",
+			Source:      "scheduler",
+			OperationID: opID,
+			Summary:     "metadata fetch running",
+			Details: map[string]any{
+				"stage": "running",
+			},
+		},
+		{
+			Timestamp:   baseTime.Add(2 * time.Minute),
+			Tier:        "change",
+			Type:        "metadata-fetch",
+			Level:       "info",
+			Source:      "scheduler",
+			OperationID: opID,
+			Summary:     "metadata fetch complete",
+			Details: map[string]any{
+				"stage": "complete",
+			},
+		},
+	}
+
+	for _, record := range records {
+		require.NoError(t, svc.Record(record))
+	}
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/operations/%s/activity", opID), nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp struct {
+		Data struct {
+			OperationID string                   `json:"operation_id"`
+			Entries     []operationActivityEntry `json:"entries"`
+			Total       int                      `json:"total"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+
+	assert.Equal(t, opID, resp.Data.OperationID)
+	assert.Equal(t, len(records), resp.Data.Total)
+	require.Len(t, resp.Data.Entries, len(records))
+
+	for idx, record := range records {
+		got := resp.Data.Entries[idx]
+		assert.Equal(t, record.Summary, got.Message)
+		assert.Equal(t, record.Level, got.Level)
+		assert.Equal(t, record.Type, got.OperationType)
+		assert.True(t, record.Timestamp.Equal(got.Timestamp))
+	}
+
+	hasOpTag := false
+	for _, tag := range resp.Data.Entries[0].Tags {
+		if tag == "op:"+opID {
+			hasOpTag = true
+			break
+		}
+	}
+	assert.True(t, hasOpTag)
 }
