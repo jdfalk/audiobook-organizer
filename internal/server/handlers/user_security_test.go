@@ -1,7 +1,7 @@
 // file: internal/server/handlers/user_security_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 7f1c2a93-4d8e-4b6a-9c10-2e5b7a0d1f44
-// last-edited: 2026-06-04
+// last-edited: 2026-06-09
 
 package handlers_test
 
@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/server/handlers"
-	handlersmocks "github.com/jdfalk/audiobook-organizer/internal/server/handlers/mocks"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/server/handlers"
+	handlersmocks "github.com/falkcorp/audiobook-organizer/internal/server/handlers/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"

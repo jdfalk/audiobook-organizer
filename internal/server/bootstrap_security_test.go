@@ -1,7 +1,7 @@
 // file: internal/server/bootstrap_security_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 2b9d4e6a-1c3f-4a8b-bd72-5e0a9c4f1d36
-// last-edited: 2026-06-04
+// last-edited: 2026-06-09
 
 package server
 
@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
 // fakeSettingsStore is a minimal in-memory SettingsReadWriter that mirrors the
