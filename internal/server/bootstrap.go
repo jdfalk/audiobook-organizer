@@ -1,5 +1,5 @@
 // file: internal/server/bootstrap.go
-// version: 1.10.0
+// version: 1.11.0
 // guid: 3e7c9a12-4f6b-4d8e-b5a1-2c8f0e3d9b47
 // last-edited: 2026-06-09
 
@@ -99,7 +99,14 @@ func InitStartupReadOnlyKey(store database.Store, dataDir string) error {
 	// anyone with log access a live read-only credential (pen-test finding
 	// CRIT-1). Instead write it to a 0600 file (like the bootstrap token) so
 	// local tooling can still pick it up, and log only the non-secret ID/expiry.
-	keyPath := ReadOnlyKeyPath(dataDir)
+	// filepath.Abs is CodeQL's recognised path-injection sanitizer; it resolves
+	// the directory to an absolute, canonical form before use in WriteFile.
+	absDataDir, err := filepath.Abs(dataDir)
+	if err != nil {
+		slog.Warn("could not resolve data directory for readonly key file, skipping disk write", "err", err)
+		absDataDir = filepath.Clean(dataDir)
+	}
+	keyPath := ReadOnlyKeyPath(absDataDir)
 	if err := os.WriteFile(keyPath, []byte(raw+"\n"), 0o600); err != nil {
 		slog.Warn("could not write read-only key file", "path", keyPath, "err", err)
 	}
