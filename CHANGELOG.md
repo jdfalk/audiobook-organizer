@@ -1,11 +1,37 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.11.0 -->
+<!-- version: 3.12.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-06-04 -->
+<!-- last-edited: 2026-06-09 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Changed
+
+#### June 9, 2026 — Burndown bot: automatic conflict resolution + schedule reliability
+
+**Conflict resolution (`rebase-stale` job — falkcorp/github-common v1.11.0)**
+
+Every burndown run now starts a `rebase-stale` job in parallel with `preflight`.
+It finds all open `automation`-labeled PRs where GitHub reports `mergeable == CONFLICTING`,
+rebases each onto `main`, and force-pushes. If a rebase has unresolvable conflicts
+the PR gets labeled `status:conflict-unresolvable` (red) and a comment instructs
+closing the PR and re-dispatching the hub issue. Triage waits for both `preflight`
+and `rebase-stale` so every new dispatch lands on a clean base.
+
+**Schedule reliability (PR #1342)**
+
+- Added second daily slot: `0 20 * * *` (20:00 UTC) — guards against GitHub
+  scheduler drift (observed up to 4.5h late)
+- Scheduled runs now use `full` mode (auto-merge) instead of `draft-only`
+- Manual `workflow_dispatch` still defaults to `draft-only` for safety
+
+**SHA pin updated**: `nightly-burndown.yml` → `c3dac07` (v1.11.0, PR #1353)
+
+**31 narrow replacement issues created** (burndown-tasks #79–109): the 16 broad
+`on-hold` testing tasks that were hitting the 90-iteration cap were closed and
+replaced with single-file issues, each completable in ~20 agent iterations.
 
 ### Fixed
 

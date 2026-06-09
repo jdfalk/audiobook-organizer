@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.70.0 -->
+<!-- version: 8.71.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-06-04 -->
+<!-- last-edited: 2026-06-09 -->
 
 # Project TODO
 
@@ -19,12 +19,29 @@ future agent) can scan the entire workspace in one page.
 
 ---
 
-## 🎯 Current Status — June 4, 2026
+## 🎯 Current Status — June 9, 2026
 
 **Library:** ~50K books (~10,891 organized + ~39K iTunes-imported) / 8,837 authors / 21,668 series
 **Production:** PebbleDB primary; Linux, HTTPS at `172.16.2.30:8484`
-**Latest activity:** Handler extraction complete (PRs #1232/#1233/#1236/#1238 — 12 handler domains off `*Server` into `internal/server/handlers/`); Registry.Shutdown nil-cancel race fixed (PR #1239); triage-poll migrated to Responses API + gpt-5.3-codex
-**In flight:** SEC-AUDIT-11 (CodeQL bulk dismiss), FE-10 (Vitest coverage thresholds), fingerprint identification pipeline (#6–#30 in burndown-tasks)
+**Latest activity:** Burndown bot: `rebase-stale` job (auto-fix CONFLICTING PRs) + dual schedule (08:00/20:00 UTC) + `full` mode for scheduled runs (PRs #1342, #1353). 31 narrow test-coverage issues queued in burndown-tasks (#79–#109).
+**In flight:** Burndown bot dispatching test coverage tasks (#79–#109), FE-10 (Vitest coverage thresholds), fingerprint identification pipeline
+
+---
+
+## ✅ Completed — June 9, 2026
+
+- [x] **BURNDOWN-REBASE** Burndown bot: automatic conflict resolution — `rebase-stale` job
+  rebases CONFLICTING bot PRs onto main before each dispatch run;
+  `status:conflict-unresolvable` label + comment for true conflicts.
+  (falkcorp/github-common PR #303, v1.11.0; audiobook-organizer PR #1353)
+- [x] **BURNDOWN-SCHED** Burndown schedule reliability: dual slot (08:00+20:00 UTC),
+  `full` mode for scheduled runs, `max_tasks=8` cap to prevent OpenAI 429.
+  (audiobook-organizer PR #1342, v2.5.0→v2.6.0)
+- [x] **BURNDOWN-DECOMPOSE** Proactive task decomposition: 16 broad `on-hold` testing
+  issues (burndown-tasks #52–#67) closed and replaced with 31 narrow single-file
+  issues (#79–#109), each completable within the 90-iteration agent cap.
+
+---
 
 ---
 
