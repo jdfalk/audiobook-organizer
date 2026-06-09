@@ -1,12 +1,22 @@
 #!/usr/bin/env python3
+# file: scripts/check-memory-leaks.py
+# version: 1.1.0
 """
 Detects common memory leak patterns in React/TypeScript code.
 Scans for:
 - Untracked setTimeout/setInterval
 - Untracked addEventListener/removeEventListener pairs
 - Untracked fetch/subscriptions in handlers
+
+Flags:
+  (default)        Human-readable report; exits 1 when leaks found
+  --json           JSON array of findings; exits 1 when leaks found
+  --todo-entry     Single TODO.md list item for the findings; exits 0 always
+                   (meant for CI reporting steps)
 """
 
+import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -220,7 +230,7 @@ class MemoryLeakDetector:
             f for f in tsx_files if ".test." not in f.name and "setup.ts" not in f.name
         ]
 
-        print(f"🔍 Scanning {len(tsx_files)} files for memory leaks...")
+        print(f"🔍 Scanning {len(tsx_files)} files for memory leaks...", file=sys.stderr)
 
         for filepath in tsx_files:
             try:
@@ -257,12 +267,97 @@ class MemoryLeakDetector:
         print()
 
 
-def main():
-    detector = MemoryLeakDetector()
-    success = detector.scan()
-    detector.report()
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Detect memory leak patterns in React/TS code")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--json", action="store_true", help="Output findings as JSON array")
+    group.add_argument(
+        "--todo-entry",
+        metavar="DATE",
+        help="Output a TODO.md list item for the findings (DATE = YYYY-MM-DD); exits 0 always",
+    )
+    group.add_argument(
+        "--todo-insert",
+        metavar="DATE",
+        help="Like --todo-entry but also inserts the entry into TODO.md in-place",
+    )
+    parser.add_argument(
+        "--run-url",
+        metavar="URL",
+        default="",
+        help="GitHub Actions run URL to include in TODO entry",
+    )
+    args = parser.parse_args()
 
-    return 0 if success else 1
+    detector = MemoryLeakDetector()
+    clean = detector.scan()
+
+    if args.json:
+        data = [
+            {"file": f, "line": ln, "message": msg}
+            for f, ln, msg in detector.issues
+        ]
+        print(json.dumps(data, indent=2))
+        return 0 if clean else 1
+
+    date = args.todo_entry or args.todo_insert
+    if date:
+        count = len(detector.issues)
+        if count == 0:
+            return 0
+        # Build a compact TODO.md bullet that the burndown bot won't auto-process
+        # (tag is [memory-leak], NOT [failed-batch-hard]).
+        lines = [
+            f"- [ ] **MEMLEAK-{date}** [memory-leak] {count} potential memory leak(s) "
+            f"detected by scheduled scan{' — ' + args.run_url if args.run_url else ''}."
+        ]
+        # Up to 20 specific findings as sub-bullets
+        for filepath, line_no, msg in detector.issues[:20]:
+            lines.append(f"  - `{filepath}:{line_no}` — {msg}")
+        if count > 20:
+            lines.append(f"  - _(+{count - 20} more — see run output)_")
+        entry = "\n".join(lines) + "\n"
+
+        if args.todo_insert:
+            _insert_into_todo(entry)
+
+        print(entry)
+        return 0
+
+    # Default: human-readable report
+    detector.report()
+    return 0 if clean else 1
+
+
+def _insert_into_todo(entry: str) -> None:
+    """Insert entry under '## ⚠️ Automated Findings' section in TODO.md (creates section if absent)."""
+    todo_path = Path("TODO.md")
+    if not todo_path.exists():
+        return
+
+    content = todo_path.read_text(encoding="utf-8")
+    header = "## ⚠️ Automated Findings"
+
+    if header in content:
+        # Insert right after the header line
+        idx = content.index(header) + len(header)
+        # Skip past any immediately following newline
+        while idx < len(content) and content[idx] == "\n":
+            idx += 1
+        content = content[:idx] + "\n" + entry + content[idx:]
+    else:
+        # Prepend a new section before the last "---" divider, or append at end
+        last_divider = content.rfind("\n---\n")
+        if last_divider != -1:
+            content = (
+                content[:last_divider]
+                + f"\n\n{header}\n\n{entry}"
+                + content[last_divider:]
+            )
+        else:
+            content += f"\n\n{header}\n\n{entry}"
+
+    todo_path.write_text(content, encoding="utf-8")
 
 
 if __name__ == "__main__":
