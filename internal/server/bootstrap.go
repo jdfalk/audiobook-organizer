@@ -1,5 +1,5 @@
 // file: internal/server/bootstrap.go
-// version: 1.9.1
+// version: 1.10.0
 // guid: 3e7c9a12-4f6b-4d8e-b5a1-2c8f0e3d9b47
 // last-edited: 2026-06-09
 
@@ -53,9 +53,10 @@ const (
 
 // InitStartupReadOnlyKey creates (or refreshes) a read-only API key on every
 // startup. The key is scoped to library.view only and expires after 24 hours.
-// Its raw value is printed to the log so local tooling can pick it up without
-// going through the bootstrap exchange dance.
-func InitStartupReadOnlyKey(store database.Store) error {
+// Its raw value is written to a 0600 file at ReadOnlyKeyPath(dataDir).
+// dataDir must be the already-cleaned application data directory (caller is
+// responsible for sanitising the value — mirrors ConsumeBootstrapToken).
+func InitStartupReadOnlyKey(store database.Store, dataDir string) error {
 	// Revoke any previously emitted startup read-only key so old tokens don't
 	// accumulate in the database.
 	if prev, err := store.GetSetting(readonlyKeyNameSetting); err == nil && prev != nil && prev.Value != "" {
@@ -98,9 +99,7 @@ func InitStartupReadOnlyKey(store database.Store) error {
 	// anyone with log access a live read-only credential (pen-test finding
 	// CRIT-1). Instead write it to a 0600 file (like the bootstrap token) so
 	// local tooling can still pick it up, and log only the non-secret ID/expiry.
-	// filepath.Clean sanitizes the config-sourced path before use in os.WriteFile
-	// so CodeQL's path-injection taint can resolve the sanitizer at the call site.
-	keyPath := ReadOnlyKeyPath(filepath.Clean(filepath.Dir(config.AppConfig.DatabasePath)))
+	keyPath := ReadOnlyKeyPath(dataDir)
 	if err := os.WriteFile(keyPath, []byte(raw+"\n"), 0o600); err != nil {
 		slog.Warn("could not write read-only key file", "path", keyPath, "err", err)
 	}

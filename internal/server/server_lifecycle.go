@@ -1,7 +1,7 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.31.0
+// version: 1.32.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
-// last-edited: 2026-06-03
+// last-edited: 2026-06-09
 
 package server
 
@@ -395,17 +395,17 @@ func (s *Server) Start(cfg ServerConfig) error {
 		slog.Warn("seed system user", "err", err)
 	}
 
-	// Initialize the one-time bootstrap token for emergency admin access.
+	// Initialize the one-time bootstrap token and startup read-only key.
+	// dataDir is derived and sanitised once here so both callers receive a
+	// clean path — mirrors the ConsumeBootstrapToken(store, dataDir, …) pattern.
 	if dbPath := config.AppConfig.DatabasePath; dbPath != "" {
-		dataDir := filepath.Dir(dbPath)
+		dataDir := filepath.Clean(filepath.Dir(dbPath))
 		if err := InitBootstrapToken(s.Store(), dataDir); err != nil {
 			slog.Info("Failed to init bootstrap token", "err", err)
 		}
-	}
-
-	// Emit a fresh read-only API key (library.view, 24 h TTL) for local tooling.
-	if err := InitStartupReadOnlyKey(s.Store()); err != nil {
-		slog.Info("Failed to init startup read-only key", "err", err)
+		if err := InitStartupReadOnlyKey(s.Store(), dataDir); err != nil {
+			slog.Info("Failed to init startup read-only key", "err", err)
+		}
 	}
 
 	// Resume any operations that were interrupted by a previous shutdown/crash
