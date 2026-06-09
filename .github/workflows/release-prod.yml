@@ -1,7 +1,7 @@
 # file: .github/workflows/release-prod.yml
-# version: 4.8.1
+# version: 4.8.2
 # guid: f1a2b3c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c
-# last-edited: 2026-05-01
+# last-edited: 2026-06-09
 
 name: Production Release
 
@@ -42,7 +42,7 @@ permissions:
 jobs:
   release:
     name: Create Production Release
-    uses: falkcorp/github-common/.github/workflows/reusable-release.yml@fe1e3081e230dd5ac3d358f9c6a3e4dc0b209529 # latest
+    uses: falkcorp/github-common/.github/workflows/reusable-release.yml@f602707c96a8c979ecb9d2f4b0b95874673b2392 # v2.13.4
     with:
       release-type: ${{ github.event.inputs.release-type }}
       prerelease: false
