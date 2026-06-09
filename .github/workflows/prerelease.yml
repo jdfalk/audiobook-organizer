@@ -1,7 +1,7 @@
 # file: .github/workflows/prerelease.yml
-# version: 2.9.2
+# version: 2.9.3
 # guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
-# last-edited: 2026-05-01
+# last-edited: 2026-06-09
 
 name: Prerelease on Merge
 
@@ -28,7 +28,7 @@ env:
 jobs:
   prerelease:
     name: Create Prerelease Build
-    uses: falkcorp/github-common/.github/workflows/reusable-release.yml@fe1e3081e230dd5ac3d358f9c6a3e4dc0b209529 # v2.13.1
+    uses: falkcorp/github-common/.github/workflows/reusable-release.yml@f602707c96a8c979ecb9d2f4b0b95874673b2392 # v2.13.4
     with:
       release-type: 'auto'
       prerelease: true
