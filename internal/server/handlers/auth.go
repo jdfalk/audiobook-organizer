@@ -1,7 +1,7 @@
 // file: internal/server/handlers/auth.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: c3d4e5f6-a7b8-9012-cdef-012345678901
-// last-edited: 2026-06-04
+// last-edited: 2026-06-09
 
 package handlers
 
@@ -100,6 +100,13 @@ func NewAuthHandler(store AuthStore, enableAuth bool) *AuthHandler {
 	}
 }
 
+// SetFailureDelay replaces the per-account soft-delay function. The only
+// intended caller is test code in the external handlers_test package; inject a
+// no-op (func(time.Duration) {}) to keep the suite fast and deterministic.
+func (h *AuthHandler) SetFailureDelay(fn func(time.Duration)) {
+	h.failureDelay = fn
+}
+
 // bumpFailureLocked increments the windowed failure counter for key and returns
 // the post-increment count. Caller must hold failMu.
 func bumpFailureLocked(m map[string]*failedAttempt, key string) int {
@@ -131,6 +138,17 @@ func (h *AuthHandler) ipThrottled(ip string) bool {
 	return a.count >= maxFailedLoginsPerIP
 }
 
+// purgeExpiredLocked removes entries whose throttle window has elapsed so the
+// maps don't grow without bound when attackers rotate source IPs. Caller must
+// hold failMu.
+func purgeExpiredLocked(m map[string]*failedAttempt) {
+	for k, a := range m {
+		if time.Since(a.firstAt) > loginThrottleWindow {
+			delete(m, k)
+		}
+	}
+}
+
 // recordFailure bumps the per-IP counter and (when userID is non-empty) the
 // per-account counter, returning the soft delay to apply for this account
 // failure. Unknown users still count against the IP so username guessing can't
@@ -138,6 +156,8 @@ func (h *AuthHandler) ipThrottled(ip string) bool {
 func (h *AuthHandler) recordFailure(userID, ip string) time.Duration {
 	h.failMu.Lock()
 	defer h.failMu.Unlock()
+	purgeExpiredLocked(h.ipFails)
+	purgeExpiredLocked(h.acctFails)
 	if ip != "" {
 		bumpFailureLocked(h.ipFails, ip)
 	}

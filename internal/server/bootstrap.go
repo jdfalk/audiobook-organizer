@@ -1,7 +1,7 @@
 // file: internal/server/bootstrap.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: 3e7c9a12-4f6b-4d8e-b5a1-2c8f0e3d9b47
-// last-edited: 2026-06-04
+// last-edited: 2026-06-09
 
 package server
 
@@ -107,16 +107,19 @@ func InitStartupReadOnlyKey(store database.Store) error {
 }
 
 // ReadOnlyKeyPath returns the path to the on-disk plaintext read-only API key file.
+// filepath.Clean sanitizes the dataDir before joining so a misconfigured path
+// cannot escape the intended directory (CodeQL: path-injection).
 func ReadOnlyKeyPath(dataDir string) string {
-	return filepath.Join(dataDir, ".readonly-key")
+	return filepath.Join(filepath.Clean(dataDir), ".readonly-key")
 }
 
 // bootstrapMu prevents two concurrent exchange attempts from both succeeding.
 var bootstrapMu sync.Mutex
 
 // BootstrapTokenPath returns the path to the on-disk plaintext bootstrap token file.
+// filepath.Clean sanitizes the dataDir before joining (CodeQL: path-injection).
 func BootstrapTokenPath(dataDir string) string {
-	return filepath.Join(dataDir, ".bootstrap-token")
+	return filepath.Join(filepath.Clean(dataDir), ".bootstrap-token")
 }
 
 // InitBootstrapToken generates a fresh bootstrap token on every startup.

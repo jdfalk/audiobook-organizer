@@ -1,3 +1,8 @@
+// file: pprof_debug.go
+// version: 1.0.0
+// guid: f9e1a23b-4c56-7890-d1e2-f3a4b5c6d7e8
+// last-edited: 2026-06-09
+
 //go:build pprof
 
 package main

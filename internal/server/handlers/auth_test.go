@@ -1,7 +1,7 @@
 // file: internal/server/handlers/auth_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: d5e6f7a8-b9c0-1234-5678-90abcdef0123
-// last-edited: 2026-06-01
+// last-edited: 2026-06-09
 
 package handlers_test
 
@@ -208,6 +208,7 @@ func TestAuthHandler_Login_SoftCounterDoesNotLock(t *testing.T) {
 		Return(&database.Session{ID: "sess-1", ExpiresAt: time.Now().Add(time.Hour)}, nil)
 
 	h := handlers.NewAuthHandler(store, true)
+	h.SetFailureDelay(func(time.Duration) {}) // no-op: keeps test fast and deterministic
 
 	// 7 wrong attempts (past the soft threshold of 5) — adds small delays, no lock.
 	for i := 0; i < 7; i++ {
