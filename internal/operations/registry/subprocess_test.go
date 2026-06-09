@@ -15,16 +15,33 @@ package registry_test
 // integration test for child mode re-execs the test binary itself.
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 )
+
+const (
+	testChildEnvVar          = "TEST_SUBPROCESS_CHILD"
+	testChildExpectDefVar    = "TEST_SUBPROCESS_EXPECT_DEF"
+	testChildExpectParamsVar = "TEST_SUBPROCESS_EXPECT_PARAMS"
+	testChildResultErrorVar  = "TEST_SUBPROCESS_RESULT_ERROR"
+)
+
+func TestMain(m *testing.M) {
+	if os.Getenv(testChildEnvVar) == "1" && len(os.Args) >= 2 && os.Args[1] == "--operation-runner" {
+		runStubChild()
+		return
+	}
+	os.Exit(m.Run())
+}
 
 // TestIsChildMode_FalseWithNoArgs verifies IsChildMode is false in normal execution.
 func TestIsChildMode_FalseWithNoArgs(t *testing.T) {
@@ -174,4 +191,96 @@ func TestSubprocess_HandshakeRoundtrip(t *testing.T) {
 	if *row.ErrorMessage != expected {
 		t.Fatalf("unexpected error_message: got %q want %q", *row.ErrorMessage, expected)
 	}
+}
+
+func TestSubprocessRoundtrip(t *testing.T) {
+	prev := registry.ChildEnvFunc
+	registry.ChildEnvFunc = func() []string {
+		return []string{testChildEnvVar + "=1"}
+	}
+	t.Cleanup(func() { registry.ChildEnvFunc = prev })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	store := newFakeStore()
+	r := registry.New(store, slog.Default(), 1, nil)
+
+	def := makeValidDef("test.subprocess-roundtrip")
+	def.Isolate = true
+	def.Run = func(_ context.Context, _ json.RawMessage, _ registry.Reporter) error {
+		t.Error("def.Run should not be called in-process for Isolate=true")
+		return nil
+	}
+	if err := r.RegisterOp(def); err != nil {
+		t.Fatalf("RegisterOp: %v", err)
+	}
+	r.Start(ctx)
+
+	opID, err := r.EnqueueOp(ctx, "test.subprocess-roundtrip", nil)
+	if err != nil {
+		t.Fatalf("EnqueueOp: %v", err)
+	}
+
+	awaitStatus(t, store, opID, "completed", 15*time.Second)
+}
+
+func runStubChild() {
+	socket := os.Getenv(registry.EnvSocketPath)
+	if socket == "" {
+		fmt.Fprintln(os.Stderr, "stub child: UOS_SOCKET not set")
+		os.Exit(2)
+	}
+	conn, err := net.Dial("unix", socket)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "stub child: dial: %v\n", err)
+		os.Exit(2)
+	}
+	defer conn.Close()
+
+	// Read handshake (newline-terminated JSON).
+	scanner := bufio.NewScanner(conn)
+	if !scanner.Scan() {
+		fmt.Fprintln(os.Stderr, "stub child: no handshake")
+		os.Exit(1)
+	}
+	var hs struct {
+		DefID  string          `json:"def_id"`
+		Params json.RawMessage `json:"params"`
+	}
+	if err := json.Unmarshal(scanner.Bytes(), &hs); err != nil {
+		fmt.Fprintf(os.Stderr, "stub child: bad handshake: %v\n", err)
+		os.Exit(1)
+	}
+
+	if expectedDef := os.Getenv(testChildExpectDefVar); expectedDef != "" && hs.DefID != expectedDef {
+		fmt.Fprintf(os.Stderr, "stub child: unexpected def_id: got %s want %s\n", hs.DefID, expectedDef)
+		writeStubChildResult(conn, fmt.Sprintf("unexpected def_id: %s", hs.DefID))
+		os.Exit(1)
+	}
+	if expectedParams := os.Getenv(testChildExpectParamsVar); expectedParams != "" && string(hs.Params) != expectedParams {
+		fmt.Fprintf(os.Stderr, "stub child: unexpected params: got %s want %s\n", string(hs.Params), expectedParams)
+		writeStubChildResult(conn, fmt.Sprintf("unexpected params: %s", string(hs.Params)))
+		os.Exit(1)
+	}
+
+	if errMsg := os.Getenv(testChildResultErrorVar); errMsg != "" {
+		writeStubChildResult(conn, errMsg)
+		os.Exit(0)
+	}
+	writeStubChildResult(conn, "")
+	os.Exit(0)
+}
+
+func writeStubChildResult(conn net.Conn, errMsg string) {
+	res := struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error,omitempty"`
+	}{
+		OK:    errMsg == "",
+		Error: errMsg,
+	}
+	b, _ := json.Marshal(res)
+	b = append(b, '\n')
+	_, _ = conn.Write(b)
 }
