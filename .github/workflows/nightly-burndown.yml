@@ -1,5 +1,5 @@
 # file: .github/workflows/nightly-burndown.yml
-# version: 2.4.0
+# version: 2.5.0
 name: Nightly burndown
 
 on:
@@ -33,5 +33,7 @@ jobs:
       hub_repo: falkcorp/burndown-tasks
       cheapest_only: true
       triage_model: gpt-4.1
-      max_tasks: ${{ fromJSON(inputs.max_tasks || '0') }}
+      # Scheduled runs cap at 8 tasks to avoid OpenAI 429 rate-limit exhaustion
+      # from 22+ simultaneous agent calls. Manual dispatch can override to 0 (unlimited).
+      max_tasks: ${{ github.event_name == 'schedule' && 8 || fromJSON(inputs.max_tasks || '0') }}
     secrets: inherit
