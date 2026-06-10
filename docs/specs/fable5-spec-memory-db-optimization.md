@@ -22,6 +22,13 @@ against code this review):
    (~7,938 lines) opened unconditionally at startup via `database.go:20`
    (`sql.Open("sqlite3", …)`) — findings MED-4.
 
+Prod disk reality check (2026-06-09, `/var/lib/audiobook-organizer/`):
+`audiobooks.pebble` = **11GB** (not the 20–40GB estimated below); stale leftovers from
+completed migrations still on disk — `embeddings.db` 1.8GB sparse/924MB, `activity.db`
+842MB/140MB, `metrics.db`+wal/shm, `audiobooks.chai/` — all last written 2026-05-11.
+TASK-022 must include archiving/deleting these dead files (~1GB+ reclaimed, and removes
+the confusion of dead stores sitting next to live ones).
+
 Current steady-state RSS model at ~50K books / ~308K files (agent audit, spot-checked):
 
 | Component | RSS | Notes |
@@ -29,7 +36,8 @@ Current steady-state RSS model at ~50K books / ~308K files (agent audit, spot-ch
 | go-memdb (stripped projections) | ~2.4–2.7GB | books ~2GB dominated by retained AcoustIDSeg0–6 strings + remaining Book fields |
 | chromem (in-RAM vectors) | ~600MB | 50K × 3072-dim float32; hydrated once at startup from Pebble |
 | Pebble block cache / runtime | ~100–300MB | |
-| **Total baseline** | **~3.3GB** | |
+| **Modeled baseline** | **~3.3GB** | bottom-up estimate |
+| **Prod observed (2026-06-09)** | **~7.0GB steady / 8.9GB peak + 2.2GB swap peak** | systemd `MemoryCurrent` at 9-day uptime; unit accounting at restart. The ~3.7GB gap between model and reality (Go heap slack, Pebble caches/compaction, goroutine/op buffers, untracked allocations) is itself a finding — TASK-023's telemetry should attribute it before further optimization claims are made |
 
 ## 1. PebbleDB schema audit — results
 
