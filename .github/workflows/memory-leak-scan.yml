@@ -1,7 +1,7 @@
 # file: .github/workflows/memory-leak-scan.yml
-# version: 2.0.0
+# version: 2.1.0
 # guid: 9f3a1b2c-4d5e-6f7a-8b9c-0d1e2f3a4b5c
-# last-edited: 2026-06-09
+# last-edited: 2026-06-10
 name: Memory Leak Detection
 
 on:
@@ -121,40 +121,50 @@ jobs:
           fi
 
           git add TODO.md
-          git commit -m "chore(todo): add memory leak findings ${DATE} [skip ci]
 
-${LEAK_COUNT} potential memory leak(s) detected in scheduled static scan.
-Run: ${RUN_URL}
-
-These [memory-leak] TODO items are intentionally NOT [failed-batch-hard] so
-the burndown decompose job will not auto-dispatch them.
-Convert to burndown-tasks issues manually when ready to fix."
+          # Write commit body to a file so multi-line text never bleeds to
+          # column 0 inside the YAML block scalar.
+          printf '%s\n' \
+            "chore(todo): add memory leak findings ${DATE} [skip ci]" \
+            "" \
+            "${LEAK_COUNT} potential memory leak(s) detected in scheduled static scan." \
+            "Run: ${RUN_URL}" \
+            "" \
+            "These [memory-leak] TODO items are intentionally NOT [failed-batch-hard] so" \
+            "the burndown decompose job will not auto-dispatch them." \
+            "Convert to burndown-tasks issues manually when ready to fix." \
+            > /tmp/commit-msg.txt
+          git commit -F /tmp/commit-msg.txt
 
           git push origin "$BRANCH"
 
-          PR_NUMBER=$(gh pr create \
+          # gh pr create returns the PR URL; extract the number from it.
+          # (gh pr create has no --json flag)
+          printf '%s\n' \
+            "## Memory Leak Findings — ${DATE}" \
+            "" \
+            "**${LEAK_COUNT}** potential leak(s) detected in weekly scheduled static scan." \
+            "Run: ${RUN_URL}" \
+            "" \
+            "### What this PR does" \
+            "Inserts a \`[memory-leak]\` entry under \`## ⚠️ Automated Findings\` in \`TODO.md\`." \
+            "The \`[skip ci]\` tag in the commit message prevents CI from running on merge." \
+            "" \
+            "### What to do next" \
+            "1. Review the findings in \`TODO.md\`" \
+            "2. For each genuine leak, open a \`burndown-tasks\` issue with \`status:ready\`" \
+            "3. The burndown bot will pick it up on the next nightly run" \
+            "" \
+            "> \`[memory-leak]\` is intentionally **not** \`[failed-batch-hard]\` — the decompose job" \
+            "> will not auto-dispatch these. Human review first." \
+            > /tmp/pr-body.md
+          PR_URL=$(gh pr create \
             --repo "$REPO" \
             --head "$BRANCH" \
             --title "chore(todo): memory leak findings ${DATE} [skip ci]" \
-            --body "## Memory Leak Findings — ${DATE}
-
-**${LEAK_COUNT}** potential leak(s) detected in weekly scheduled static scan.
-Run: ${RUN_URL}
-
-### What this PR does
-Inserts a \`[memory-leak]\` entry under \`## ⚠️ Automated Findings\` in \`TODO.md\`.
-The \`[skip ci]\` tag in the commit message prevents CI from running on merge.
-
-### What to do next
-1. Review the findings in \`TODO.md\`
-2. For each genuine leak, open a \`burndown-tasks\` issue with \`status:ready\`
-3. The burndown bot will pick it up on the next nightly run
-
-> \`[memory-leak]\` is intentionally **not** \`[failed-batch-hard]\` — the decompose job
-> will not auto-dispatch these. Human review first." \
-            --label "automation" \
-            --json number \
-            --jq '.number')
+            --body-file /tmp/pr-body.md \
+            --label "automation")
+          PR_NUMBER="${PR_URL##*/}"
 
           gh pr merge "$PR_NUMBER" \
             --repo "$REPO" \
