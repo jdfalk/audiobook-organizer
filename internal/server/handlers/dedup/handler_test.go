@@ -1,5 +1,5 @@
 // file: internal/server/handlers/dedup/handler_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 6d8011eb-bed6-430b-959e-2a2b0738ffbc
 // last-edited: 2026-06-10
 
@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/falkcorp/audiobook-organizer/internal/database"
+	dedupengine "github.com/falkcorp/audiobook-organizer/internal/dedup"
+	unifiedpkg "github.com/falkcorp/audiobook-organizer/internal/dedup/unified"
 	"github.com/falkcorp/audiobook-organizer/internal/merge"
 	"github.com/falkcorp/audiobook-organizer/internal/plugin"
 	deduphandler "github.com/falkcorp/audiobook-organizer/internal/server/handlers/dedup"
@@ -608,5 +610,236 @@ func TestPurgeLegacyFPCandidates_NoRegistry(t *testing.T) {
 	w := doReq(t, h.PurgeLegacyFPCandidates, http.MethodPost, "/api/v1/dedup/purge-legacy-fp", nil, nil)
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d want 500; body=%s", w.Code, w.Body.String())
+	}
+}
+
+// ──────────────── T016: band filter, breakdown, rescore ─────────────────────
+
+// insertCandidateWithBand creates a pending book candidate with the given band
+// set directly in the store via UpsertCandidate. Uses the same canonicalisation
+// logic as insertCandidate.
+func insertCandidateWithBand(t *testing.T, es *database.EmbeddingStore, aID, bID, band string) (int64, string, string) {
+	t.Helper()
+	sim := 0.95
+	score := 95.0
+	if err := es.UpsertCandidate(database.DedupCandidate{
+		EntityType: "book",
+		EntityAID:  aID,
+		EntityBID:  bID,
+		Layer:      "embedding",
+		Similarity: &sim,
+		Status:     "pending",
+		Band:       band,
+		ScoreBreakdown: &unifiedpkg.UnifiedDedupScore{
+			Score:  score,
+			Band:   band,
+			Pair:   [2]string{aID, bID},
+			Formula: unifiedpkg.FormulaVersion,
+			Signals: []unifiedpkg.Signal{
+				{Kind: unifiedpkg.SigEmbedHigh, Raw: 0.95, Confidence: 0.90, Evidence: "test"},
+			},
+		},
+		FormulaVersion: unifiedpkg.FormulaVersion,
+	}); err != nil {
+		t.Fatalf("UpsertCandidate: %v", err)
+	}
+	cA, cB := aID, bID
+	if cA > cB {
+		cA, cB = cB, cA
+	}
+	cands, _, err := es.ListCandidates(database.CandidateFilter{EntityType: "book", Status: "pending", Limit: 100})
+	if err != nil {
+		t.Fatalf("ListCandidates: %v", err)
+	}
+	for _, c := range cands {
+		if c.EntityAID == cA && c.EntityBID == cB {
+			return c.ID, cA, cB
+		}
+	}
+	t.Fatalf("inserted candidate not found")
+	return 0, "", ""
+}
+
+// TestListDedupCandidates_BandFilter verifies that band=CERTAIN filters correctly:
+// a CERTAIN and a HIGH candidate are inserted; only the CERTAIN one is returned.
+func TestListDedupCandidates_BandFilter(t *testing.T) {
+	h, d := newHandler(t)
+	insertCandidateWithBand(t, d.es, "book-c1", "book-c2", "CERTAIN")
+	insertCandidateWithBand(t, d.es, "book-h1", "book-h2", "HIGH")
+
+	// Both books must "exist" to pass the dead-book filter.
+	d.store.EXPECT().GetBookByID(mock.Anything).Return(&database.Book{ID: "x"}, nil).Maybe()
+
+	w := doReq(t, h.ListDedupCandidates, http.MethodGet, "/api/v1/dedup/candidates?band=CERTAIN", nil, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d want 200; body=%s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Data struct {
+			Total      int              `json:"total"`
+			Candidates []map[string]any `json:"candidates"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v; body=%s", err, w.Body.String())
+	}
+	if resp.Data.Total != 1 {
+		t.Errorf("total=%d want 1 (only CERTAIN band)", resp.Data.Total)
+	}
+	if len(resp.Data.Candidates) != 1 {
+		t.Errorf("candidates len=%d want 1", len(resp.Data.Candidates))
+		return
+	}
+	if band, _ := resp.Data.Candidates[0]["band"].(string); band != "CERTAIN" {
+		t.Errorf("returned candidate band=%q want CERTAIN", band)
+	}
+}
+
+// TestListDedupCandidates_BreakdownOmitted verifies that score_breakdown is NOT
+// included by default (include_breakdown not set).
+func TestListDedupCandidates_BreakdownOmitted(t *testing.T) {
+	h, d := newHandler(t)
+	insertCandidateWithBand(t, d.es, "book-x1", "book-x2", "HIGH")
+	d.store.EXPECT().GetBookByID(mock.Anything).Return(&database.Book{ID: "x"}, nil).Maybe()
+
+	w := doReq(t, h.ListDedupCandidates, http.MethodGet, "/api/v1/dedup/candidates", nil, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d want 200; body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Data struct {
+			Candidates []map[string]any `json:"candidates"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v; body=%s", err, w.Body.String())
+	}
+	if len(resp.Data.Candidates) == 0 {
+		t.Fatal("want at least one candidate")
+	}
+	if _, hasBreakdown := resp.Data.Candidates[0]["score_breakdown"]; hasBreakdown {
+		t.Error("score_breakdown should be omitted without include_breakdown=true")
+	}
+}
+
+// TestListDedupCandidates_BreakdownIncluded verifies that score_breakdown is
+// present when include_breakdown=true.
+func TestListDedupCandidates_BreakdownIncluded(t *testing.T) {
+	h, d := newHandler(t)
+	insertCandidateWithBand(t, d.es, "book-y1", "book-y2", "HIGH")
+	d.store.EXPECT().GetBookByID(mock.Anything).Return(&database.Book{ID: "x"}, nil).Maybe()
+
+	w := doReq(t, h.ListDedupCandidates, http.MethodGet, "/api/v1/dedup/candidates?include_breakdown=true", nil, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d want 200; body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Data struct {
+			Candidates []map[string]any `json:"candidates"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v; body=%s", err, w.Body.String())
+	}
+	if len(resp.Data.Candidates) == 0 {
+		t.Fatal("want at least one candidate")
+	}
+	if _, hasBreakdown := resp.Data.Candidates[0]["score_breakdown"]; !hasBreakdown {
+		t.Error("score_breakdown should be present with include_breakdown=true")
+	}
+}
+
+// TestGetDedupCandidateBreakdown_OK verifies the breakdown endpoint returns
+// candidate + both books.
+func TestGetDedupCandidateBreakdown_OK(t *testing.T) {
+	h, d := newHandler(t)
+	id, aID, bID := insertCandidateWithBand(t, d.es, "book-ba", "book-bb", "HIGH")
+	d.store.EXPECT().GetBookByID(aID).Return(&database.Book{ID: aID, Title: "Book A"}, nil).Once()
+	d.store.EXPECT().GetBookByID(bID).Return(&database.Book{ID: bID, Title: "Book B"}, nil).Once()
+	d.store.EXPECT().GetBookFiles(aID).Return([]database.BookFile{}, nil).Once()
+	d.store.EXPECT().GetBookFiles(bID).Return([]database.BookFile{}, nil).Once()
+
+	w := doReq(t, h.GetDedupCandidateBreakdown, http.MethodGet,
+		"/api/v1/dedup/candidates/"+strconv.FormatInt(id, 10)+"/breakdown",
+		nil, gin.Params{{Key: "id", Value: strconv.FormatInt(id, 10)}})
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d want 200; body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Data struct {
+			Candidate map[string]any `json:"candidate"`
+			BookA     map[string]any `json:"book_a"`
+			BookB     map[string]any `json:"book_b"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v; body=%s", err, w.Body.String())
+	}
+	if resp.Data.Candidate == nil {
+		t.Error("candidate should be present in breakdown response")
+	}
+	if resp.Data.BookA == nil || resp.Data.BookB == nil {
+		t.Error("book_a and book_b should be present in breakdown response")
+	}
+}
+
+// TestGetDedupCandidateBreakdown_NotFound verifies 404 for unknown candidate IDs.
+func TestGetDedupCandidateBreakdown_NotFound(t *testing.T) {
+	h, _ := newHandler(t)
+	w := doReq(t, h.GetDedupCandidateBreakdown, http.MethodGet, "/api/v1/dedup/candidates/99999/breakdown",
+		nil, gin.Params{{Key: "id", Value: "99999"}})
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status=%d want 404; body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestGetDedupCandidateBreakdown_NoEmbedStore verifies 503 when the embedding
+// store is unavailable.
+func TestGetDedupCandidateBreakdown_NoEmbedStore(t *testing.T) {
+	h, _ := newHandler(t, noEmbed)
+	w := doReq(t, h.GetDedupCandidateBreakdown, http.MethodGet, "/api/v1/dedup/candidates/1/breakdown",
+		nil, gin.Params{{Key: "id", Value: "1"}})
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d want 503; body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestRescoreDedupCandidates_DryRun verifies that a dry-run rescore returns 200
+// with the result summary and does not persist any changes.
+func TestRescoreDedupCandidates_DryRun(t *testing.T) {
+	h, d := newHandler(t)
+	expected := dedupengine.RescoreResult{Inspected: 5, Skipped: 1, Changed: 2, Applied: false,
+		BandDeltas: map[string]int{"HIGH→CERTAIN": 2}}
+	d.engine.EXPECT().Rescore(mock.Anything, false).Return(expected, nil).Once()
+
+	w := doReq(t, h.RescoreDedupCandidates, http.MethodPost, "/api/v1/dedup/rescore", nil, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d want 200; body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestRescoreDedupCandidates_Apply verifies that apply=true is forwarded to
+// the engine.
+func TestRescoreDedupCandidates_Apply(t *testing.T) {
+	h, d := newHandler(t)
+	expected := dedupengine.RescoreResult{Inspected: 10, Changed: 3, Applied: true,
+		BandDeltas: map[string]int{"MEDIUM→HIGH": 3}}
+	d.engine.EXPECT().Rescore(mock.Anything, true).Return(expected, nil).Once()
+
+	w := doReq(t, h.RescoreDedupCandidates, http.MethodPost, "/api/v1/dedup/rescore",
+		map[string]bool{"apply": true}, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d want 200; body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestRescoreDedupCandidates_NoEngine verifies 503 when the dedup engine is
+// unavailable.
+func TestRescoreDedupCandidates_NoEngine(t *testing.T) {
+	h, _ := newHandler(t, noEngine)
+	w := doReq(t, h.RescoreDedupCandidates, http.MethodPost, "/api/v1/dedup/rescore", nil, nil)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d want 503; body=%s", w.Code, w.Body.String())
 	}
 }

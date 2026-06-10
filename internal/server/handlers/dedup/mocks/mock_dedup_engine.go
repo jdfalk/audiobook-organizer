@@ -5,6 +5,9 @@
 package dedupmocks
 
 import (
+	"context"
+
+	"github.com/falkcorp/audiobook-organizer/internal/dedup"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -82,6 +85,72 @@ func (_c *MockDedupEngine_CleanupCandidatesAfterMerge_Call) Return(n int) *MockD
 }
 
 func (_c *MockDedupEngine_CleanupCandidatesAfterMerge_Call) RunAndReturn(run func(mergedAwayBookIDs []string) int) *MockDedupEngine_CleanupCandidatesAfterMerge_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Rescore provides a mock function for the type MockDedupEngine
+func (_mock *MockDedupEngine) Rescore(ctx context.Context, apply bool) (dedup.RescoreResult, error) {
+	ret := _mock.Called(ctx, apply)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Rescore")
+	}
+
+	var r0 dedup.RescoreResult
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, bool) (dedup.RescoreResult, error)); ok {
+		return returnFunc(ctx, apply)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, bool) dedup.RescoreResult); ok {
+		r0 = returnFunc(ctx, apply)
+	} else {
+		r0 = ret.Get(0).(dedup.RescoreResult)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, bool) error); ok {
+		r1 = returnFunc(ctx, apply)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockDedupEngine_Rescore_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Rescore'
+type MockDedupEngine_Rescore_Call struct {
+	*mock.Call
+}
+
+// Rescore is a helper method to define mock.On call
+//   - ctx context.Context
+//   - apply bool
+func (_e *MockDedupEngine_Expecter) Rescore(ctx interface{}, apply interface{}) *MockDedupEngine_Rescore_Call {
+	return &MockDedupEngine_Rescore_Call{Call: _e.mock.On("Rescore", ctx, apply)}
+}
+
+func (_c *MockDedupEngine_Rescore_Call) Run(run func(ctx context.Context, apply bool)) *MockDedupEngine_Rescore_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 bool
+		if args[1] != nil {
+			arg1 = args[1].(bool)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockDedupEngine_Rescore_Call) Return(rescoreResult dedup.RescoreResult, err error) *MockDedupEngine_Rescore_Call {
+	_c.Call.Return(rescoreResult, err)
+	return _c
+}
+
+func (_c *MockDedupEngine_Rescore_Call) RunAndReturn(run func(ctx context.Context, apply bool) (dedup.RescoreResult, error)) *MockDedupEngine_Rescore_Call {
 	_c.Call.Return(run)
 	return _c
 }

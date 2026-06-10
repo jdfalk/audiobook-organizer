@@ -1,5 +1,5 @@
 // file: internal/server/handlers/dedup/handler.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: d1b9e024-d28c-4d62-8f90-96d7064559c4
 // last-edited: 2026-06-10
 
@@ -128,7 +128,26 @@ func (h *Handler) resolveEmbeddingStore() *database.EmbeddingStore {
 
 // ListDedupCandidates handles GET /api/v1/dedup/candidates.
 //
-// Query params: entity_type, status, layer, min_similarity (float), limit (int, default 50), offset (int).
+// Query params:
+//
+//	entity_type — filter by entity type (e.g. "book")
+//	status      — filter by status (e.g. "pending")
+//	layer       — filter by detection layer (e.g. "embedding")
+//	min_similarity (float) — lower-bound on raw similarity score
+//	band        — filter by unified scoring band: CERTAIN|HIGH|MEDIUM|REVIEW
+//	             (T016 extension; empty = no filter; pre-T015 rows without
+//	             a stored band will not match any non-empty band filter)
+//	include_breakdown=true — include score_breakdown (full signal array)
+//	                         in each row; default false (payload savings)
+//	limit (int, default 50), offset (int) — pagination
+//
+// Response shape (T016 contract, frozen for T017):
+//
+//	{ "candidates": [ candidateListItem, ... ], "total": N }
+//
+// Each candidateListItem extends DedupCandidate with a top-level "score"
+// field (the composite 0–100 value). "band" is already part of
+// DedupCandidate. "score_breakdown" is omitted unless include_breakdown=true.
 func (h *Handler) ListDedupCandidates(c *gin.Context) {
 	es := h.resolveEmbeddingStore()
 	if es == nil {
@@ -155,6 +174,13 @@ func (h *Handler) ListDedupCandidates(c *gin.Context) {
 		}
 		filter.MinSimilarity = &f
 	}
+	// T016: band filter — evaluated at the store scan level so pagination
+	// totals are accurate even on large datasets.
+	if v := c.Query("band"); v != "" {
+		filter.Band = v
+	}
+	includeBreakdown := c.Query("include_breakdown") == "true"
+
 	p := httputil.ParsePaginationParams(c)
 	limit, offset := p.Limit, p.Offset
 	filter.Limit = limit
@@ -173,7 +199,6 @@ func (h *Handler) ListDedupCandidates(c *gin.Context) {
 	// the UI never shows a candidate that would 404 when clicked.
 	// Non-book entities (e.g. author) skip the existence check.
 	store := h.resolveStore()
-	filtered := candidates[:0]
 	existCache := make(map[string]bool, len(candidates)*2)
 	bookExists := func(id string) bool {
 		if id == "" {
@@ -188,6 +213,7 @@ func (h *Handler) ListDedupCandidates(c *gin.Context) {
 		return exists
 	}
 	dropped := 0
+	items := make([]gin.H, 0, len(candidates))
 	for _, cand := range candidates {
 		if cand.EntityType == "book" {
 			if !bookExists(cand.EntityAID) || !bookExists(cand.EntityBID) {
@@ -195,12 +221,36 @@ func (h *Handler) ListDedupCandidates(c *gin.Context) {
 				continue
 			}
 		}
-		filtered = append(filtered, cand)
+		// Build the response item: always include band + top-level score;
+		// conditionally include score_breakdown.
+		row := gin.H{
+			"id":              cand.ID,
+			"entity_type":     cand.EntityType,
+			"entity_a_id":     cand.EntityAID,
+			"entity_b_id":     cand.EntityBID,
+			"layer":           cand.Layer,
+			"similarity":      cand.Similarity,
+			"llm_verdict":     cand.LLMVerdict,
+			"llm_reason":      cand.LLMReason,
+			"status":          cand.Status,
+			"created_at":      cand.CreatedAt,
+			"updated_at":      cand.UpdatedAt,
+			"band":            cand.Band,
+			"formula_version": cand.FormulaVersion,
+		}
+		// Surface top-level score (avoids T017 having to unpack score_breakdown).
+		if cand.ScoreBreakdown != nil {
+			row["score"] = cand.ScoreBreakdown.Score
+		}
+		if includeBreakdown {
+			row["score_breakdown"] = cand.ScoreBreakdown
+		}
+		items = append(items, row)
 	}
 	if dropped > 0 {
 		slog.Warn("dedup.list_candidates: filtered dead-book candidate rows",
 			"dropped", dropped,
-			"returned", len(filtered),
+			"returned", len(items),
 			"page_size", len(candidates),
 			"note", "B3 cleanup may be lagging")
 		// Reflect the filtered count in the total so pagination
@@ -211,9 +261,118 @@ func (h *Handler) ListDedupCandidates(c *gin.Context) {
 	}
 
 	httputil.RespondWithOK(c, gin.H{
-		"candidates": filtered,
+		"candidates": items,
 		"total":      total,
 	})
+}
+
+// GetDedupCandidateBreakdown handles GET /api/v1/dedup/candidates/:id/breakdown.
+//
+// Returns a single candidate's full comparison payload: the candidate row
+// (including the full score_breakdown with all signals), plus both books'
+// details (title, author, files) so the UI can render a side-by-side
+// comparison without issuing additional requests.
+//
+// T016 contract (frozen for T017):
+//
+//	{
+//	  "candidate": { ...DedupCandidate with score_breakdown... },
+//	  "book_a":    { id, title, author_id, series_id, files: [...] },
+//	  "book_b":    { id, title, author_id, series_id, files: [...] }
+//	}
+//
+// Returns 404 when the candidate ID is not found.
+// Returns 503 when the embedding store is unavailable.
+func (h *Handler) GetDedupCandidateBreakdown(c *gin.Context) {
+	es := h.resolveEmbeddingStore()
+	if es == nil {
+		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
+		return
+	}
+
+	idStr := c.Param("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		httputil.RespondWithBadRequest(c, "invalid candidate id")
+		return
+	}
+
+	candidate, err := es.GetCandidateByID(id)
+	if err != nil {
+		httputil.InternalError(c, "failed to get candidate", err)
+		return
+	}
+	if candidate == nil {
+		httputil.RespondWithNotFound(c, "candidate", idStr)
+		return
+	}
+
+	// Fetch both books and their files for the side-by-side comparison view.
+	store := h.resolveStore()
+	type bookDetail struct {
+		*database.Book
+		Files []database.BookFile `json:"files"`
+	}
+	fetchBook := func(bookID string) *bookDetail {
+		book, err := store.GetBookByID(bookID)
+		if err != nil || book == nil {
+			return nil
+		}
+		files, _ := store.GetBookFiles(bookID)
+		return &bookDetail{Book: book, Files: files}
+	}
+
+	bookA := fetchBook(candidate.EntityAID)
+	bookB := fetchBook(candidate.EntityBID)
+
+	httputil.RespondWithOK(c, gin.H{
+		"candidate": candidate,
+		"book_a":    bookA,
+		"book_b":    bookB,
+	})
+}
+
+// RescoreDedupCandidates handles POST /api/v1/dedup/rescore.
+//
+// Re-runs unified.ComposeScore over the stored signal sets of all pending
+// candidates and returns a per-band delta summary. Signals are read from the
+// stored ScoreBreakdown — no re-collection or re-embedding is performed.
+// Pre-T015 candidates with no stored signals are counted as "skipped".
+//
+// Request body (JSON, optional):
+//
+//	{ "apply": true }   // persist new scores+bands (default: false = dry-run)
+//
+// Response:
+//
+//	{
+//	  "inspected":   N,   // total pending candidates examined
+//	  "skipped":     N,   // pre-T015 rows with no stored signals
+//	  "changed":     N,   // rows whose band or score changed
+//	  "applied":     bool,
+//	  "band_deltas": { "HIGH→CERTAIN": 3, ... }
+//	}
+//
+// Returns 503 when the dedup engine is unavailable.
+func (h *Handler) RescoreDedupCandidates(c *gin.Context) {
+	if h.dedupEngine == nil {
+		httputil.RespondWithServiceUnavailable(c, "dedup engine not available")
+		return
+	}
+
+	var body struct {
+		Apply bool `json:"apply"`
+	}
+	// Ignore parse errors; missing body → dry-run (apply=false).
+	_ = c.ShouldBindJSON(&body)
+
+	result, err := h.dedupEngine.Rescore(c.Request.Context(), body.Apply)
+	if err != nil {
+		httputil.InternalError(c, "rescore failed", err)
+		return
+	}
+
+	httputil.RespondWithOK(c, result)
 }
 
 // ExportDedupCandidates handles GET /api/v1/dedup/candidates/export.

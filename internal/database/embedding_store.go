@@ -1,5 +1,5 @@
 // file: internal/database/embedding_store.go
-// version: 2.2.0
+// version: 2.3.0
 // last-edited: 2026-06-10
 // guid: 7c4a9b2e-d831-4f5c-a07e-3b8d6e1f9c42
 
@@ -166,8 +166,13 @@ type CandidateFilter struct {
 	Layer         string
 	MinSimilarity *float64
 	MaxSimilarity *float64
-	Limit         int
-	Offset        int
+	// Band filters by the unified scoring band (CERTAIN/HIGH/MEDIUM/REVIEW).
+	// Empty means no band filter. The filter is evaluated on the stored Band
+	// field (set by the T015/T016 unified pipeline); pre-T015 rows with an
+	// empty band will not match any non-empty Band filter.
+	Band   string
+	Limit  int
+	Offset int
 }
 
 // CandidateStat holds a count for one grouping.
@@ -632,6 +637,9 @@ func (s *EmbeddingStore) ListCandidates(f CandidateFilter) ([]DedupCandidate, in
 		if f.MaxSimilarity != nil && (c.Similarity == nil || *c.Similarity > *f.MaxSimilarity) {
 			continue
 		}
+		if f.Band != "" && c.Band != f.Band {
+			continue
+		}
 		all = append(all, c)
 	}
 	if err := iter.Error(); err != nil {
@@ -670,6 +678,18 @@ func (s *EmbeddingStore) ListCandidates(f CandidateFilter) ([]DedupCandidate, in
 func (s *EmbeddingStore) UpdateCandidateStatus(id int64, status string) error {
 	return s.updateCandidate(id, func(rec *candRec) {
 		rec.Status = status
+		rec.UpdatedAt = time.Now().UnixNano()
+	})
+}
+
+// UpdateCandidateScore persists a new ScoreBreakdown, Band, and
+// FormulaVersion onto an existing candidate. Called by Engine.Rescore
+// when apply=true to commit re-computed scores without re-collecting signals.
+func (s *EmbeddingStore) UpdateCandidateScore(id int64, score *unified.UnifiedDedupScore, band, formulaVersion string) error {
+	return s.updateCandidate(id, func(rec *candRec) {
+		rec.ScoreBreakdown = score
+		rec.Band = band
+		rec.FormulaVersion = formulaVersion
 		rec.UpdatedAt = time.Now().UnixNano()
 	})
 }
