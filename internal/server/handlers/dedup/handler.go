@@ -1,7 +1,7 @@
 // file: internal/server/handlers/dedup/handler.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: d1b9e024-d28c-4d62-8f90-96d7064559c4
-// last-edited: 2026-06-03
+// last-edited: 2026-06-09
 
 // Package deduphandler hosts the dedup-domain HTTP handlers extracted from the
 // server package: dedup candidate / cluster / series listing, merge / dismiss /
@@ -1329,6 +1329,25 @@ func (h *Handler) TriggerEmbedAsync(c *gin.Context) {
 	opID, err := h.opRegistry.EnqueueOp(c.Request.Context(), "dedup.embed-async", nil)
 	if err != nil {
 		httputil.InternalError(c, "failed to enqueue embed-async", err)
+		return
+	}
+	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
+}
+
+// TriggerLSHIndexBuild handles POST /api/v1/dedup/lsh-index.
+// Enqueues the dedup.lsh-index-build op (fable5 T012), which builds
+// the fpidx: PebbleDB secondary index over whole-file AcoustID
+// fingerprints. The op is idempotent and resumable — re-triggering
+// while the index is already up-to-date is safe (skips already-indexed
+// files via the fpidx_meta: member-list).
+func (h *Handler) TriggerLSHIndexBuild(c *gin.Context) {
+	if h.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operation registry not initialized")
+		return
+	}
+	opID, err := h.opRegistry.EnqueueOp(c.Request.Context(), "dedup.lsh-index-build", nil)
+	if err != nil {
+		httputil.InternalError(c, "failed to enqueue lsh-index-build", err)
 		return
 	}
 	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
