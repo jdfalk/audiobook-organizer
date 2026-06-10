@@ -1,5 +1,5 @@
 // file: internal/testutil/integration.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-06-10
 
@@ -88,6 +88,13 @@ func SetupIntegration(t *testing.T) (*IntegrationEnv, func()) {
 	}
 
 	cleanup := func() {
+		// Clear scan hooks before closing the store. NewServer installs
+		// hooks that hold a reference to the activity service / PebbleStore.
+		// If a scan goroutine calls OnBookScanned after store.Close() it
+		// panics ("pebble: closed"). Clearing early means hook calls are
+		// no-ops instead of panics; activity loss during teardown is acceptable.
+		scanner.SetScanHooks(nil)
+
 		database.SetGlobalStore(nil)
 		scanner.SetStore(nil)
 		store.Close()

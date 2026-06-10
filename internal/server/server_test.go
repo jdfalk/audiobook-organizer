@@ -25,6 +25,7 @@ import (
 	"github.com/falkcorp/audiobook-organizer/internal/database"
 	"github.com/falkcorp/audiobook-organizer/internal/metadata"
 	"github.com/falkcorp/audiobook-organizer/internal/metafetch"
+	"github.com/falkcorp/audiobook-organizer/internal/scanner"
 	"github.com/oklog/ulid/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -73,6 +74,13 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 
 	// Cleanup function
 	cleanup := func() {
+		// Clear scan hooks BEFORE closing the store. If a scan is in progress
+		// when cleanup runs (or when the next test starts its own scan), stale
+		// hooks would try to write activity to the already-closed PebbleStore
+		// and panic ("pebble: closed"). Clearing early is safe — the hooks only
+		// record activity, so skipping them during teardown is acceptable.
+		scanner.SetScanHooks(nil)
+
 		if server.opRegistry != nil {
 			_ = server.opRegistry.Shutdown(context.Background())
 		}

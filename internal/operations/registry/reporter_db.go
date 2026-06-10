@@ -1,5 +1,5 @@
 // file: internal/operations/registry/reporter_db.go
-// version: 1.3.0
+// version: 1.3.1
 // guid: 1a2b3c4d-5e6f-7890-abcd-ef0123456789
 // last-edited: 2026-06-01
 
@@ -199,6 +199,16 @@ func (r *dbReporter) flushLoop(ctx context.Context) {
 
 // flushLogs drains logBuf to the DB.
 func (r *dbReporter) flushLogs() {
+	// WHY recover: if the underlying store is closed during test teardown
+	// (PebbleDB panics with "pebble: closed" when used after Close()), we
+	// convert the panic to a logged warning. In production the store is
+	// closed only at process exit, well after all reporters finish.
+	defer func() {
+		if rec := recover(); rec != nil {
+			slog.Default().Warn("dbReporter: flush recovered from panic", "op_id", r.opID, "panic", rec)
+		}
+	}()
+
 	r.logMu.Lock()
 	if len(r.logBuf) == 0 {
 		r.logMu.Unlock()
