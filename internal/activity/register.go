@@ -1,10 +1,20 @@
 // file: internal/activity/register.go
-// version: 1.1.0
+// version: 1.2.0
+// guid: c4d5e6f7-a8b9-0009-2345-000000000009
 
+// Package activity — service registry wiring for the activity log.
+//
+// WHY backend selection during the migration window (T024):
+//   - Before the "activity_pebble_v1_done" backfill flag is set in Pebble, reads
+//     come from NutsDB (source of truth). Both backends receive every write.
+//   - After the flag is set, reads flip to Pebble. NutsDB still receives writes
+//     so a rollback (flip ReadFromPebble=false) is safe without data loss.
+//   - The dual-write window ends when NutsDB is removed (follow-up task T024b).
 package activity
 
 import (
 	"fmt"
+	"log/slog"
 	"path/filepath"
 
 	"github.com/falkcorp/audiobook-organizer/internal/config"
@@ -13,15 +23,35 @@ import (
 )
 
 func init() {
-	// activitystore: NutsDB-backed sidecar store for activity log entries.
-	// Lives in {dirname(DatabasePath)}/activity.nutsdb so it sits next to the
-	// main Pebble DB. Returns nil (Build returns an error, but the container
-	// will fail Resolve before reaching here if DatabasePath is empty) when
-	// DatabasePath is unset — host code must Override "activitystore" with a
-	// pre-built instance in that case (test paths).
+	// pebble-activitystore: PebbleDB-backed activity store, sharing the main
+	// PebbleDB instance. Built only when the main store is a *PebbleStore.
+	// Returns a nil *PebbleActivityStore on other backends so dual-write
+	// wiring below can detect and fall back gracefully.
+	serviceregistry.Register(serviceregistry.ServiceDef{
+		Name:   "pebble-activitystore",
+		Needs:  []string{"store"},
+		Groups: []string{"activity"},
+		Build: func(c *serviceregistry.Container) (any, error) {
+			store := serviceregistry.Get[database.Store](c, "store")
+			ps, ok := store.(*database.PebbleStore)
+			if !ok {
+				// Non-Pebble backend (test double, SQLite) — return nil pointer;
+				// the activitystore Build checks for nil and falls back to NutsDB-only.
+				return (*database.PebbleActivityStore)(nil), nil
+			}
+			s := database.NewPebbleActivityStore(ps.DB())
+			slog.Info("[activity] Pebble activity store initialised")
+			return s, nil
+		},
+	})
+
+	// activitystore: activity log backend, wired to dual-write when Pebble is available.
+	// Lives in {dirname(DatabasePath)}/activity.nutsdb (NutsDB sidecar).
+	// Returns nil when DatabasePath is unset — host code must Override "activitystore"
+	// with a pre-built instance in that case (test paths).
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:   "activitystore",
-		Needs:  []string{"config"},
+		Needs:  []string{"config", "pebble-activitystore"},
 		Groups: []string{"activity"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			cfg := serviceregistry.Get[*config.Config](c, "config")
@@ -29,7 +59,26 @@ func init() {
 				return nil, fmt.Errorf("activitystore: DatabasePath not configured")
 			}
 			activityDir := filepath.Join(filepath.Dir(cfg.DatabasePath), "activity.nutsdb")
-			return database.NewNutsActivityStore(activityDir)
+			nutsStore, err := database.NewNutsActivityStore(activityDir)
+			if err != nil {
+				return nil, fmt.Errorf("activitystore: open nutsdb: %w", err)
+			}
+
+			// Try to wrap in dual-write if the Pebble backend is available.
+			pebbleStore, hasPebble := serviceregistry.TryGet[*database.PebbleActivityStore](c, "pebble-activitystore")
+			if !hasPebble || pebbleStore == nil {
+				// Pebble backend not available — NutsDB-only (degraded / test mode).
+				slog.Info("[activity] Pebble activity store not available; using NutsDB-only")
+				return nutsStore, nil
+			}
+
+			// Determine read source from backfill flag.
+			// Checked once at startup — the flag is not expected to change at runtime.
+			readFromPebble := database.IsActivityPebbleBackfillDone(pebbleStore.DB())
+			slog.Info("[activity] dual-write mode enabled",
+				"read_from_pebble", readFromPebble,
+				"flag", database.ActivityPebbleBackfillKey)
+			return database.NewDualWriteActivityStore(nutsStore, pebbleStore, readFromPebble), nil
 		},
 	})
 
@@ -38,7 +87,9 @@ func init() {
 		Needs:  []string{"activitystore"},
 		Groups: []string{"activity"},
 		Build: func(c *serviceregistry.Container) (any, error) {
-			store := serviceregistry.Get[*database.NutsActivityStore](c, "activitystore")
+			// Use the ActivityStorer interface — the activitystore may be any of
+			// *NutsActivityStore, *DualWriteActivityStore (all implement ActivityStorer).
+			store := serviceregistry.Get[database.ActivityStorer](c, "activitystore")
 			return NewService(store), nil
 		},
 	})
