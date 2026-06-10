@@ -1,7 +1,7 @@
 // file: internal/server/handlers/dedup/handler_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 6d8011eb-bed6-430b-959e-2a2b0738ffbc
-// last-edited: 2026-06-03
+// last-edited: 2026-06-10
 
 // Tests for the dedup-domain handlers. The embedding store is exercised through
 // a REAL pebble-backed *database.EmbeddingStore (it is a concrete db type the
@@ -573,5 +573,40 @@ func TestHandleCompareAcoustID_MissingOther(t *testing.T) {
 		gin.Params{{Key: "id", Value: "a"}})
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d want 400; body=%s", w.Code, w.Body.String())
+	}
+}
+
+// ──────────────── T015: purge-legacy-fp endpoint ─────────────────────────────
+
+// TestPurgeLegacyFPCandidates verifies the happy path: a POST with apply=true
+// body enqueues the correct op and returns 202 Accepted with an op_id.
+func TestPurgeLegacyFPCandidates(t *testing.T) {
+	h, d := newHandler(t)
+	d.reg.EXPECT().EnqueueOp(mock.Anything, "dedup.purge-legacy-fp-candidates", mock.Anything).Return("op-fp-1", nil).Once()
+	w := doReq(t, h.PurgeLegacyFPCandidates, http.MethodPost, "/api/v1/dedup/purge-legacy-fp",
+		map[string]bool{"apply": true}, nil)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("status=%d want 202; body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestPurgeLegacyFPCandidates_DryRun verifies that a request with no body
+// (dry-run mode) also enqueues successfully and returns 202.
+func TestPurgeLegacyFPCandidates_DryRun(t *testing.T) {
+	h, d := newHandler(t)
+	d.reg.EXPECT().EnqueueOp(mock.Anything, "dedup.purge-legacy-fp-candidates", mock.Anything).Return("op-fp-dry", nil).Once()
+	w := doReq(t, h.PurgeLegacyFPCandidates, http.MethodPost, "/api/v1/dedup/purge-legacy-fp", nil, nil)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("status=%d want 202; body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestPurgeLegacyFPCandidates_NoRegistry verifies that a missing op registry
+// returns 500.
+func TestPurgeLegacyFPCandidates_NoRegistry(t *testing.T) {
+	h, _ := newHandler(t, noReg)
+	w := doReq(t, h.PurgeLegacyFPCandidates, http.MethodPost, "/api/v1/dedup/purge-legacy-fp", nil, nil)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d want 500; body=%s", w.Code, w.Body.String())
 	}
 }
