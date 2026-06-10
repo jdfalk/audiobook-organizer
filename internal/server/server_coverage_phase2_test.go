@@ -1,7 +1,7 @@
 // file: internal/server/server_coverage_phase2_test.go
-// version: 1.1.1
+// version: 1.2.0
 // guid: d5e6f7a8-b9c0-1d2e-3f4a-5b6c7d8e9f0a
-// last-edited: 2026-04-30
+// last-edited: 2026-06-10
 
 package server
 
@@ -170,6 +170,8 @@ func TestDeleteWorkErrors(t *testing.T) {
 			workID: "01HQWKV1234567890ABCDEFGHJK",
 			mockSetup: func(m *mocks.MockStore) {
 				m.EXPECT().SetRootDir(mock.Anything).Return()
+				// WorkService.DeleteWork checks existence first, then deletes.
+				m.EXPECT().GetWorkByID("01HQWKV1234567890ABCDEFGHJK").Return(&database.Work{ID: "01HQWKV1234567890ABCDEFGHJK", Title: "Work"}, nil).Once()
 				m.EXPECT().DeleteWork("01HQWKV1234567890ABCDEFGHJK").Return(errors.New("database connection error")).Once()
 			},
 			statusCode: http.StatusInternalServerError,
@@ -179,7 +181,8 @@ func TestDeleteWorkErrors(t *testing.T) {
 			workID: "01HQWKV9999999999999999999",
 			mockSetup: func(m *mocks.MockStore) {
 				m.EXPECT().SetRootDir(mock.Anything).Return()
-				m.EXPECT().DeleteWork("01HQWKV9999999999999999999").Return(errors.New("work not found")).Once()
+				// WorkService.DeleteWork checks existence; nil work → returns "work not found" without calling DeleteWork.
+				m.EXPECT().GetWorkByID("01HQWKV9999999999999999999").Return(nil, nil).Once()
 			},
 			statusCode: http.StatusNotFound,
 		},
