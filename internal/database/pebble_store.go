@@ -1,7 +1,7 @@
 // file: internal/database/pebble_store.go
-// version: 1.82.0
+// version: 1.83.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
-// last-edited: 2026-05-24
+// last-edited: 2026-06-10
 
 package database
 
@@ -6541,6 +6541,50 @@ func (p *PebbleStore) DeleteOperationsByStatus(statuses []string) (int, error) {
 		batch.Close()
 	}
 	return deleted, nil
+}
+
+// DeleteOperationWithLogs removes the operation record (operation:<id>) plus all
+// associated log entries (operationlog:<id>:*) in a single atomic Pebble batch.
+//
+// Why atomic: orphaning log lines under a deleted operation wastes disk space and
+// confuses diagnostics. Grouping both deletions into one batch ensures they succeed
+// or fail together with no partially-deleted state visible to readers.
+func (p *PebbleStore) DeleteOperationWithLogs(id string) error {
+	batch := p.db.NewBatch()
+	defer batch.Close()
+
+	// Delete the operation record itself.
+	opKey := []byte(fmt.Sprintf("operation:%s", id))
+	if err := batch.Delete(opKey, nil); err != nil {
+		return fmt.Errorf("batch delete operation key: %w", err)
+	}
+
+	// Delete all associated log lines via prefix range iteration.
+	// Key format: operationlog:<operation_id>:<timestamp_nano>:<seq>
+	logPrefix := []byte(fmt.Sprintf("operationlog:%s:", id))
+	logUpper := prefixEnd(logPrefix)
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: logPrefix,
+		UpperBound: logUpper,
+	})
+	if err != nil {
+		return fmt.Errorf("open log iterator: %w", err)
+	}
+	for iter.First(); iter.Valid(); iter.Next() {
+		k := make([]byte, len(iter.Key()))
+		copy(k, iter.Key())
+		if err := batch.Delete(k, nil); err != nil {
+			iter.Close()
+			return fmt.Errorf("batch delete log key: %w", err)
+		}
+	}
+	if iterErr := iter.Error(); iterErr != nil {
+		iter.Close()
+		return fmt.Errorf("log iterator: %w", iterErr)
+	}
+	iter.Close()
+
+	return batch.Commit(pebble.Sync)
 }
 
 func (p *PebbleStore) GetInterruptedOperations() ([]Operation, error) {

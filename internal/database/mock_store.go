@@ -1,7 +1,7 @@
 // file: internal/database/mock_store.go
-// version: 1.56.0
+// version: 1.57.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
-// last-edited: 2026-05-16
+// last-edited: 2026-06-10
 
 package database
 
@@ -128,6 +128,7 @@ type MockStore struct {
 	CreateOperationFunc           func(id, opType string, folderPath *string) (*Operation, error)
 	GetOperationByIDFunc          func(id string) (*Operation, error)
 	GetRecentOperationsFunc       func(limit int) ([]Operation, error)
+	ListOperationsFunc            func(limit, offset int) ([]Operation, int, error)
 	UpdateOperationStatusFunc     func(id, status string, progress, total int, message string) error
 	UpdateOperationErrorFunc      func(id, errorMessage string) error
 	UpdateOperationResultDataFunc func(id string, resultData string) error
@@ -139,6 +140,7 @@ type MockStore struct {
 	GetOperationParamsFunc       func(opID string) ([]byte, error)
 	DeleteOperationStateFunc     func(opID string) error
 	DeleteOperationsByStatusFunc func(statuses []string) (int, error)
+	DeleteOperationWithLogsFunc  func(id string) error
 	GetInterruptedOperationsFunc func() ([]Operation, error)
 
 	// Operation Logs
@@ -180,6 +182,13 @@ type MockStore struct {
 	SetSettingFunc     func(key, value, typ string, isSecret bool) error
 	GetAllSettingsFunc func() ([]Setting, error)
 	DeleteSettingFunc  func(key string) error
+
+	// RawKV — func delegates so tests can intercept prefix scans / deletes.
+	SetRawFunc      func(key string, value []byte) error
+	GetRawFunc      func(key string) ([]byte, error)
+	DeleteRawFunc   func(key string) error
+	ScanPrefixFunc  func(prefix string) ([]KVPair, error)
+	CountPrefixFunc func(prefix string) (int64, error)
 
 	// Playlists
 	CreatePlaylistFunc        func(name string, seriesID *int, filePath string) (*Playlist, error)
@@ -1035,6 +1044,9 @@ func (m *MockStore) GetRecentOperations(limit int) ([]Operation, error) {
 }
 
 func (m *MockStore) ListOperations(limit, offset int) ([]Operation, int, error) {
+	if m.ListOperationsFunc != nil {
+		return m.ListOperationsFunc(limit, offset)
+	}
 	return nil, 0, nil
 }
 
@@ -1099,6 +1111,13 @@ func (m *MockStore) DeleteOperationsByStatus(statuses []string) (int, error) {
 		return m.DeleteOperationsByStatusFunc(statuses)
 	}
 	return 0, nil
+}
+
+func (m *MockStore) DeleteOperationWithLogs(id string) error {
+	if m.DeleteOperationWithLogsFunc != nil {
+		return m.DeleteOperationWithLogsFunc(id)
+	}
+	return nil
 }
 
 func (m *MockStore) GetInterruptedOperations() ([]Operation, error) {
@@ -2028,11 +2047,36 @@ func (m *MockStore) GetRemovedExternalIDs(source string) ([]ExternalIDMapping, e
 	return nil, nil
 }
 
-func (m *MockStore) SetRaw(key string, value []byte) error               { return nil }
-func (m *MockStore) GetRaw(key string) ([]byte, error)                   { return nil, nil }
-func (m *MockStore) DeleteRaw(key string) error                          { return nil }
-func (m *MockStore) ScanPrefix(prefix string) ([]KVPair, error)          { return nil, nil }
-func (m *MockStore) CountPrefix(prefix string) (int64, error)            { return 0, nil }
+func (m *MockStore) SetRaw(key string, value []byte) error {
+	if m.SetRawFunc != nil {
+		return m.SetRawFunc(key, value)
+	}
+	return nil
+}
+func (m *MockStore) GetRaw(key string) ([]byte, error) {
+	if m.GetRawFunc != nil {
+		return m.GetRawFunc(key)
+	}
+	return nil, nil
+}
+func (m *MockStore) DeleteRaw(key string) error {
+	if m.DeleteRawFunc != nil {
+		return m.DeleteRawFunc(key)
+	}
+	return nil
+}
+func (m *MockStore) ScanPrefix(prefix string) ([]KVPair, error) {
+	if m.ScanPrefixFunc != nil {
+		return m.ScanPrefixFunc(prefix)
+	}
+	return nil, nil
+}
+func (m *MockStore) CountPrefix(prefix string) (int64, error) {
+	if m.CountPrefixFunc != nil {
+		return m.CountPrefixFunc(prefix)
+	}
+	return 0, nil
+}
 func (m *MockStore) CreateOperationResult(result *OperationResult) error { return nil }
 func (m *MockStore) GetOperationResults(operationID string) ([]OperationResult, error) {
 	return nil, nil

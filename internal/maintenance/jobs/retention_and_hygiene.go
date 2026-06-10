@@ -1,11 +1,12 @@
 // file: internal/maintenance/jobs/retention_and_hygiene.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e7c9d4a2-f1b3-49a8-8c4f-7d2e5a1f3c9e
 
 package jobs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -51,10 +52,12 @@ func (j *retentionAndHygieneJob) Run(ctx context.Context, store database.Store, 
 		slog.Error("retention-and-hygiene: operation deletion failed", "error", err)
 		return fmt.Errorf("operation retention sweep: %w", err)
 	}
-	slog.Info("retention-and-hygiene: operation logs deleted",
+	slog.Info("retention-and-hygiene: operations processed",
 		"count", operationsCut, "dry_run", dryRun)
 
 	// (2) Dead-prefix sweep: one-off cleanup of residual book:series: and book:author: keys.
+	// These prefix indexes were removed in Task 3.4 (replaced by memdb queries) but may
+	// still exist in production databases that pre-date the removal.
 	// Guard with versioned flag to prevent re-running on every maintenance cycle.
 	flagName := "dead_prefix_sweep_v1_done"
 	done, err := isDeadPrefixSweepDone(store, flagName)
@@ -64,19 +67,21 @@ func (j *retentionAndHygieneJob) Run(ctx context.Context, store database.Store, 
 	} else if done {
 		slog.Info("retention-and-hygiene: dead-prefix sweep already completed (flag set)")
 	} else {
-		prefixCount, err := deleteDeadPrefixes(ctx, store, dryRun)
-		if err != nil {
-			slog.Error("retention-and-hygiene: dead-prefix deletion failed", "error", err)
-			return fmt.Errorf("dead-prefix sweep: %w", err)
+		prefixCount, sweepErr := deleteDeadPrefixes(ctx, store, dryRun)
+		if sweepErr != nil {
+			slog.Error("retention-and-hygiene: dead-prefix deletion failed", "error", sweepErr)
+			return fmt.Errorf("dead-prefix sweep: %w", sweepErr)
 		}
 		slog.Info("retention-and-hygiene: dead prefixes deleted",
 			"count", prefixCount, "dry_run", dryRun)
 
-		// Mark the sweep as done only if not a dry run.
+		// Mark the sweep as done only after a real (non-dry-run) execution that
+		// succeeded. Setting the flag on a dry-run would suppress the actual
+		// deletion on the next real run — defeating the purpose of the guard.
 		if !dryRun {
 			if err := setDeadPrefixSweepDone(store, flagName); err != nil {
 				slog.Warn("retention-and-hygiene: failed to set completion flag", "error", err)
-				// Don't fail the job — the flag is just a safeguard.
+				// Don't fail the job — the flag is just a guard to avoid redundant runs.
 			}
 		}
 	}
@@ -86,70 +91,126 @@ func (j *retentionAndHygieneJob) Run(ctx context.Context, store database.Store, 
 	return nil
 }
 
-// deleteOldOperations deletes operation and operationlog records older than cutoffTime.
-// Uses ListOperations to scan and count old records. Actual deletion requires invoking
-// store-specific methods (e.g., PebbleStore.DeleteByPrefix or similar).
-// For now, this counts matching records in dry-run mode.
+// deleteOldOperations deletes operation records (and their associated log lines) whose
+// CreatedAt is strictly before cutoffTime.
+//
+// In dry-run mode it counts matching records without modifying the store so callers can
+// preview the impact. In non-dry-run mode it calls DeleteOperationWithLogs for each
+// eligible operation, which atomically removes the operation key and all operationlog:*
+// entries in a single Pebble batch — avoiding orphaned log lines.
+//
+// The scan is done in two phases: first collect all eligible IDs, then delete them.
+// This avoids pagination skew caused by row deletions shifting the sorted index
+// mid-scan (PebbleStore.ListOperations reads the entire prefix into memory and slices
+// by offset, so deleting during iteration would cause the same offset to advance past
+// fewer rows, silently skipping records).
 func deleteOldOperations(ctx context.Context, store database.Store, cutoffTime time.Time, dryRun bool) (int, error) {
-	slog.Info("deleteOldOperations: scanning operations", "cutoff_time", cutoffTime)
+	slog.Info("deleteOldOperations: scanning operations", "cutoff_time", cutoffTime, "dry_run", dryRun)
 
-	// Use ListOperations to fetch all operations and identify those older than cutoff.
-	count := 0
-	const pageSize = 100
+	// Phase 1: collect all eligible operation IDs in a single pass.
+	var toDelete []string
+	const pageSize = 500
 	offset := 0
 	for {
+		if ctx.Err() != nil {
+			return 0, ctx.Err()
+		}
 		ops, totalCount, err := store.ListOperations(pageSize, offset)
 		if err != nil {
-			return 0, fmt.Errorf("list operations: %w", err)
+			return 0, fmt.Errorf("list operations (offset=%d): %w", offset, err)
 		}
-
 		for _, op := range ops {
-			if ctx.Err() != nil {
-				return count, ctx.Err()
-			}
-
 			if op.CreatedAt.Before(cutoffTime) {
-				if !dryRun {
-					// TODO: PebbleStore needs DeleteByPrefix or DeleteOperation(id) method
-					// to actually delete operation:<id> and operationlog:<id>:* records.
-					// For now, this remains a dry-run counting pass.
-					slog.Debug("would delete operation", "op_id", op.ID, "created_at", op.CreatedAt)
-				}
-				count++
+				toDelete = append(toDelete, op.ID)
 			}
 		}
-
 		if offset+pageSize >= totalCount {
 			break
 		}
 		offset += pageSize
 	}
 
+	slog.Info("deleteOldOperations: scan complete",
+		"eligible", len(toDelete), "dry_run", dryRun)
+
+	if dryRun {
+		// Dry-run: report count only, touch nothing.
+		for _, id := range toDelete {
+			slog.Debug("dry-run: would delete operation", "op_id", id)
+		}
+		return len(toDelete), nil
+	}
+
+	// Phase 2: delete eligible operations and their associated log lines.
+	count := 0
+	for _, id := range toDelete {
+		if ctx.Err() != nil {
+			return count, ctx.Err()
+		}
+		slog.Debug("deleting operation with logs", "op_id", id)
+		if err := store.DeleteOperationWithLogs(id); err != nil {
+			return count, fmt.Errorf("delete operation %s: %w", id, err)
+		}
+		count++
+	}
 	return count, nil
 }
 
-// deleteDeadPrefixes deletes residual book:series: and book:author: keys.
-// Grep audit must confirm zero live readers before this runs (see PR description).
-// Note: This implementation is minimal — it logs the count without actually deleting.
-// A full implementation would require a DeleteByPrefix method on the Store interface.
+// deleteDeadPrefixes deletes residual book:series: and book:author: keys that were
+// written by the old secondary-index layer (removed in Task 3.4).
+//
+// Zero live code reads these prefixes — a grep audit confirmed no reader outside this
+// file references them (see PR description). Removing them reclaims disk space and
+// eliminates confusion for future readers of the key schema.
+//
+// Returns the total number of keys deleted across both prefixes.
 func deleteDeadPrefixes(ctx context.Context, store database.Store, dryRun bool) (int, error) {
-	slog.Info("deleteDeadPrefixes: audit only (deletion deferred to interface extension)",
-		"prefixes_to_clean", []string{"book:series:", "book:author:"})
+	deadPrefixes := []string{"book:series:", "book:author:"}
+	slog.Info("deleteDeadPrefixes: starting sweep",
+		"prefixes", deadPrefixes, "dry_run", dryRun)
 
-	// TODO(TASK-023): Once PebbleStore has a DeleteByPrefix method, implement actual deletion.
-	// For now, this serves as the hook point for the feature. The prefixes are:
-	// - book:series:<id> — replaced by memdb queries
-	// - book:author:<id> — replaced by memdb queries
-	// Before implementing deletion, the reader audit must confirm zero live reads from these prefixes.
-	// See PR description for the grep audit results.
+	total := 0
+	for _, prefix := range deadPrefixes {
+		if ctx.Err() != nil {
+			return total, ctx.Err()
+		}
 
-	return 0, nil
+		pairs, err := store.ScanPrefix(prefix)
+		if err != nil {
+			return total, fmt.Errorf("scan prefix %q: %w", prefix, err)
+		}
+
+		slog.Info("deleteDeadPrefixes: scanned prefix",
+			"prefix", prefix, "key_count", len(pairs), "dry_run", dryRun)
+
+		if dryRun {
+			total += len(pairs)
+			continue
+		}
+
+		for _, pair := range pairs {
+			if ctx.Err() != nil {
+				return total, ctx.Err()
+			}
+			if err := store.DeleteRaw(pair.Key); err != nil {
+				return total, fmt.Errorf("delete key %q: %w", pair.Key, err)
+			}
+			total++
+		}
+	}
+
+	return total, nil
 }
 
 // isDeadPrefixSweepDone checks if the dead-prefix sweep completion flag is set.
+// A missing setting (ErrSettingNotFound) is treated as "not done" (returns false, nil)
+// because the flag is created only after the first successful real run.
 func isDeadPrefixSweepDone(store database.Store, flagName string) (bool, error) {
 	setting, err := store.GetSetting(flagName)
 	if err != nil {
+		if errors.Is(err, database.ErrSettingNotFound) {
+			return false, nil // Flag absent → sweep has not run yet.
+		}
 		return false, err
 	}
 	if setting == nil {
