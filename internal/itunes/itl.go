@@ -692,64 +692,52 @@ func UpdateITLLocations(inputPath, outputPath string, updates []ITLLocationUpdat
 		updateMap[strings.ToLower(u.PersistentID)] = u.NewLocation
 	}
 
-	data, err := os.ReadFile(inputPath)
+	// Mutation: rewrite location hohms in the decompressed LE payload. Header
+	// regeneration (CRIT-3) + the full ITLSafetyContract + BE refusal all happen
+	// inside the SafeWriteITL chokepoint (TASK-004) — no direct writeITLFile here.
+	updatedCount := 0
+	mutate := func(decompressed []byte) ([]byte, error) {
+		var newData []byte
+		newData, updatedCount = rewriteChunksLE(decompressed, updateMap)
+		return newData, nil
+	}
+	return safeWriteOrEncodeToFile(inputPath, outputPath, mutate, &updatedCount)
+}
+
+// safeWriteOrEncodeToFile routes an itl.go writeback entry point through the
+// SafeWriteITL atomic protocol when writing in place (inputPath == outputPath),
+// or through the safe in-memory encode (header regen + full contract) written to
+// outputPath when the caller wants a distinct output file (e.g. a managed .tmp).
+// `updated`, when non-nil, is surfaced as ITLWriteBackResult.UpdatedCount —
+// callers set it from inside their mutate closure (the closure runs before this
+// function returns, so the deref below sees the final value).
+func safeWriteOrEncodeToFile(inputPath, outputPath string, mutate func([]byte) ([]byte, error), updated *int) (*ITLWriteBackResult, error) {
+	if inputPath == outputPath {
+		if _, err := SafeWriteITL(inputPath, mutate); err != nil {
+			return nil, err
+		}
+		return &ITLWriteBackResult{UpdatedCount: derefCount(updated), OutputPath: outputPath}, nil
+	}
+	raw, err := os.ReadFile(inputPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading ITL: %w", err)
 	}
-
-	hdr, err := parseHdfmHeader(data)
+	outBytes, err := safeEncodeITL(raw, mutate, DefaultContractConfig())
 	if err != nil {
 		return nil, err
 	}
-
-	payload := data[hdr.headerLen:]
-	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed, err := itlInflate(decrypted)
-	if err != nil {
-		return nil, fmt.Errorf("decompressing ITL payload: %w", err)
-	}
-
-	// Walk and rewrite — dispatch on endianness.
-	// BE writeback is refused (K12): see ErrBEWritebackUnsupported.
-	if !detectLE(decompressed) {
-		return nil, ErrBEWritebackUnsupported
-	}
-	var newData []byte
-	var updatedCount int
-	if detectLE(decompressed) {
-		newData, updatedCount = rewriteChunksLE(decompressed, updateMap)
-	} else {
-		newData, updatedCount = rewriteChunksBE(decompressed, updateMap)
-	}
-
-	// Compress if original was
-	var finalPayload []byte
-	if wasCompressed {
-		finalPayload = itlDeflate(newData)
-	} else {
-		finalPayload = newData
-	}
-
-	// Encrypt
-	encrypted := itlEncrypt(hdr, finalPayload)
-
-	// Build new file
-	newFileLen := uint32(len(encrypted)) + hdr.headerLen
-	newHeader := buildHdfmHeader(hdr.version, hdr.headerRemainder, newFileLen, hdr.unknown)
-
-	outData := make([]byte, 0, len(newHeader)+len(encrypted))
-	outData = append(outData, newHeader...)
-	outData = append(outData, encrypted...)
-
-	if err := os.WriteFile(outputPath, outData, 0664); err != nil {
+	if err := writeFileSync(outputPath, outBytes); err != nil {
 		return nil, fmt.Errorf("writing ITL: %w", err)
 	}
 	fixITLPermissions(outputPath)
+	return &ITLWriteBackResult{UpdatedCount: derefCount(updated), OutputPath: outputPath}, nil
+}
 
-	return &ITLWriteBackResult{
-		UpdatedCount: updatedCount,
-		OutputPath:   outputPath,
-	}, nil
+func derefCount(p *int) int {
+	if p == nil {
+		return 0
+	}
+	return *p
 }
 
 // ---------------------------------------------------------------------------
@@ -763,64 +751,48 @@ func InsertITLTracks(inputPath, outputPath string, tracks []ITLNewTrack) (*ITLWr
 		return &ITLWriteBackResult{OutputPath: outputPath}, nil
 	}
 
-	data, err := os.ReadFile(inputPath)
-	if err != nil {
-		return nil, fmt.Errorf("reading ITL: %w", err)
+	// Mutation: append new track chunks at the track-insert offset. Header
+	// regeneration (CRIT-3) + the full ITLSafetyContract + BE refusal happen in
+	// the SafeWriteITL chokepoint (TASK-004).
+	mutate := func(decompressed []byte) ([]byte, error) {
+		// Find max track ID and the insertion point (after last track hohm,
+		// before first hpim).
+		maxID := findMaxTrackID(decompressed)
+		insertOffset := findTrackInsertOffset(decompressed)
+
+		var newChunks bytes.Buffer
+		for i, tr := range tracks {
+			trackID := maxID + 1 + i
+			newChunks.Write(buildHtimChunk(trackID, tr))
+			// Order matters: location first, then metadata (iTunes convention).
+			if tr.Location != "" {
+				newChunks.Write(buildHohmChunk(0x0D, tr.Location))
+			}
+			if tr.Name != "" {
+				newChunks.Write(buildHohmChunk(0x02, tr.Name))
+			}
+			if tr.Album != "" {
+				newChunks.Write(buildHohmChunk(0x03, tr.Album))
+			}
+			if tr.Artist != "" {
+				newChunks.Write(buildHohmChunk(0x04, tr.Artist))
+			}
+			if tr.Genre != "" {
+				newChunks.Write(buildHohmChunk(0x05, tr.Genre))
+			}
+			if tr.Kind != "" {
+				newChunks.Write(buildHohmChunk(0x06, tr.Kind))
+			}
+		}
+
+		var newData bytes.Buffer
+		newData.Write(decompressed[:insertOffset])
+		newData.Write(newChunks.Bytes())
+		newData.Write(decompressed[insertOffset:])
+		return newData.Bytes(), nil
 	}
-
-	hdr, err := parseHdfmHeader(data)
-	if err != nil {
-		return nil, err
-	}
-
-	payload := data[hdr.headerLen:]
-	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed, err := itlInflate(decrypted)
-	if err != nil {
-		return nil, fmt.Errorf("decompressing ITL payload: %w", err)
-	}
-
-	// Find max track ID
-	maxID := findMaxTrackID(decompressed)
-
-	// Find insertion point: after last hohm that follows an htim, before first hpim
-	insertOffset := findTrackInsertOffset(decompressed)
-
-	// Build new track chunks
-	var newChunks bytes.Buffer
-	for i, tr := range tracks {
-		trackID := maxID + 1 + i
-		htim := buildHtimChunk(trackID, tr)
-		newChunks.Write(htim)
-
-		// Order matters: location first, then metadata (matches iTunes convention).
-		if tr.Location != "" {
-			newChunks.Write(buildHohmChunk(0x0D, tr.Location))
-		}
-		if tr.Name != "" {
-			newChunks.Write(buildHohmChunk(0x02, tr.Name))
-		}
-		if tr.Album != "" {
-			newChunks.Write(buildHohmChunk(0x03, tr.Album))
-		}
-		if tr.Artist != "" {
-			newChunks.Write(buildHohmChunk(0x04, tr.Artist))
-		}
-		if tr.Genre != "" {
-			newChunks.Write(buildHohmChunk(0x05, tr.Genre))
-		}
-		if tr.Kind != "" {
-			newChunks.Write(buildHohmChunk(0x06, tr.Kind))
-		}
-	}
-
-	// Splice: before insertOffset + newChunks + after insertOffset
-	var newData bytes.Buffer
-	newData.Write(decompressed[:insertOffset])
-	newData.Write(newChunks.Bytes())
-	newData.Write(decompressed[insertOffset:])
-
-	return writeITLFile(outputPath, hdr, newData.Bytes(), wasCompressed, len(tracks))
+	count := len(tracks)
+	return safeWriteOrEncodeToFile(inputPath, outputPath, mutate, &count)
 }
 
 // findMaxTrackID walks chunks to find the highest track ID.
@@ -901,33 +873,17 @@ func RewriteITLExtensions(inputPath, outputPath string, oldExt, newExt string) (
 		newExt = "." + newExt
 	}
 
-	data, err := os.ReadFile(inputPath)
-	if err != nil {
-		return nil, fmt.Errorf("reading ITL: %w", err)
+	// Mutation: rewrite file extensions in location hohms. Header regeneration
+	// (CRIT-3) + the full ITLSafetyContract + BE refusal happen in the
+	// SafeWriteITL chokepoint (TASK-004). (BE was already refused here pre-T004;
+	// the chokepoint enforces it for every entry point uniformly.)
+	count := 0
+	mutate := func(decompressed []byte) ([]byte, error) {
+		var newData []byte
+		newData, count = rewriteExtensionsInChunks(decompressed, oldExt, newExt)
+		return newData, nil
 	}
-
-	hdr, err := parseHdfmHeader(data)
-	if err != nil {
-		return nil, err
-	}
-
-	payload := data[hdr.headerLen:]
-	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed, err := itlInflate(decrypted)
-	if err != nil {
-		return nil, fmt.Errorf("decompressing ITL payload: %w", err)
-	}
-
-	// rewriteExtensionsInChunks is a BE ("hohm") path. BE writeback is refused
-	// (K12): the BE writer shares CRIT-1's +27 flag invention with no corpus to
-	// validate against. Production is LE; refuse rather than corrupt.
-	if !detectLE(decompressed) {
-		return nil, ErrBEWritebackUnsupported
-	}
-
-	newData, count := rewriteExtensionsInChunks(decompressed, oldExt, newExt)
-
-	return writeITLFile(outputPath, hdr, newData, wasCompressed, count)
+	return safeWriteOrEncodeToFile(inputPath, outputPath, mutate, &count)
 }
 
 // rewriteExtensionsInChunks walks chunks and rewrites extensions in location hohms.
@@ -983,37 +939,23 @@ func rewriteExtensionsInChunks(data []byte, oldExt, newExt string) ([]byte, int)
 // InsertITLPlaylist reads an ITL file, appends a new playlist, and writes
 // the result to outputPath.
 func InsertITLPlaylist(inputPath, outputPath string, playlist ITLNewPlaylist) (*ITLWriteBackResult, error) {
-	data, err := os.ReadFile(inputPath)
-	if err != nil {
-		return nil, fmt.Errorf("reading ITL: %w", err)
+	// Mutation: append the new playlist chunks. Header regeneration (CRIT-3) +
+	// the full ITLSafetyContract + BE refusal happen in the SafeWriteITL
+	// chokepoint (TASK-004).
+	mutate := func(decompressed []byte) ([]byte, error) {
+		var plChunks bytes.Buffer
+		plChunks.Write(buildHpimChunk(len(playlist.TrackIDs)))
+		plChunks.Write(buildHohmChunk(0x64, playlist.Title))
+		for _, tid := range playlist.TrackIDs {
+			plChunks.Write(buildHptmChunk(tid))
+		}
+		var newData bytes.Buffer
+		newData.Write(decompressed)
+		newData.Write(plChunks.Bytes())
+		return newData.Bytes(), nil
 	}
-
-	hdr, err := parseHdfmHeader(data)
-	if err != nil {
-		return nil, err
-	}
-
-	payload := data[hdr.headerLen:]
-	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed, err := itlInflate(decrypted)
-	if err != nil {
-		return nil, fmt.Errorf("decompressing ITL payload: %w", err)
-	}
-
-	// Build playlist chunks
-	var plChunks bytes.Buffer
-	plChunks.Write(buildHpimChunk(len(playlist.TrackIDs)))
-	plChunks.Write(buildHohmChunk(0x64, playlist.Title))
-	for _, tid := range playlist.TrackIDs {
-		plChunks.Write(buildHptmChunk(tid))
-	}
-
-	// Append at end
-	var newData bytes.Buffer
-	newData.Write(decompressed)
-	newData.Write(plChunks.Bytes())
-
-	return writeITLFile(outputPath, hdr, newData.Bytes(), wasCompressed, 1)
+	count := 1
+	return safeWriteOrEncodeToFile(inputPath, outputPath, mutate, &count)
 }
 
 // writeITLFile handles compression, encryption, and writing of an ITL file.

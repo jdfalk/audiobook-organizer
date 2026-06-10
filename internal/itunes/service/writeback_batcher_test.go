@@ -24,7 +24,12 @@ func withFakeITLHooks(t *testing.T, validate func(string) error, apply func(in, 
 	prevValidate := itlValidateFn
 	prevApply := itlApplyOperationsFn
 	itlValidateFn = validate
-	itlApplyOperationsFn = apply
+	// itlApplyOperationsFn is now variadic (TASK-004 added an optional
+	// ContractConfig for Force); the batcher never passes one, so the test
+	// double ignores the variadic tail and delegates to the simple closure.
+	itlApplyOperationsFn = func(in, out string, ops itunes.ITLOperationSet, _ ...itunes.ContractConfig) (*itunes.ITLWriteBackResult, error) {
+		return apply(in, out, ops)
+	}
 	t.Cleanup(func() {
 		itlValidateFn = prevValidate
 		itlApplyOperationsFn = prevApply

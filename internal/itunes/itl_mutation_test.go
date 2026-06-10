@@ -873,8 +873,9 @@ func TestMutation_LargeTrackID(t *testing.T) {
 // 8. InsertITLTracks integration with multi-track synthetic ITLs
 // ===========================================================================
 
+// TestMutation_InsertIntoEmptyITL: v9 synthetic libraries are big-endian; the
+// SafeWriteITL chokepoint refuses BE writeback (TASK-004, SPEC §3 step 1 / K12).
 func TestMutation_InsertIntoEmptyITL(t *testing.T) {
-	// Build empty ITL, then insert a track via InsertITLTracks
 	data := buildSyntheticITLMultiTrack(t, "9.0.0", false, nil)
 
 	tmpDir := t.TempDir()
@@ -882,21 +883,16 @@ func TestMutation_InsertIntoEmptyITL(t *testing.T) {
 	outPath := filepath.Join(tmpDir, "out.itl")
 	require.NoError(t, os.WriteFile(itlPath, data, 0644))
 
-	result, err := InsertITLTracks(itlPath, outPath, []ITLNewTrack{
+	_, err := InsertITLTracks(itlPath, outPath, []ITLNewTrack{
 		{Location: "/music/inserted.mp3", Name: "Inserted Track"},
 	})
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.UpdatedCount)
-
-	lib, err := ParseITL(outPath)
-	require.NoError(t, err)
-	require.Len(t, lib.Tracks, 1)
-	assert.Equal(t, "Inserted Track", lib.Tracks[0].Name)
-	assert.Equal(t, "/music/inserted.mp3", lib.Tracks[0].Location)
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported)
+	_, statErr := os.Stat(outPath)
+	require.Error(t, statErr, "refused BE write must not create output")
 }
 
+// TestMutation_InsertMultipleIntoExisting: BE fixture → refused (see above).
 func TestMutation_InsertMultipleIntoExisting(t *testing.T) {
-	// Start with 3 tracks, insert 2 more
 	specs := make([]trackSpec, 3)
 	for i := 0; i < 3; i++ {
 		specs[i] = makeTrackSpec(i)
@@ -908,26 +904,13 @@ func TestMutation_InsertMultipleIntoExisting(t *testing.T) {
 	outPath := filepath.Join(tmpDir, "out.itl")
 	require.NoError(t, os.WriteFile(itlPath, data, 0644))
 
-	result, err := InsertITLTracks(itlPath, outPath, []ITLNewTrack{
+	_, err := InsertITLTracks(itlPath, outPath, []ITLNewTrack{
 		{Location: "/music/new1.mp3", Name: "New Track 1", Artist: "New Artist"},
 		{Location: "/music/new2.mp3", Name: "New Track 2", Album: "New Album"},
 	})
-	require.NoError(t, err)
-	assert.Equal(t, 2, result.UpdatedCount)
-
-	lib, err := ParseITL(outPath)
-	require.NoError(t, err)
-	require.Len(t, lib.Tracks, 5)
-
-	// Original tracks preserved
-	for i := 0; i < 3; i++ {
-		assert.Equal(t, specs[i].Location, lib.Tracks[i].Location, "original track %d", i)
-	}
-	// New tracks appended
-	assert.Equal(t, "New Track 1", lib.Tracks[3].Name)
-	assert.Equal(t, "New Artist", lib.Tracks[3].Artist)
-	assert.Equal(t, "New Track 2", lib.Tracks[4].Name)
-	assert.Equal(t, "New Album", lib.Tracks[4].Album)
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported)
+	_, statErr := os.Stat(outPath)
+	require.Error(t, statErr, "refused BE write must not create output")
 }
 
 // ===========================================================================
@@ -1208,6 +1191,8 @@ func TestMutation_HohmTypeOrdering(t *testing.T) {
 // 15. Playlist tests with multi-track
 // ===========================================================================
 
+// TestMutation_InsertPlaylistIntoMultiTrackITL: BE fixture → refused (TASK-004,
+// SPEC §3 step 1 / K12).
 func TestMutation_InsertPlaylistIntoMultiTrackITL(t *testing.T) {
 	specs := make([]trackSpec, 3)
 	for i := 0; i < 3; i++ {
@@ -1220,31 +1205,27 @@ func TestMutation_InsertPlaylistIntoMultiTrackITL(t *testing.T) {
 	outPath := filepath.Join(tmpDir, "with_playlist.itl")
 	require.NoError(t, os.WriteFile(itlPath, data, 0644))
 
-	result, err := InsertITLPlaylist(itlPath, outPath, ITLNewPlaylist{
+	_, err := InsertITLPlaylist(itlPath, outPath, ITLNewPlaylist{
 		Title:    "Test Playlist",
 		TrackIDs: []int{specs[0].TrackID, specs[2].TrackID},
 	})
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.UpdatedCount)
-
-	lib, err := ParseITL(outPath)
-	require.NoError(t, err)
-	require.Len(t, lib.Tracks, 3)
-	require.Len(t, lib.Playlists, 1)
-	assert.Equal(t, "Test Playlist", lib.Playlists[0].Title)
-	require.Len(t, lib.Playlists[0].Items, 2)
-	assert.Equal(t, specs[0].TrackID, lib.Playlists[0].Items[0])
-	assert.Equal(t, specs[2].TrackID, lib.Playlists[0].Items[1])
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported)
+	_, statErr := os.Stat(outPath)
+	require.Error(t, statErr, "refused BE write must not create output")
 }
 
 // ===========================================================================
 // 16. Sequential mutation tests (build -> insert -> update -> verify)
 // ===========================================================================
 
+// TestMutation_SequentialMutations: post-TASK-004 EVERY writeback entry point
+// routes through the SafeWriteITL chokepoint, which refuses BE (K12). The v9
+// synthetic fixture is big-endian, so the very first mutation (InsertITLTracks)
+// is refused — previously only the location-update path refused BE.
 func TestMutation_SequentialMutations(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Step 1: Build initial ITL with 2 tracks
+	// Step 1: Build initial BE (v9) ITL with 2 tracks.
 	specs := make([]trackSpec, 2)
 	for i := 0; i < 2; i++ {
 		specs[i] = makeTrackSpec(i)
@@ -1253,22 +1234,18 @@ func TestMutation_SequentialMutations(t *testing.T) {
 	path1 := filepath.Join(tmpDir, "step1.itl")
 	require.NoError(t, os.WriteFile(path1, data, 0644))
 
-	// Step 2: Insert a new track
+	// Step 2: Insert a new track — refused, BE writeback unsupported.
 	path2 := filepath.Join(tmpDir, "step2.itl")
 	_, err := InsertITLTracks(path1, path2, []ITLNewTrack{
 		{Location: "/music/new.mp3", Name: "New Track", Artist: "New Artist"},
 	})
-	require.NoError(t, err)
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported, "BE writeback must be refused (K12)")
+	_, statErr := os.Stat(path2)
+	require.Error(t, statErr, "refused BE write must not create output")
 
-	lib2, err := ParseITL(path2)
-	require.NoError(t, err)
-	require.Len(t, lib2.Tracks, 3)
-
-	// Step 3: Update location — BE fixture, so BE writeback is refused (K12).
-	// (InsertITLTracks above still works because it does not route through the
-	// detectLE writeback dispatch; the location-update path does.)
+	// Step 3: Update location — also refused for the same BE fixture.
 	path3 := filepath.Join(tmpDir, "step3.itl")
-	_, err = UpdateITLLocations(path2, path3, []ITLLocationUpdate{
+	_, err = UpdateITLLocations(path1, path3, []ITLLocationUpdate{
 		{PersistentID: pidToHex(specs[0].PID), NewLocation: "/moved/track_000.mp3"},
 	})
 	require.ErrorIs(t, err, ErrBEWritebackUnsupported, "BE writeback must be refused (K12)")
