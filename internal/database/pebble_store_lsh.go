@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store_lsh.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: e083305c-0d28-49c9-9f90-40b2c068414f
 // last-edited: 2026-06-09
 
@@ -8,7 +8,7 @@
 //
 // # Key format invariants (normative — do not change without bumping lsh_index_v2)
 //
-//	fpidx:<band:1B><subprint:8B>:<bookFileID>   → 1 byte (LSHIndexVersion)
+//	fpidx:<band:1B><subprint:8B>:<bookFileID>   → BookID (UTF-8 bytes)
 //	fpidx_meta:<bookFileID>                     → 1B version + N×(1B band + 8B subprint)
 //
 // The fpidx_meta row is the member list that makes O(1) deletes possible: when
