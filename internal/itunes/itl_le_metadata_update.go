@@ -1,5 +1,5 @@
 // file: internal/itunes/itl_le_metadata_update.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f01234567890
 //
 // Update track metadata (title, artist, album, genre, etc.) in LE-format
@@ -10,6 +10,7 @@ package itunes
 
 import (
 	"bytes"
+	"log"
 	"strings"
 )
 
@@ -23,7 +24,14 @@ type ITLMetadataUpdate struct {
 	Genre        string // hohm type 0x05
 	Kind         string // hohm type 0x06
 	Composer     string // hohm type 0x0C
-	Location     string // hohm type 0x0D
+	// Location is the WINPATH side of the location pair (hohm type 0x0D — SPEC
+	// §1b / TASK-006). It is the single source of truth: UpdateMetadataLE derives
+	// the LocationPair from it and writes BOTH 0x0D (this plain Windows path) and
+	// the sibling 0x0B LocalURL (file://localhost/ percent-escaped) so the two
+	// fields always round-trip the T003 location-form guard. Callers may pass a
+	// native Windows path or a file://localhost/ URL (normalized on the way in);
+	// never write a URL into 0x0D yourself.
+	Location string // hohm type 0x0D (WinPath side of the LocationPair)
 }
 
 // UpdateMetadataLE rewrites mhoh chunks for tracks matching the given updates.
@@ -146,7 +154,18 @@ func UpdateMetadataLE(data []byte, updates []ITLMetadataUpdate) ([]byte, int) {
 		// Build replacement mhoh list
 		replacements := map[uint32]string{}
 		if update.Location != "" {
-			replacements[0x0D] = update.Location
+			// SPEC §1b / TASK-006: derive BOTH renderings from ONE LocationPair.
+			// 0x0D gets the plain WinPath, 0x0B the percent-escaped URL. Writing
+			// only 0x0D (the old behaviour) left a stale 0x0B that no longer
+			// round-tripped — the T003 location-form guard would reject it. An
+			// unmappable Location is skipped with a WARN, never written raw.
+			pair, err := normalizeLocationValue(update.Location)
+			if err != nil {
+				log.Printf("[itl] WARN UpdateMetadataLE: PID %s location %q unmappable, skipping location update: %v", update.PersistentID, update.Location, err)
+			} else {
+				replacements[0x0D] = pair.WinPath
+				replacements[0x0B] = pair.URL
+			}
 		}
 		if update.Name != "" {
 			replacements[0x02] = update.Name
@@ -183,9 +202,11 @@ func UpdateMetadataLE(data []byte, updates []ITLMetadataUpdate) ([]byte, int) {
 			}
 		}
 
-		// Append new mhoh chunks for types that didn't exist
-		// Order: location first, then metadata
-		appendOrder := []uint32{0x0D, 0x02, 0x03, 0x04, 0x05, 0x06, 0x0C}
+		// Append new mhoh chunks for types that didn't exist.
+		// Order: location pair (0x0D path, then 0x0B URL), then metadata. The 0x0B
+		// LocalURL is appended here when the track had a 0x0D but no sibling 0x0B
+		// (or neither) so the location-form pairing invariant holds (SPEC §1b).
+		appendOrder := []uint32{0x0D, 0x0B, 0x02, 0x03, 0x04, 0x05, 0x06, 0x0C}
 		for _, ht := range appendOrder {
 			if val, ok := replacements[ht]; ok && !replaced[ht] {
 				// buildMhohLE returns built=false for hohmTypes absent from the

@@ -1,7 +1,7 @@
 // file: internal/server/handlers/itunes.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: d4e5f6a7-b8c9-0123-defa-123456789012
-// last-edited: 2026-06-03
+// last-edited: 2026-06-10
 
 package handlers
 
@@ -20,6 +20,7 @@ import (
 	"github.com/falkcorp/audiobook-organizer/internal/httputil"
 	"github.com/falkcorp/audiobook-organizer/internal/itunes"
 	itunesservice "github.com/falkcorp/audiobook-organizer/internal/itunes/service"
+	"github.com/falkcorp/audiobook-organizer/internal/metrics"
 	"github.com/falkcorp/audiobook-organizer/internal/security/pathvalidation"
 	"github.com/oklog/ulid/v2"
 )
@@ -440,10 +441,20 @@ func (h *ITunesHandler) WriteBack(c *gin.Context) {
 			continue
 		}
 
+		// TASK-006 / SPEC §1b: normalize the remapped path into the canonical
+		// WinPath (the LE writer derives the 0x0B URL). Unmappable values are
+		// skipped with a WARN + metric, never written raw into 0x0D (CRIT-2).
 		itunesPath := itunes.ReverseRemapPath(book.FilePath, pathMappings)
+		pair, err := itunes.NewLocationPair(itunesPath)
+		if err != nil {
+			metrics.RecordITunesLocationUnmappable("invalid_path")
+			stdlog.Warn("iTunes update-locations: skipping unmappable location (never written raw — CRIT-2)",
+				"pid", *book.ITunesPersistentID, "raw", itunesPath, "error", err.Error())
+			continue
+		}
 		itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
 			PersistentID: *book.ITunesPersistentID,
-			NewLocation:  itunesPath,
+			NewLocation:  pair.WinPath,
 		})
 	}
 

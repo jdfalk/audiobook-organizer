@@ -1,5 +1,5 @@
 // file: internal/itunes/service/importer.go
-// version: 1.0.5
+// version: 1.1.0
 // guid: 2b8e5f1a-4c7d-4e9f-b3a0-6d8c2e7a4f1b
 
 package itunesservice
@@ -462,9 +462,14 @@ func (imp *Importer) Sync(ctx context.Context, libraryPath string, pathMappings 
 	if imp.cfg.ITLWriteBackEnabled && imp.cfg.LibraryWritePath != "" {
 		pending, _ := imp.store.GetPendingDeferredITunesUpdates()
 		if len(pending) > 0 {
-			updates := make([]itunes.ITLLocationUpdate, len(pending))
-			for i, p := range pending {
-				updates[i] = itunes.ITLLocationUpdate{PersistentID: p.PersistentID, NewLocation: p.NewPath}
+			// TASK-006: normalize each deferred NewPath into the canonical WinPath
+			// (the LE writer derives the 0x0B URL). Unmappable values are skipped
+			// with a WARN + metric, never written raw (CRIT-2).
+			updates := make([]itunes.ITLLocationUpdate, 0, len(pending))
+			for _, p := range pending {
+				if winPath, ok := normalizeITunesLocation(p.PersistentID, p.NewPath); ok {
+					updates = append(updates, itunes.ITLLocationUpdate{PersistentID: p.PersistentID, NewLocation: winPath})
+				}
 			}
 			itlPath := imp.cfg.LibraryWritePath
 			tmpPath := itlPath + ".deferred-update.tmp"
@@ -775,10 +780,14 @@ func (imp *Importer) CollectITLUpdates() []itunes.ITLLocationUpdate {
 					if len(files) > 0 {
 						for _, f := range files {
 							if f.ITunesPersistentID != "" && f.ITunesPath != "" {
-								local = append(local, itunes.ITLLocationUpdate{
-									PersistentID: f.ITunesPersistentID,
-									NewLocation:  f.ITunesPath,
-								})
+								// TASK-006: normalize to canonical WinPath; skip
+								// unmappable (WARN + metric), never write raw (CRIT-2).
+								if winPath, ok := normalizeITunesLocation(f.ITunesPersistentID, f.ITunesPath); ok {
+									local = append(local, itunes.ITLLocationUpdate{
+										PersistentID: f.ITunesPersistentID,
+										NewLocation:  winPath,
+									})
+								}
 							}
 						}
 					}
@@ -822,11 +831,15 @@ func (imp *Importer) CollectITLUpdatesWithBookIDs() ([]itunes.ITLLocationUpdate,
 		if len(files) > 0 {
 			for _, f := range files {
 				if f.ITunesPersistentID != "" && f.ITunesPath != "" {
-					updates = append(updates, itunes.ITLLocationUpdate{
-						PersistentID: f.ITunesPersistentID,
-						NewLocation:  f.ITunesPath,
-					})
-					bookIDSet[b.ID] = true
+					// TASK-006: normalize to canonical WinPath; skip unmappable
+					// (WARN + metric), never write raw (CRIT-2).
+					if winPath, ok := normalizeITunesLocation(f.ITunesPersistentID, f.ITunesPath); ok {
+						updates = append(updates, itunes.ITLLocationUpdate{
+							PersistentID: f.ITunesPersistentID,
+							NewLocation:  winPath,
+						})
+						bookIDSet[b.ID] = true
+					}
 				}
 			}
 		}

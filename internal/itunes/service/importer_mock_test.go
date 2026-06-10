@@ -1,5 +1,5 @@
 // file: internal/itunes/service/importer_mock_test.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: e7f1a2b3-4c5d-6e7f-8a9b-0c1d2e3f4a5b
 
 package itunesservice
@@ -178,16 +178,19 @@ func TestCollectITLUpdatesWithBookIDs_FileLevel(t *testing.T) {
 
 	files := []database.BookFile{
 		{
+			// TASK-006 / SPEC §1b: f.ITunesPath holds a native Windows path; the
+			// collector normalizes it through LocationPair (Unix paths would be
+			// unmappable and skipped).
 			ID:                 "file-1",
 			BookID:             "book-3",
 			ITunesPersistentID: "PID111",
-			ITunesPath:         "/mnt/books/multi/track1.m4b",
+			ITunesPath:         `W:\books\multi\track1.m4b`,
 		},
 		{
 			ID:                 "file-2",
 			BookID:             "book-3",
 			ITunesPersistentID: "PID222",
-			ITunesPath:         "/mnt/books/multi/track2.m4b",
+			ITunesPath:         `W:\books\multi\track2.m4b`,
 		},
 		{
 			// File without PID — should be skipped.

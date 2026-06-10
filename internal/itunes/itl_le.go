@@ -1,5 +1,5 @@
 // file: internal/itunes/itl_le.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: b4e8d927-6c3f-4a81-9e02-f7b3c8d4e56a
 
 package itunes
@@ -709,6 +709,22 @@ func rewriteMithContentLE(mith []byte, updateMap map[string]string, currentPID s
 }
 
 // shouldUpdateMhohLE checks if a mhoh block should be updated with a new location.
+//
+// The updateMap value is the CANONICAL Windows path (the single source of truth —
+// SPEC §1b / TASK-006). This function derives the two renderings from ONE
+// LocationPair: hohm 0x0D gets the plain WinPath, hohm 0x0B gets the
+// file://localhost/ percent-escaped URL. No caller ever passes a raw string to
+// either field directly, which is what makes the CRIT-2 "URL-in-0x0D" bug
+// unrepresentable.
+//
+// WHY this replaced the old inline "file://localhost/"+TrimPrefix hack: that code
+// (a) wrote whatever caller value verbatim into 0x0D (the CRIT-2 corruption when
+// the value was URL-shaped), and (b) produced a 0x0B URL with NO percent-escaping,
+// so it never round-tripped the T003 location-form guard.
+//
+// An unmappable value (relative path, staging-dir leak, podcast URL — none of
+// which has a valid 0x0D Windows path) is SKIPPED with a WARN: the block is left
+// unmodified rather than written with a corrupt value.
 func shouldUpdateMhohLE(data []byte, offset, length int, currentPID string, updateMap map[string]string) (string, bool) {
 	if length < 40 {
 		return "", false
@@ -720,13 +736,24 @@ func shouldUpdateMhohLE(data []byte, offset, length int, currentPID string, upda
 	if currentPID == "" {
 		return "", false
 	}
-	newLoc, ok := updateMap[currentPID]
-	if ok && hohmType == 0x0B {
-		if !strings.HasPrefix(newLoc, "file://") {
-			newLoc = "file://localhost/" + strings.TrimPrefix(newLoc, "/")
-		}
+	raw, ok := updateMap[currentPID]
+	if !ok {
+		return "", false
 	}
-	return newLoc, ok
+
+	pair, err := normalizeLocationValue(raw)
+	if err != nil {
+		// Unmappable location: never write a raw/corrupt value into 0x0D or 0x0B.
+		// Skip this block (the guard would reject it anyway) and WARN so the skip
+		// is visible in logs/metrics.
+		log.Printf("[itl] WARN shouldUpdateMhohLE: PID %s location %q unmappable, skipping update: %v", currentPID, raw, err)
+		return "", false
+	}
+
+	if hohmType == 0x0B {
+		return pair.URL, true
+	}
+	return pair.WinPath, true
 }
 
 // rewriteHohmLocationLE rewrites a location/metadata mhoh block with a new

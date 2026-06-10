@@ -1,5 +1,5 @@
 // file: internal/metrics/metrics.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9f8e7d6c-5b4a-3210-9fed-cba876543210
 
 package metrics
@@ -101,6 +101,18 @@ var (
 		Help:      "Histogram of cache Get latencies in seconds per cache instance",
 		Buckets:   prometheus.ExponentialBuckets(0.0000005, 4, 10), // 500ns up to ~130ms
 	}, []string{"cache"})
+
+	// itunesLocationUnmappable counts iTunes writeback location values that could
+	// NOT be normalized into a valid 0x0B/0x0D LocationPair and were therefore
+	// SKIPPED (never written raw — CRIT-2). The {reason} label is a small enum
+	// (url_unmappable|invalid_path), never the path itself (cardinality). A
+	// nonzero value here is an actionable data-quality signal: stale URL-shaped or
+	// staging-dir f.ITunesPath rows that writeback refused to touch.
+	itunesLocationUnmappable = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "audiobook_organizer",
+		Name:      "itunes_location_unmappable_total",
+		Help:      "Total iTunes writeback location values skipped because they could not be normalized into a valid 0x0B/0x0D pair (CRIT-2)",
+	}, []string{"reason"})
 )
 
 // Register initializes metrics with the global Prometheus registry (idempotent)
@@ -108,8 +120,16 @@ func Register() {
 	registerOnce.Do(func() {
 		prometheus.MustRegister(operationStarted, operationCompleted, operationFailed, operationCanceled, operationDuration,
 			booksGauge, foldersGauge, memoryAllocGauge, goroutinesGauge,
-			cacheHits, cacheMisses, cacheSets, cacheInvalidations, cacheEvictions, cacheSize, cacheGetDuration)
+			cacheHits, cacheMisses, cacheSets, cacheInvalidations, cacheEvictions, cacheSize, cacheGetDuration,
+			itunesLocationUnmappable)
 	})
+}
+
+// RecordITunesLocationUnmappable counts a writeback location value that could not
+// be normalized into a valid 0x0B/0x0D pair and was skipped (CRIT-2 / TASK-006).
+// reason is a small enum: "url_unmappable" or "invalid_path".
+func RecordITunesLocationUnmappable(reason string) {
+	itunesLocationUnmappable.WithLabelValues(reason).Inc()
 }
 
 // Operation lifecycle helpers

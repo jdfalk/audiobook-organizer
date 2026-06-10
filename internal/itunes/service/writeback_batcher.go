@@ -1,5 +1,5 @@
 // file: internal/itunes/service/writeback_batcher.go
-// version: 5.0.0
+// version: 5.1.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e90
 //
 // Combined write-back batcher: handles location updates, track additions,
@@ -338,10 +338,18 @@ func (b *WriteBackBatcher) flush() {
 					continue
 				}
 				if f.ITunesPath != "" {
-					locationUpdates = append(locationUpdates, itunes.ITLLocationUpdate{
-						PersistentID: f.ITunesPersistentID,
-						NewLocation:  f.ITunesPath,
-					})
+					// SPEC §1b / TASK-006: normalize f.ITunesPath (which has
+					// historically held BOTH native paths and file:// URLs) into
+					// the canonical WinPath. The LE writer derives the 0x0B URL
+					// from it. Unmappable values (relative, staging-dir leak,
+					// podcast URL) are NOT written — per-item WARN + metric, never
+					// a raw value into 0x0D (the CRIT-2 corruption).
+					if winPath, ok := normalizeITunesLocation(f.ITunesPersistentID, f.ITunesPath); ok {
+						locationUpdates = append(locationUpdates, itunes.ITLLocationUpdate{
+							PersistentID: f.ITunesPersistentID,
+							NewLocation:  winPath,
+						})
+					}
 				}
 				// Always push metadata so iTunes has current values
 				metadataUpdates = append(metadataUpdates, itunes.ITLMetadataUpdate{
