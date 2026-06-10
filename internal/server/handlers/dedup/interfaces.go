@@ -1,7 +1,7 @@
 // file: internal/server/handlers/dedup/interfaces.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e84f746d-28e9-4c8a-9520-66191e582881
-// last-edited: 2026-06-03
+// last-edited: 2026-06-10
 
 // Narrow dependency interfaces for the dedup-domain HTTP handlers (candidate /
 // cluster / series listing, merge / dismiss / remove, bulk merge, stats,
@@ -24,6 +24,7 @@ import (
 	"context"
 
 	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/dedup"
 	"github.com/falkcorp/audiobook-organizer/internal/merge"
 	opsregistry "github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 )
@@ -65,10 +66,18 @@ type MergeService interface {
 	MergeBooks(bookIDs []string, primaryID string) (*merge.Result, error)
 }
 
-// DedupEngine is the narrow *dedup.Engine subset used by mergeDedupCandidate's
-// post-merge orphan-candidate sweep. The concrete *dedup.Engine satisfies it.
+// DedupEngine is the narrow *dedup.Engine subset used by:
+//   - mergeDedupCandidate's post-merge orphan-candidate sweep (CleanupCandidatesAfterMerge)
+//   - the T016 rescore endpoint (Rescore)
+//
+// The concrete *dedup.Engine satisfies it.
 type DedupEngine interface {
 	CleanupCandidatesAfterMerge(mergedAwayBookIDs []string) int
+	// Rescore re-runs unified.ComposeScore over stored signal sets for every
+	// pending candidate. When apply=false this is a dry-run (no writes);
+	// apply=true persists new bands and scores. Returns a delta summary
+	// suitable for the HTTP response body.
+	Rescore(ctx context.Context, apply bool) (dedup.RescoreResult, error)
 }
 
 // OperationsRegistry is the narrow operations-registry subset the dedup scan

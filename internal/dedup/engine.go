@@ -1,5 +1,5 @@
 // file: internal/dedup/engine.go
-// version: 1.25.0
+// version: 1.26.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 // last-edited: 2026-06-10
 
@@ -1894,6 +1894,94 @@ func (de *Engine) CleanupCandidatesAfterMerge(mergedAwayBookIDs []string) int {
 		)
 	}
 	return total
+}
+
+// RescoreResult is returned by Engine.Rescore. It summarises how many
+// candidates changed band (per-band breakdown), how many were skipped
+// (no stored signals, i.e. pre-unified-pipeline rows), and whether the
+// changes were persisted (apply=true) or are dry-run only.
+type RescoreResult struct {
+	// Inspected is the total number of pending candidates examined.
+	Inspected int `json:"inspected"`
+	// Skipped is the count of candidates with no stored signal set
+	// (pre-T015 rows; re-scoring without signals is impossible).
+	Skipped int `json:"skipped"`
+	// Changed is the count of candidates whose band or score changed.
+	Changed int `json:"changed"`
+	// Applied is true when changes were written back to the store.
+	Applied bool `json:"applied"`
+	// BandDeltas maps old_band→new_band to occurrence count.
+	// Key format: "<old>→<new>" (e.g. "HIGH→CERTAIN").
+	BandDeltas map[string]int `json:"band_deltas,omitempty"`
+}
+
+// Rescore re-runs unified.ComposeScore over the stored signal set of every
+// pending candidate and returns a summary of band changes.
+//
+// "Stored signal sets only" means no re-collection or re-embedding: only
+// candidates that have a non-nil ScoreBreakdown (i.e., were scored by the
+// T015+ unified pipeline) are eligible. Pre-unified-pipeline rows are
+// counted as Skipped.
+//
+// By default (apply=false) this is a dry-run: scores are computed but NOT
+// written back to the store. Set apply=true to persist new scores and bands;
+// this is the equivalent of "re-calibrate in production". The T016 HTTP
+// handler exposes this via the {"apply": true} body pattern already used by
+// emb-reencode and purge-legacy-fp.
+func (de *Engine) Rescore(ctx context.Context, apply bool) (RescoreResult, error) {
+	if de.embedStore == nil {
+		return RescoreResult{}, nil
+	}
+
+	candidates, _, err := de.embedStore.ListCandidates(database.CandidateFilter{
+		Status: "pending",
+		Limit:  100000,
+	})
+	if err != nil {
+		return RescoreResult{}, fmt.Errorf("rescore: list candidates: %w", err)
+	}
+
+	cfg := de.getScoreConfig()
+	result := RescoreResult{
+		Applied:    apply,
+		BandDeltas: make(map[string]int),
+	}
+
+	for _, cand := range candidates {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
+		result.Inspected++
+		if cand.ScoreBreakdown == nil || len(cand.ScoreBreakdown.Signals) == 0 {
+			result.Skipped++
+			continue
+		}
+		sb := cand.ScoreBreakdown
+		newScore := unified.ComposeScore(sb.Signals, sb.Suppressors, cfg, sb.Pair)
+		if newScore.Band == cand.Band && newScore.Score == sb.Score {
+			continue // no change
+		}
+		result.Changed++
+		deltaKey := cand.Band + "→" + newScore.Band
+		result.BandDeltas[deltaKey]++
+
+		if apply {
+			if err := de.embedStore.UpdateCandidateScore(cand.ID, &newScore, newScore.Band, newScore.Formula); err != nil {
+				slog.Warn("dedup rescore: update candidate score",
+					"candidate_id", cand.ID,
+					"err", err,
+				)
+			}
+		}
+	}
+
+	slog.Info("dedup rescore",
+		"inspected", result.Inspected,
+		"skipped", result.Skipped,
+		"changed", result.Changed,
+		"applied", result.Applied,
+	)
+	return result, nil
 }
 
 func (de *Engine) PurgeStaleCandidates(ctx context.Context) (int, error) {
