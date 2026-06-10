@@ -343,7 +343,10 @@ func diagRoundTrip(dir string, baseline []byte) (SyncDiagInfo, error) {
 	}
 	payload := baseline[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed := itlInflate(decrypted)
+	decompressed, wasCompressed, err := itlInflate(decrypted)
+	if err != nil {
+		return SyncDiagInfo{}, fmt.Errorf("decompressing: %w", err)
+	}
 	if err := writeITLFileRaw(filepath.Join(dir, "iTunes Library.itl"), hdr, decompressed, wasCompressed); err != nil {
 		return SyncDiagInfo{}, err
 	}
@@ -360,7 +363,10 @@ func diagRemoveLast(dir string, baseline []byte, n int) (SyncDiagInfo, error) {
 	hdr, _ := parseHdfmHeader(baseline)
 	payload := baseline[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed := itlInflate(decrypted)
+	decompressed, wasCompressed, err := itlInflate(decrypted)
+	if err != nil {
+		return SyncDiagInfo{}, fmt.Errorf("decompressing: %w", err)
+	}
 	modified := RemoveLastNTracksLE(decompressed, n)
 	if err := writeITLFileRaw(filepath.Join(dir, "iTunes Library.itl"), hdr, modified, wasCompressed); err != nil {
 		return SyncDiagInfo{}, err
@@ -382,7 +388,10 @@ func diagAddSynthetic(baseline []byte, n int, deterministicPID bool) ([]byte, Sy
 	}
 	payload := baseline[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed := itlInflate(decrypted)
+	decompressed, wasCompressed, err := itlInflate(decrypted)
+	if err != nil {
+		return nil, SyncDiagInfo{}, fmt.Errorf("decompressing: %w", err)
+	}
 
 	tracks := make([]ITLNewTrack, n)
 	for i := 0; i < n; i++ {
@@ -432,7 +441,10 @@ func diagAddSyntheticAt(dir string, baseline []byte, location, extra string) (Sy
 	hdr, _ := parseHdfmHeader(baseline)
 	payload := baseline[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed := itlInflate(decrypted)
+	decompressed, wasCompressed, err := itlInflate(decrypted)
+	if err != nil {
+		return SyncDiagInfo{}, fmt.Errorf("decompressing: %w", err)
+	}
 
 	tr := ITLNewTrack{
 		Location: location,
@@ -464,7 +476,10 @@ func diagAddVariant(dir string, baseline []byte, mutTag, hypo string, tr ITLNewT
 	hdr, _ := parseHdfmHeader(baseline)
 	payload := baseline[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed := itlInflate(decrypted)
+	decompressed, wasCompressed, err := itlInflate(decrypted)
+	if err != nil {
+		return SyncDiagInfo{}, fmt.Errorf("decompressing: %w", err)
+	}
 	modified := AddTracksLE(decompressed, []ITLNewTrack{tr})
 	if err := writeITLFileRaw(filepath.Join(dir, "iTunes Library.itl"), hdr, modified, wasCompressed); err != nil {
 		return SyncDiagInfo{}, err
@@ -513,7 +528,10 @@ func diagCloneFirstBaselineTrack(dir string, baseline []byte) (SyncDiagInfo, err
 	hdr, _ := parseHdfmHeader(baseline)
 	payload := baseline[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed := itlInflate(decrypted)
+	decompressed, wasCompressed, err := itlInflate(decrypted)
+	if err != nil {
+		return SyncDiagInfo{}, fmt.Errorf("decompressing: %w", err)
+	}
 	modified := AddTracksLE(decompressed, []ITLNewTrack{tr})
 	if err := writeITLFileRaw(filepath.Join(dir, "iTunes Library.itl"), hdr, modified, wasCompressed); err != nil {
 		return SyncDiagInfo{}, err

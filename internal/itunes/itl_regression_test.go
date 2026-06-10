@@ -36,7 +36,8 @@ func TestITLDeflate_ProducesBestSpeedOutput(t *testing.T) {
 		"zlib flag byte should be 0x01 (BestSpeed), not 0x9C (DefaultCompression)")
 
 	// Verify round-trip
-	decompressed, wasCompressed := itlInflate(compressed)
+	decompressed, wasCompressed, err := itlInflate(compressed)
+	assert.NoError(t, err)
 	assert.True(t, wasCompressed)
 	assert.Equal(t, data, decompressed)
 }
@@ -49,7 +50,8 @@ func TestITLDeflate_LargePayloadRoundTrip(t *testing.T) {
 	}
 
 	compressed := itlDeflate(data)
-	decompressed, wasCompressed := itlInflate(compressed)
+	decompressed, wasCompressed, err := itlInflate(compressed)
+	assert.NoError(t, err)
 	assert.True(t, wasCompressed)
 	assert.Equal(t, data, decompressed, "large payload must survive deflate/inflate round-trip")
 }

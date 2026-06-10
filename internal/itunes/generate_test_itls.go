@@ -464,7 +464,10 @@ func genAddTracks(dir, realITLPath string, n int, toWin func(string) string) err
 	}
 	payload := data[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed := itlInflate(decrypted)
+	decompressed, wasCompressed, err := itlInflate(decrypted)
+	if err != nil {
+		return fmt.Errorf("decompressing: %w", err)
+	}
 
 	tracks := multiTracks(n, toWin)
 	modified := AddTracksLE(decompressed, tracks)
@@ -492,7 +495,10 @@ func genRemoveTracks(dir, realITLPath string, n int) error {
 	}
 	payload := data[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed := itlInflate(decrypted)
+	decompressed, wasCompressed, err := itlInflate(decrypted)
+	if err != nil {
+		return fmt.Errorf("decompressing: %w", err)
+	}
 
 	modified := RemoveLastNTracksLE(decompressed, n)
 
@@ -519,7 +525,10 @@ func genAddThenRemove(dir, realITLPath string, toWin func(string) string) error 
 	}
 	payload := data[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed := itlInflate(decrypted)
+	decompressed, wasCompressed, err := itlInflate(decrypted)
+	if err != nil {
+		return fmt.Errorf("decompressing: %w", err)
+	}
 
 	tracks := multiTracks(5, toWin)
 	modified := AddTracksLE(decompressed, tracks)
@@ -551,7 +560,10 @@ func genRoundTrip(dir, realITLPath string) error {
 
 	payload := data[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed := itlInflate(decrypted)
+	decompressed, wasCompressed, err := itlInflate(decrypted)
+	if err != nil {
+		return fmt.Errorf("decompressing: %w", err)
+	}
 
 	// Write it back through the full pipeline — no modifications
 	if err := writeITLFileRaw(filepath.Join(dir, "iTunes Library.itl"), hdr, decompressed, wasCompressed); err != nil {

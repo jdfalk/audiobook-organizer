@@ -208,7 +208,10 @@ func WriteITLBytes(inputPath, outputPath string, decompressed []byte) error {
 	}
 	origPayload := raw[hdr.headerLen:]
 	origDec := itlDecrypt(hdr, origPayload)
-	_, wasCompressed := itlInflate(origDec)
+	_, wasCompressed, err := itlInflate(origDec)
+	if err != nil {
+		return fmt.Errorf("decompressing original ITL payload: %w", err)
+	}
 
 	_, err = writeITLFile(outputPath, hdr, decompressed, wasCompressed, 0)
 	return err
