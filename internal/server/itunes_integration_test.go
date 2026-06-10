@@ -1,5 +1,5 @@
 // file: internal/server/itunes_integration_test.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: e5f6a7b8-c9d0-1234-efab-567890123cde
 
 package server
@@ -55,7 +55,8 @@ func TestITunesImport_FullWorkflow(t *testing.T) {
 	server := NewServer(env.Store)
 	if server.opRegistry != nil {
 		server.opRegistry.Start(context.Background())
-		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+		// registered after defer cleanup() → runs first (LIFO) to avoid pebble: closed panics.
+		defer func() { _ = server.opRegistry.Shutdown(context.Background()) }()
 	}
 	body := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":true}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
@@ -122,7 +123,8 @@ func TestITunesImport_OrganizeMode(t *testing.T) {
 	server := NewServer(env.Store)
 	if server.opRegistry != nil {
 		server.opRegistry.Start(context.Background())
-		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+		// registered after defer cleanup() → runs first (LIFO) to avoid pebble: closed panics.
+		defer func() { _ = server.opRegistry.Shutdown(context.Background()) }()
 	}
 	body := fmt.Sprintf(`{"library_path":"%s","import_mode":"organize","skip_duplicates":false}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
@@ -169,7 +171,8 @@ func TestITunesImport_SkipDuplicates(t *testing.T) {
 	server := NewServer(env.Store)
 	if server.opRegistry != nil {
 		server.opRegistry.Start(context.Background())
-		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+		// registered after defer cleanup() → runs first (LIFO) to avoid pebble: closed panics.
+		defer func() { _ = server.opRegistry.Shutdown(context.Background()) }()
 	}
 	importOnce := func() int {
 		body := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":true}`, xmlPath)
@@ -218,7 +221,8 @@ func TestITunesWriteBack(t *testing.T) {
 	server := NewServer(env.Store)
 	if server.opRegistry != nil {
 		server.opRegistry.Start(context.Background())
-		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+		// registered after defer cleanup() → runs first (LIFO) to avoid pebble: closed panics.
+		defer func() { _ = server.opRegistry.Shutdown(context.Background()) }()
 	}
 	body := fmt.Sprintf(`{"audiobook_ids":["%s"]}`, created.ID)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/write-back", strings.NewReader(body))
@@ -251,7 +255,8 @@ func TestITunesValidate_Endpoint(t *testing.T) {
 	server := NewServer(env.Store)
 	if server.opRegistry != nil {
 		server.opRegistry.Start(context.Background())
-		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+		// registered after defer cleanup() → runs first (LIFO) to avoid pebble: closed panics.
+		defer func() { _ = server.opRegistry.Shutdown(context.Background()) }()
 	}
 	body := fmt.Sprintf(`{"library_path":"%s"}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/validate", strings.NewReader(body))

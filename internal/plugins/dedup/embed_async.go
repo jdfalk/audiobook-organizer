@@ -1,15 +1,20 @@
 // file: internal/plugins/dedup/embed_async.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: b1c2d3e4-f5a6-7890-bcde-f01234567890
-// last-edited: 2026-05-17
+// last-edited: 2026-06-10
+
+// T018: embed_async.go is a thin wrapper that delegates to runEmbedScanMode
+// (in embed_scan.go) with async=true.
+//
+// Deprecated (T018): Both op IDs remain registered for one release so that
+// existing callers that trigger "dedup.embed-async" by ID continue to work.
+// New callers should use dedup.embed-scan with {"async": true}.
 
 package dedup
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"time"
 
 	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
@@ -20,8 +25,8 @@ func (p *Plugin) embedAsyncDef() sdk.OperationDef {
 	return sdk.OperationDef{
 		ID:              "dedup.embed-async",
 		Plugin:          "dedup",
-		DisplayName:     "Embed books async (batch API)",
-		Description:     "Submits all un-embedded books to the OpenAI Batch API. Results arrive within 24 hours and are ingested automatically.",
+		DisplayName:     "Embed books async (batch API) [deprecated — use embed-scan with async:true]",
+		Description:     "Deprecated: delegates to dedup.embed-scan with async=true. Submits all un-embedded books to the OpenAI Batch API. Results arrive within 24 hours and are ingested automatically.",
 		ResumePolicy:    sdk.ResumeRequeue,
 		DefaultPriority: sdk.PriorityLow,
 		ConcurrencyKey:  "dedup.embed-async",
@@ -33,27 +38,10 @@ func (p *Plugin) embedAsyncDef() sdk.OperationDef {
 	}
 }
 
+// runEmbedAsync delegates to runEmbedScanMode(async=true).
+// Keeping this as a named method (not an inline closure) preserves the
+// method expression stored in OperationDef.Run so sdk.Registry can
+// identify and invoke it correctly.
 func (p *Plugin) runEmbedAsync(ctx context.Context, _ json.RawMessage, reporter sdk.Reporter) error {
-	if p.engine == nil {
-		return errors.New("dedup engine not available (embedding may be disabled or API key not configured)")
-	}
-
-	collectProg := sdk.NewProgress(reporter, 0)
-	collectProg.Start("Collecting un-embedded books...")
-
-	batchID, count, err := p.engine.EmbedBooksAsync(ctx)
-	if err != nil {
-		return fmt.Errorf("submit embedding batch: %w", err)
-	}
-	if count == 0 {
-		collectProg.Done("All books already embedded — nothing to submit")
-		return nil
-	}
-
-	prog := sdk.NewProgress(reporter, count)
-	prog.Start(fmt.Sprintf("Submitting %d books to batch API...", count))
-	prog.StepN(count, fmt.Sprintf("Submitted %d / %d books", count, count))
-	prog.Finalize("writing results...")
-	prog.Done(fmt.Sprintf("Submitted %d books to OpenAI Batch API (batch_id=%s). Results will be ingested automatically within 24h.", count, batchID))
-	return nil
+	return p.runEmbedScanMode(ctx, true, reporter)
 }

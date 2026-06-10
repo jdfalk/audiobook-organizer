@@ -1,5 +1,5 @@
 // file: internal/server/e2e_workflow_test.go
-// version: 1.2.1
+// version: 1.2.2
 // guid: c9d0e1f2-a3b4-5678-cdef-901234567012
 
 package server
@@ -48,7 +48,8 @@ func TestE2E_ITunesImportOrganizeWriteBack(t *testing.T) {
 	server := NewServer(env.Store)
 	if server.opRegistry != nil {
 		server.opRegistry.Start(context.Background())
-		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+		// registered after defer cleanup() → runs first (LIFO) to avoid pebble: closed panics.
+		defer func() { _ = server.opRegistry.Shutdown(context.Background()) }()
 	}
 
 	// Step 3: Import (non-organize mode)

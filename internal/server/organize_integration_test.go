@@ -1,5 +1,5 @@
 // file: internal/server/organize_integration_test.go
-// version: 1.0.2
+// version: 1.0.3
 // guid: b8c9d0e1-f2a3-4567-bcde-890123456f01
 
 package server
@@ -52,7 +52,8 @@ func TestOrganizeService_ViaHTTP(t *testing.T) {
 	server := NewServer(env.Store)
 	if server.opRegistry != nil {
 		server.opRegistry.Start(context.Background())
-		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+		// registered after defer cleanup() → runs first (LIFO) to avoid pebble: closed panics.
+		defer func() { _ = server.opRegistry.Shutdown(context.Background()) }()
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/operations/organize", strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
