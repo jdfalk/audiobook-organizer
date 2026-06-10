@@ -232,12 +232,16 @@ func TestMemStore_CountFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMemStore: %v", err)
 	}
+	trueVal := true
+	books := []Book{
+		{ID: "b1", IsPrimaryVersion: &trueVal},
+	}
 	files := []BookFile{
 		{ID: "f1", BookID: "b1", Missing: false},
 		{ID: "f2", BookID: "b1", Missing: false},
-		{ID: "f3", BookID: "b2", Missing: true},
+		{ID: "f3", BookID: "b2", Missing: true}, // b2 has no book entry → not counted
 	}
-	seedMemStore(t, m, nil, files, nil, nil)
+	seedMemStore(t, m, books, files, nil, nil)
 
 	got, err := m.CountFiles()
 	if err != nil {
