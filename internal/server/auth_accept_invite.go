@@ -1,7 +1,7 @@
 // file: internal/server/auth_accept_invite.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef0123456789
-// last-edited: 2026-06-04
+// last-edited: 2026-06-09
 
 // Rescued from user_handlers.go during Phase 2 handler extraction.
 // handleAcceptInvite remains a *Server method because it bridges auth
@@ -10,6 +10,8 @@
 package server
 
 import (
+	"io"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -26,7 +28,15 @@ func (s *Server) handleAcceptInvite(c *gin.Context) {
 		Password string `json:"password" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		httputil.RespondWithBadRequest(c, err.Error())
+		// Map EOF/empty-body errors to a clear message.
+		// HTTP/2 streaming bodies and empty POSTs produce io.EOF or
+		// io.ErrUnexpectedEOF. Never echo the raw "EOF" string to the client.
+		errMsg := err.Error()
+		if err == io.EOF || err == io.ErrUnexpectedEOF || strings.Contains(errMsg, "EOF") {
+			httputil.RespondWithBadRequest(c, "request body required: token, password")
+			return
+		}
+		httputil.RespondWithBadRequest(c, errMsg)
 		return
 	}
 	if len(req.Password) < 8 {
