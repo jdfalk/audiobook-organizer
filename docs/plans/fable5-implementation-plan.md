@@ -475,6 +475,9 @@ opaque EOF-ish errors.
   bind errors to 400 `"request body required: token, password"`; never echo raw "EOF".
 - `internal/server/middleware/request_size.go` — detect `http.MaxBytesError` after bind
   failures (or wrap body) → 413 with clear message; keep limits unchanged.
+- Gin release mode (findings MED-9, prod-observed): set `gin.SetMode(gin.ReleaseMode)`
+  unless a debug env/config flag is set — locate the `gin.New()`/`gin.Default()` call in
+  server startup; preserve route logging behind the debug flag.
 - tests: `auth_accept_invite_test.go` (empty body, no Content-Length body, oversized
   body), middleware test for chunked oversized body.
 
@@ -710,8 +713,12 @@ title+author Levenshtein — the brief's METADATA_FUZZY tier; currently doesn't 
 Priority: P1 · Effort: M · Agent: sonnet-4.6 · Depends: [T011]
 
 **Context.** SPEC 1 §3 additive fields (`ScoreBreakdown`, `Band`, `FormulaVersion`) +
-§8 migration; HIGH-5 purge of ~14K stale 100% candidates from pre-whole-file fingerprints.
-PebbleDB candidate keys unchanged.
+§8 migration; HIGH-5 purge of stale 100% candidates from pre-whole-file fingerprints.
+**Prod-verified (2026-06-09):** 12,320 pending `exact`-layer candidates, sampled rows all
+sim 1.0 with `created_at: 2026-05-11` — use 2026-05-12T00:00:00 as the default cutover
+date in config. A separate `acoustid` layer exists in prod (2,591 pending, May 31,
+post-cutover) — exclude it from the purge; it is current data. PebbleDB candidate keys
+unchanged.
 
 **Exact files to change**
 - `internal/database/embedding_store.go` — extend `DedupCandidate` + `candRec` (additive
@@ -982,7 +989,12 @@ code, CGO dep, and the startup open.
    reader → keep behind explicit migration cmd if it reads old prod `.db` files —
    verify with the owner via PR comment if found).
 4. `go mod tidy`; build with and without `embed_frontend` tag.
-5. `make ci` (full suite). 
+5. Prod cleanup step (document in PR; execute post-merge with owner ack): archive then
+   delete the dead store files on `172.16.2.30:/var/lib/audiobook-organizer/` —
+   `embeddings.db{,-shm,-wal}` (1.8GB), `activity.db` (842MB), `metrics.db{,-shm,-wal}`,
+   `audiobooks.chai/` — all last written 2026-05-11 (prod-verified stale). Move into
+   `backups/` first; delete after one clean service restart.
+6. `make ci` (full suite). 
 
 **Acceptance criteria**
 - [ ] No `mattn/go-sqlite3` in go.mod; no `sql.Open` in internal/.
@@ -1144,6 +1156,11 @@ Priority: P4 · Effort: S · Agent: sonnet-4.6 · Depends: []
 
 **Context.** MED-8: hydration goroutine (`internal/dedup/lifecycle.go:103-112`) is
 cancel-correct but not joined; `Stop()` can return while a Pebble read is in flight.
+**Prod-observed (2026-06-09):** every shutdown logs `"Background goroutines did not stop
+within 30s — proceeding with shutdown anyway"` — find the source of that message in server
+lifecycle, identify which goroutine set exhausts the 30s grace (dedup hydration is the
+known suspect; instrument with per-goroutine names if needed), and make shutdown complete
+cleanly within the grace period, not just bounded.
 
 **Exact files to change**
 - `internal/dedup/lifecycle.go` — add `bgWg sync.WaitGroup`; `Add(1)` before goroutine

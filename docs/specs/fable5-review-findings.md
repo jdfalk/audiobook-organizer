@@ -156,13 +156,19 @@ EOF-flavored errors from `MaxBytesReader` (see MED-1).
 
 ### HIGH-5 — Dedup candidates carry no fingerprint provenance; stale 100%-similarity rows survive recompute (BUG, dedup correctness)
 
-**VERIFIED.** `DedupCandidate` (`internal/database/embedding_store.go:79-91`) has
-`Layer`/`Similarity` but no record of *which fingerprint version/algorithm* produced the
-match. `PurgeStaleCandidates` (`internal/dedup/engine.go:1521-1649`) prunes for
-missing/non-primary/version-group/series reasons only — nothing invalidates candidates when
-fingerprints are recomputed. Production carries ~14K 100%-matches created from the old
-per-segment fingerprints (count from project records; not re-verified against prod in this
-review). Whole-file fields exist (`store.go:676-684`, segments deprecated) but no
+**VERIFIED, including against production (2026-06-09).** `DedupCandidate`
+(`internal/database/embedding_store.go:79-91`) has `Layer`/`Similarity` but no record of
+*which fingerprint version/algorithm* produced the match. `PurgeStaleCandidates`
+(`internal/dedup/engine.go:1521-1649`) prunes for missing/non-primary/version-group/series
+reasons only — nothing invalidates candidates when fingerprints are recomputed.
+**Prod-verified via `GET /api/v1/dedup/stats` + candidate sampling:** 12,320 pending
+`exact`-layer candidates, sampled rows all `similarity: 1.0` with
+`created_at: 2026-05-11` — squarely in the pre-whole-file-fingerprint era — plus 2,591
+pending `acoustid`-layer candidates (created 2026-05-31, post-cutover; note: an `acoustid`
+layer value exists in prod data that the code-audit layer list missed). Total pending
+sim-1.0 backlog: 14,911 — matching the "~14K" project lore. The May-11 `created_at`
+clustering directly validates the cutover-date purge criterion in SPEC 1 §8 / TASK-015.
+Whole-file fields exist (`store.go:676-684`, segments deprecated) but no
 `fingerprint_version` marker exists anywhere (grep negative). Fix: provenance fields +
 purge-by-provenance migration (SPEC 1, tasks in plan).
 
@@ -203,13 +209,17 @@ and inflates copy-on-write `.bak-*` churn.
 
 ### MED-4 — Legacy SQLite store (~7.9K lines) still compiled and opened at startup (DEBT)
 
-**VERIFIED.** `internal/database/database.go:20` does `sql.Open("sqlite3", databasePath)`
-unconditionally; `sqlite_store_*.go` totals ~7,938 lines implementing a parallel Store that
-production (PebbleDB-primary) shouldn't reach. Risk: drift, accidental use (e.g.
-`sqlite_store_books.go:872` implements `GetDuplicateBooks` alongside the Pebble one),
-single-writer lock if any path lands there. Note the review brief's claim "embeddings.db
-SQLite" is stale: embeddings live in PebbleDB (`emb:v:*` keys,
-`internal/database/embedding_store.go`). Removal plan: SPEC 3.
+**VERIFIED, including against production (2026-06-09).** `internal/database/database.go:20`
+does `sql.Open("sqlite3", databasePath)` unconditionally; `sqlite_store_*.go` totals
+~7,938 lines implementing a parallel Store that production (PebbleDB-primary) shouldn't
+reach. Risk: drift, accidental use (e.g. `sqlite_store_books.go:872` implements
+`GetDuplicateBooks` alongside the Pebble one), single-writer lock if any path lands there.
+Note the review brief's claim "embeddings.db SQLite" is stale: embeddings live in PebbleDB
+(`emb:v:*` keys, `internal/database/embedding_store.go`). **Prod confirms the leftovers:**
+`/var/lib/audiobook-organizer/` still carries `embeddings.db` (1.8GB sparse / 924MB on
+disk, +shm/wal), `activity.db` (842MB / 140MB), `metrics.db` (+wal/shm) — all last written
+2026-05-11, a month stale — plus the retired `audiobooks.chai` directory. ~1GB+ of dead
+files to archive/delete as part of the removal task. Removal plan: SPEC 3 / TASK-022.
 
 ### MED-5 — Diagnostic tools claim more than they do (DEBT, tooling trust)
 
@@ -236,13 +246,26 @@ sees garbage. Fail-closed behavior is required on both ends.
 
 ### MED-8 — Chromem hydration is fire-and-forget with no shutdown join (BUG, concurrency, minor)
 
-**REPORTED, lifecycle reviewed.** `internal/dedup/lifecycle.go:103-112` starts hydration
-under `bgCtx` with a 30-min timeout but no WaitGroup; `Stop()` cancels correctly
-(mutex-guarded, nil-safe — the PR #1239 pattern) but does not wait, so shutdown can race a
-final Pebble read. Concurrency sweep found no other unsafe cancel patterns: registry
-shutdown (`internal/operations/registry/registry.go:398-450`), acoustid heartbeat
-(`internal/plugins/acoustid/fingerprint_rescan.go:142-175`), and warmup contexts all follow
-the safe pattern.
+**REPORTED, lifecycle reviewed — and OBSERVED live in production (2026-06-09).**
+`internal/dedup/lifecycle.go:103-112` starts hydration under `bgCtx` with a 30-min timeout
+but no WaitGroup; `Stop()` cancels correctly (mutex-guarded, nil-safe — the PR #1239
+pattern) but does not wait, so shutdown can race a final Pebble read. The deploy-restart
+shutdown log shows the symptom class is real: `"Background goroutines did not stop within
+30s — proceeding with shutdown anyway"` (journal, 21:23:01) — some background goroutine
+set takes the full 30s force-abandon path on every shutdown. TASK-027 should also identify
+*which* goroutines hit this timeout (the dedup hydration join is the known suspect; the
+fix should make shutdown clean, not just bounded). Concurrency sweep found no other unsafe
+cancel patterns: registry shutdown (`internal/operations/registry/registry.go:398-450`),
+acoustid heartbeat (`internal/plugins/acoustid/fingerprint_rescan.go:142-175`), and warmup
+contexts all follow the safe pattern.
+
+### MED-9 — Production runs Gin in debug mode (PERFORMANCE/DEBT)
+
+**OBSERVED in production (2026-06-09).** Startup logs print `[GIN-debug] [WARNING] Running
+in "debug" mode. Switch to "release" mode in production.` and every route registration is
+logged at startup. Debug mode adds per-request overhead and verbose logging. Fix: call
+`gin.SetMode(gin.ReleaseMode)` (or set `GIN_MODE=release` in the systemd drop-in) when not
+in a dev build. One-liner; fold into TASK-009 or ship as a standalone quick fix.
 
 ---
 
@@ -277,8 +300,27 @@ outright instead of writing unguarded.
   the configured library path; no traversal vector found in `ReverseRemapPath`.
 - Dedup engine background lifecycle (`bgMu`/`bgCtx`) follows the post-#1239 safe pattern.
 
+## Production verification (2026-06-09, post-review pass)
+
+Verified live against `172.16.2.30` (service restarted by owner's `make deploy`;
+API key via bootstrap-token exchange):
+
+- **Dedup candidates** (`/api/v1/dedup/stats` + sampling): pending = 12,320 exact (all
+  sim 1.0, created 2026-05-11) + 2,591 acoustid (2026-05-31) + 179 embedding + 273 llm.
+  Confirms HIGH-5's magnitude (14,911 sim-1.0 backlog ≈ the "~14K" lore) and the
+  cutover-date purge criterion.
+- **Memory**: systemd `MemoryCurrent` ≈ 7.0GB at 9-day uptime; unit accounting at restart
+  reported **8.9GB memory peak + 2.2GB swap peak** over the run — SPEC 3's ~3.3GB
+  steady-state model is optimistic; treat ~7GB steady / ~9GB peak as the real baseline
+  (revised in SPEC 3).
+- **Disk** (`/var/lib/audiobook-organizer/`): `audiobooks.pebble` = **11GB** (agent's
+  20–40GB estimate was high); stale SQLite leftovers per MED-4; `activity.nutsdb` 24MB,
+  `metrics.nutsdb` <1MB; `library.bleve` small (not in du top-15).
+- **Shutdown**: 30s background-goroutine force-abandon observed (MED-8); Gin debug mode
+  observed (MED-9).
+
 ## Severity totals
 
 - **CRITICAL: 3** (CRIT-1 encoding flags, CRIT-2 0x0D URL-vs-path, CRIT-3 header count desync)
 - **HIGH: 6** (verifier blind spots; vacuous LE string parse; unconditional metadata push; accept-invite EOF; candidate provenance; headerLen detector gap)
-- **MEDIUM: 8** | **LOW: 2**
+- **MEDIUM: 9** | **LOW: 2**
