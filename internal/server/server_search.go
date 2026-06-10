@@ -1,5 +1,5 @@
 // file: internal/server/server_search.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 12815699-f9ea-4788-9af3-2e854d710315
 // last-edited: 2026-05-20
 
@@ -148,9 +148,9 @@ func (h *serverOrganizeHooks) OnCollision(currentBookID, occupantPath string) {
 	if h.server.embeddingStore == nil || h.server.store == nil {
 		return
 	}
-	h.server.bgWG.Add(1)
+	h.server.bgWG.Add("organize-collision-hook")
 	go func() {
-		defer h.server.bgWG.Done()
+		defer h.server.bgWG.Done("organize-collision-hook")
 		occupant, err := h.server.store.GetBookByFilePath(occupantPath)
 		if err != nil {
 			slog.Warn("organize-collision hook lookup failed", "occupantPath", occupantPath, "err", err)
@@ -196,9 +196,9 @@ func (s *Server) fireDedupOnImport(bookID string) {
 	if s.dedupEngine == nil || bookID == "" {
 		return
 	}
-	s.bgWG.Add(1)
+	s.bgWG.Add("dedup-on-import")
 	go func() {
-		defer s.bgWG.Done()
+		defer s.bgWG.Done("dedup-on-import")
 		if _, err := s.dedupEngine.CheckBook(s.bgCtx, bookID); err != nil {
 			slog.Warn("dedup-on-import CheckBook()", "bookID", bookID, "err", err)
 		}

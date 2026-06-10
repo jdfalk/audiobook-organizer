@@ -1,5 +1,5 @@
 // file: internal/dedup/engine.go
-// version: 1.22.0
+// version: 1.23.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 // last-edited: 2026-05-18
 
@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/falkcorp/audiobook-organizer/internal/ai"
 	"github.com/falkcorp/audiobook-organizer/internal/ai/aijobs"
@@ -83,9 +84,17 @@ type Engine struct {
 	// engine doesn't need a New-time ctx and Stop can cleanly cancel
 	// outstanding work. Guarded by bgMu (RWMutex — readers are subscriber
 	// goroutines that snapshot the ctx; writers are PostInit and Stop).
+	//
+	// bgWg tracks goroutines started under bgCtx so Stop can join them and
+	// confirm the Pebble read is fully finished before the store closes.
 	bgCtx    context.Context
 	bgCancel context.CancelFunc
 	bgMu     sync.RWMutex
+	bgWg     sync.WaitGroup
+
+	// stopTimeout overrides the default join timeout in Stop.  Zero means use
+	// defaultHydrationStopTimeout.  Only set in tests.
+	stopTimeout_ time.Duration
 }
 
 // NewEngine creates a Engine with sensible defaults.

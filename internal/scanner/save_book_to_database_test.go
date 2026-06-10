@@ -1,11 +1,12 @@
 // file: internal/scanner/save_book_to_database_test.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 0f1e2d3c-4b5a-6978-8899-aabbccddeeff
 // last-edited: 2026-06-01
 
 package scanner
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -73,12 +74,12 @@ func TestSaveBookToDatabase_GlobalStoreCreateAndUpdate(t *testing.T) {
 		Publisher: "Test Publisher",
 	}
 
-	if err := saveBookToDatabase(book); err != nil {
+	if err := saveBookToDatabase(context.Background(), book); err != nil {
 		t.Fatalf("saveBookToDatabase create failed: %v", err)
 	}
 
 	book.Title = "Updated Title"
-	if err := saveBookToDatabase(book); err != nil {
+	if err := saveBookToDatabase(context.Background(), book); err != nil {
 		t.Fatalf("saveBookToDatabase update failed: %v", err)
 	}
 
@@ -143,7 +144,7 @@ func TestSaveBookToDatabase_BlocklistSkips(t *testing.T) {
 		Format:   ".m4b",
 	}
 
-	if err := saveBookToDatabase(book); err != nil {
+	if err := saveBookToDatabase(context.Background(), book); err != nil {
 		t.Fatalf("saveBookToDatabase blocklist failed: %v", err)
 	}
 
@@ -203,7 +204,7 @@ func TestSaveBookToDatabase_DedupOnImportHook(t *testing.T) {
 	}
 
 	// First save: new book → hook MUST fire exactly once.
-	if err := saveBookToDatabase(book); err != nil {
+	if err := saveBookToDatabase(context.Background(), book); err != nil {
 		t.Fatalf("saveBookToDatabase create failed: %v", err)
 	}
 	if len(th.calls) != 1 {
@@ -218,7 +219,7 @@ func TestSaveBookToDatabase_DedupOnImportHook(t *testing.T) {
 	// again. Updating an existing book isn't a new import event and
 	// shouldn't re-trigger dedup processing.
 	book.Title = "Hook Test Updated"
-	if err := saveBookToDatabase(book); err != nil {
+	if err := saveBookToDatabase(context.Background(), book); err != nil {
 		t.Fatalf("saveBookToDatabase update failed: %v", err)
 	}
 	if len(th.calls) != 1 {

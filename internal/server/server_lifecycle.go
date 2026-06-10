@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.32.0
+// version: 1.33.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-06-09
 
@@ -239,9 +239,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 		wrapped := &indexedStore{Store: inner, server: s}
 		s.store = wrapped
 		database.SetGlobalStore(wrapped)
-		s.bgWG.Add(1)
+		s.bgWG.Add("index-worker")
 		go func() {
-			defer s.bgWG.Done()
+			defer s.bgWG.Done("index-worker")
 			s.runIndexWorker()
 		}()
 		// Route the /audiobooks?search= path through Bleve.
@@ -420,24 +420,24 @@ func (s *Server) Start(cfg ServerConfig) error {
 	// Backfill external ID mappings from existing iTunes PIDs (one-time,
 	// idempotent). Tracked via bgWG for the same reason as the embedding
 	// backfill: we can't let it hold Pebble iterators while CloseStore runs.
-	s.bgWG.Add(1)
+	s.bgWG.Add("external-id-backfill")
 	go func() {
-		defer s.bgWG.Done()
+		defer s.bgWG.Done("external-id-backfill")
 		s.backfillExternalIDs()
 	}()
 
-	s.bgWG.Add(1)
+	s.bgWG.Add("acoustid-backfill")
 	go func() {
-		defer s.bgWG.Done()
+		defer s.bgWG.Done("acoustid-backfill")
 		s.backfillAcoustIDs(s.bgCtx)
 	}()
 
 	// PERF-VERSIONS: write the book:versiongroup:<gid>:<id> secondary
 	// index for every existing book once so /audiobooks/:id/versions
 	// stops full-scanning. Idempotent and gated by a sentinel key.
-	s.bgWG.Add(1)
+	s.bgWG.Add("versiongroup-backfill")
 	go func() {
-		defer s.bgWG.Done()
+		defer s.bgWG.Done("versiongroup-backfill")
 		if err := s.bgCtx.Err(); err != nil {
 			return
 		}
@@ -451,17 +451,23 @@ func (s *Server) Start(cfg ServerConfig) error {
 
 	// Strip shwm/©mvi/©mvn atoms from audiobook files (one-time). These
 	// classical-music atoms crash Apple Devices for Windows at sync.
-	s.bgWG.Add(1)
+	// NOTE: stripMovementAtoms does not check bgCtx; it runs to completion
+	// once the "done" flag is missing. On the first run after upgrade this
+	// can take O(seconds–minutes) on large libraries and is a known
+	// contributor to the 30s grace-period timeout on shutdown.
+	s.bgWG.Add("strip-movement-atoms")
 	go func() {
-		defer s.bgWG.Done()
+		defer s.bgWG.Done("strip-movement-atoms")
 		s.stripMovementAtoms()
 	}()
 
 	// Re-mux M4B/M4A files with malformed atom structures so taglib,
 	// AtomicParsley, and Apple Devices can read them (one-time).
-	s.bgWG.Add(1)
+	// NOTE: remuxMalformedM4BFiles does not check bgCtx; same first-run
+	// latency caveat as stripMovementAtoms above.
+	s.bgWG.Add("remux-malformed-m4b")
 	go func() {
-		defer s.bgWG.Done()
+		defer s.bgWG.Done("remux-malformed-m4b")
 		s.remuxMalformedM4BFiles()
 	}()
 
@@ -469,9 +475,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 	// Tracked via bgWG so shutdown can wait for in-flight indexing
 	// instead of letting it run under a closing DB.
 	if s.searchIndex != nil {
-		s.bgWG.Add(1)
+		s.bgWG.Add("build-search-index")
 		go func() {
-			defer s.bgWG.Done()
+			defer s.bgWG.Done("build-search-index")
 			s.buildSearchIndexIfEmpty()
 		}()
 	}
@@ -479,9 +485,11 @@ func (s *Server) Start(cfg ServerConfig) error {
 	// One-time startup jobs: transcode malformed M4B files, then quarantine any
 	// that remained permanently unreadable. Run sequentially in a bgWG goroutine
 	// so shutdown waits for them and they don't race against the HTTP server.
-	s.bgWG.Add(1)
+	// NOTE: transcodeMalformedM4BFiles does not check bgCtx; same first-run
+	// latency caveat as stripMovementAtoms above.
+	s.bgWG.Add("transcode+quarantine")
 	go func() {
-		defer s.bgWG.Done()
+		defer s.bgWG.Done("transcode+quarantine")
 		s.transcodeMalformedM4BFiles()
 		s.quarantineKnownBadFiles()
 	}()
@@ -742,7 +750,8 @@ func (s *Server) Start(cfg ServerConfig) error {
 	case <-bgDone:
 		slog.Info("Background goroutines stopped")
 	case <-time.After(30 * time.Second):
-		slog.Warn("Background goroutines did not stop within 30s — proceeding with shutdown anyway")
+		slog.Warn("Background goroutines did not stop within 30s — proceeding with shutdown anyway",
+			"still_running", s.bgWG.Running())
 	}
 
 	// Stop the file I/O pool — waits for in-flight jobs to finish

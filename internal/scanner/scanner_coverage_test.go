@@ -407,7 +407,7 @@ func TestProcessBooksParallelWithSaveError(t *testing.T) {
 	t.Cleanup(func() { saveBook = oldSaver })
 
 	// Mock saveBook to return an error
-	saveBook = func(book *Book) error {
+	saveBook = func(ctx context.Context, book *Book) error {
 		return errors.New("mock save error")
 	}
 
@@ -428,7 +428,7 @@ func TestProcessBooksParallelNoProgressCallback(t *testing.T) {
 
 	oldSaver := saveBook
 	t.Cleanup(func() { saveBook = oldSaver })
-	saveBook = func(book *Book) error { return nil }
+	saveBook = func(ctx context.Context, book *Book) error { return nil }
 
 	// Test with nil progress callback
 	err := ProcessBooksParallel(context.Background(), books, 2, nil, nil)
@@ -459,7 +459,7 @@ func TestSaveBookToDatabaseCodePaths(t *testing.T) {
 			Author:   "Test",
 		}
 
-		err := saveBookToDatabase(book)
+		err := saveBookToDatabase(context.Background(), book)
 		if err == nil {
 			t.Error("expected error when no database available")
 		}
@@ -504,7 +504,7 @@ func TestSaveBookToDatabaseCodePaths(t *testing.T) {
 		}
 
 		// This exercises the GlobalStore path
-		if err := saveBookToDatabase(book); err != nil {
+		if err := saveBookToDatabase(context.Background(), book); err != nil {
 			t.Logf("saveBookToDatabase error (may be expected): %v", err)
 		}
 	})
@@ -539,7 +539,7 @@ func TestSaveBookToDatabaseWithoutStore(t *testing.T) {
 		Format:   ".m4b",
 	}
 
-	err := saveBookToDatabase(book)
+	err := saveBookToDatabase(context.Background(), book)
 	if err != nil {
 		t.Errorf("saveBookToDatabase fallback error: %v", err)
 	}
@@ -566,7 +566,7 @@ func TestSaveBookToDatabaseNoDatabase(t *testing.T) {
 		Author:   "Test",
 	}
 
-	err := saveBookToDatabase(book)
+	err := saveBookToDatabase(context.Background(), book)
 	if err == nil {
 		t.Error("expected error when no database is available")
 	}
@@ -588,7 +588,7 @@ func TestProcessBooksParallelWithAIParsing(t *testing.T) {
 
 	oldSaver := saveBook
 	t.Cleanup(func() { saveBook = oldSaver })
-	saveBook = func(book *Book) error { return nil }
+	saveBook = func(ctx context.Context, book *Book) error { return nil }
 
 	// Should handle missing API key gracefully
 	err := ProcessBooksParallel(context.Background(), books, 1, nil, nil)
@@ -609,7 +609,7 @@ func TestProcessBooksParallelContextTimeout(t *testing.T) {
 	t.Cleanup(func() { saveBook = oldSaver })
 
 	// Make save slow to allow timeout to trigger
-	saveBook = func(book *Book) error {
+	saveBook = func(ctx context.Context, book *Book) error {
 		time.Sleep(100 * time.Millisecond)
 		return nil
 	}
@@ -775,7 +775,7 @@ func TestProcessBooksDefault(t *testing.T) {
 
 	oldSaver := saveBook
 	t.Cleanup(func() { saveBook = oldSaver })
-	saveBook = func(book *Book) error { return nil }
+	saveBook = func(ctx context.Context, book *Book) error { return nil }
 
 	err := ProcessBooks(books, nil)
 	if err != nil {
