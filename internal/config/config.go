@@ -1,7 +1,7 @@
 // file: internal/config/config.go
-// version: 1.45.0
+// version: 1.46.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
-// last-edited: 2026-05-01
+// last-edited: 2026-06-09
 
 package config
 
@@ -526,6 +526,17 @@ func InitConfig() {
 	viper.SetDefault("auto_rename_on_apply", true)
 	viper.SetDefault("auto_write_tags_on_apply", true)
 	viper.SetDefault("verify_after_write", true)
+
+	// Unified dedup scoring defaults (SPEC 1 §3–4, T011).
+	// These are consumed by internal/dedup/unified.LoadScoreConfig via Viper.
+	// Overridable per-kind in config.yaml under dedup.signals.<kind>.*
+	viper.SetDefault("dedup.signals.band_certain_min", 97.0)
+	viper.SetDefault("dedup.signals.band_high_min", 90.0)
+	viper.SetDefault("dedup.signals.band_medium_min", 75.0)
+	viper.SetDefault("dedup.signals.band_review_min", 60.0)
+	// Per-kind boost defaults for supporting signals.
+	viper.SetDefault("dedup.signals.duration.boost", 4.0)
+	viper.SetDefault("dedup.signals.folder_path.boost", 3.0)
 
 	viper.SetDefault("supported_extensions", []string{
 		".m4b", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".wma",
