@@ -57,6 +57,43 @@ a URL — any code that feeds 0x0D to Win32 file APIs gets an invalid path). The
 compatibility checklist (§5) therefore requires byte-pattern conformance with
 iTunes-authored blocks, not merely self-consistency. Marked as inference, not observation.
 
+## 1b. NORMATIVE: the Location field contract (0x0B / 0x0D)
+
+This section is the single source of truth for how location fields are written. It was
+census-verified against the untouched library `itunes-lib-good.itl` (SHA-256-identical to
+golden; 93,014 local tracks + 1,187 podcast entries, zero exceptions found). Any code or
+doc that contradicts it is wrong.
+
+**One source of truth, two derived renderings.** A track's location is a single Windows
+absolute path. It is rendered into the .itl twice:
+
+| Field | hohm type | Content | Example |
+|---|---|---|---|
+| Location | `0x0D` | The plain Windows path. Backslashes. **No** `file://`. **No** percent-escaping. | `W:\itunes\iTunes Media\Audiobooks\Adrian Tchaikovsky\01 Children of Time - 1.mp3` |
+| LocalURL | `0x0B` | `file://localhost/` + the same path with `\`→`/` and RFC-3986 percent-escaping | `file://localhost/W:/itunes/iTunes%20Media/Audiobooks/Adrian%20Tchaikovsky/01%20Children%20of%20Time%20-%201.mp3` |
+
+Rules (all empirically grounded, zero counter-examples in 187,215 censused blocks):
+
+1. **Never write a URL into 0x0D.** Never write a bare path into 0x0B. The two fields are
+   derived from one `LocationPair` value (TASK-006); no caller may pass a raw string to
+   either field directly.
+2. **Pairing:** every track with a local file has BOTH fields, and they round-trip:
+   `FromWinPath(p).URL == sibling 0x0B` and `FromURL(u).WinPath == sibling 0x0D`.
+3. **Podcast/stream tracks have no 0x0D at all** and carry an `http(s)://` URL in 0x0B
+   (1,187 in the census). Writeback must never add a 0x0D to them, and validators must
+   not require one.
+4. **Encoding is orthogonal to content.** Non-ASCII paths are stored UTF-16-encoded
+   (1,736 of 93,014 in the census) with the block's encoding signaled per CRIT-1's
+   corpus rules — writing the correct *string* with wrong encoding bytes is still
+   corruption. TASK-005 (encoders) and TASK-006 (LocationPair) must both land before
+   writeback is considered safe.
+5. The familiar `file://localhost/W:/...` form seen in `iTunes Library.xml` exports is
+   the XML rendering of the location — it corresponds to 0x0B, never to 0x0D.
+
+**The historical bug in one sentence:** callers passed URL-shaped `f.ITunesPath` and the
+writer copied it into 0x0D verbatim, so both fields held the URL form (83,783 blocks in
+damaged-1/3; 34 in damaged-4) — which iTunes rejects.
+
 ## 2. `ITLSafetyContract` (write-guard contract)
 
 A single Go type (new file `internal/itunes/itl_safety_contract.go`) that runs an ordered
