@@ -1311,7 +1311,7 @@ func (p *PebbleStore) DeleteWork(id string) error {
 		return err
 	}
 	if work == nil {
-		return fmt.Errorf("work not found")
+		return nil
 	}
 	batch := p.db.NewBatch()
 	key := []byte(fmt.Sprintf("work:%s", id))

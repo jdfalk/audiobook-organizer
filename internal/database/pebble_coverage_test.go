@@ -1,6 +1,7 @@
 // file: internal/database/pebble_coverage_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 06d2f26e-2d45-49d9-9a4e-3c7b2b90de60
+// last-edited: 2026-06-10
 
 package database
 
@@ -87,8 +88,10 @@ func TestPebbleDuplicateBooksLegacyKeys(t *testing.T) {
 	pebbleStore := store.(*PebbleStore)
 
 	hash := "legacy-hash"
-	book1 := Book{ID: "legacy-1", Title: "Legacy One", FileHash: &hash}
-	book2 := Book{ID: "legacy-2", Title: "Legacy Two", FileHash: &hash}
+	// Use the canonical "book:{ULID}" key format (the old "book:id:{id}" prefix
+	// was a bug that has been fixed; books are stored as "book:{id}").
+	book1 := Book{ID: "01HLEGACY00000000000000001", Title: "Legacy One", FileHash: &hash}
+	book2 := Book{ID: "01HLEGACY00000000000000002", Title: "Legacy Two", FileHash: &hash}
 	data1, err := json.Marshal(book1)
 	if err != nil {
 		t.Fatalf("marshal book1 failed: %v", err)
@@ -98,11 +101,11 @@ func TestPebbleDuplicateBooksLegacyKeys(t *testing.T) {
 		t.Fatalf("marshal book2 failed: %v", err)
 	}
 
-	if err := pebbleStore.db.Set([]byte("book:id:"+book1.ID), data1, nil); err != nil {
-		t.Fatalf("set legacy book1 failed: %v", err)
+	if err := pebbleStore.db.Set([]byte("book:"+book1.ID), data1, nil); err != nil {
+		t.Fatalf("set book1 failed: %v", err)
 	}
-	if err := pebbleStore.db.Set([]byte("book:id:"+book2.ID), data2, nil); err != nil {
-		t.Fatalf("set legacy book2 failed: %v", err)
+	if err := pebbleStore.db.Set([]byte("book:"+book2.ID), data2, nil); err != nil {
+		t.Fatalf("set book2 failed: %v", err)
 	}
 
 	dups, err := pebbleStore.GetDuplicateBooks()
@@ -110,7 +113,7 @@ func TestPebbleDuplicateBooksLegacyKeys(t *testing.T) {
 		t.Fatalf("GetDuplicateBooks failed: %v", err)
 	}
 	if len(dups) == 0 {
-		t.Fatal("expected duplicate groups for legacy keys")
+		t.Fatal("expected duplicate groups")
 	}
 }
 
