@@ -1,7 +1,7 @@
 // file: internal/testutil/integration.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-06-01
+// last-edited: 2026-06-10
 
 package testutil
 
@@ -62,18 +62,23 @@ func SetupIntegration(t *testing.T) (*IntegrationEnv, func()) {
 	hub := realtime.NewEventHub()
 	realtime.SetGlobalHub(hub)
 
-	origCfg := config.AppConfig
-	config.AppConfig = config.Config{
-		DatabaseType:         "sqlite",
-		DatabasePath:         dbPath,
-		RootDir:              rootDir,
-		EnableSQLite:         true,
-		OrganizationStrategy: "copy",
-		FolderNamingPattern:  "{author}/{title}",
-		FileNamingPattern:    "{title}",
-		SupportedExtensions:  []string{".m4b", ".mp3", ".m4a", ".flac", ".ogg"},
-		AutoOrganize:         false,
-	}
+	origCfg := config.Snapshot()
+	// WHY Mutate: test setup writes the global AppConfig before starting any
+	// background goroutines; using Mutate ensures the write is locked so that
+	// concurrent cleanup from a prior test cannot observe a torn config.
+	config.Mutate(func(c *config.Config) {
+		*c = config.Config{
+			DatabaseType:         "sqlite",
+			DatabasePath:         dbPath,
+			RootDir:              rootDir,
+			EnableSQLite:         true,
+			OrganizationStrategy: "copy",
+			FolderNamingPattern:  "{author}/{title}",
+			FileNamingPattern:    "{title}",
+			SupportedExtensions:  []string{".m4b", ".mp3", ".m4a", ".flac", ".ogg"},
+			AutoOrganize:         false,
+		}
+	})
 
 	env := &IntegrationEnv{
 		Store:     store,
@@ -87,7 +92,9 @@ func SetupIntegration(t *testing.T) (*IntegrationEnv, func()) {
 		database.SetGlobalStore(nil)
 		scanner.SetStore(nil)
 		store.Close()
-		config.AppConfig = origCfg
+		// WHY Mutate: restore previous config under the write lock; other goroutines
+		// may still be reading via Snapshot() as the test tears down.
+		config.Mutate(func(c *config.Config) { *c = origCfg })
 	}
 
 	return env, cleanup

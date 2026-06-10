@@ -1,6 +1,7 @@
 // file: internal/config/persistence.go
-// version: 1.18.1
+// version: 1.19.0
 // guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f
+// last-edited: 2026-06-10
 
 package config
 
@@ -18,12 +19,14 @@ import (
 )
 
 // ConfigFilePath returns the path to the YAML config file next to the database.
+// WHY Snapshot: reads two fields together; Snapshot ensures a consistent view.
 func ConfigFilePath() string {
-	if AppConfig.DatabasePath != "" {
-		return filepath.Join(filepath.Dir(AppConfig.DatabasePath), "config.yaml")
+	c := Snapshot()
+	if c.DatabasePath != "" {
+		return filepath.Join(filepath.Dir(c.DatabasePath), "config.yaml")
 	}
-	if AppConfig.RootDir != "" {
-		return filepath.Join(AppConfig.RootDir, "config.yaml")
+	if c.RootDir != "" {
+		return filepath.Join(c.RootDir, "config.yaml")
 	}
 	return ""
 }
@@ -50,34 +53,37 @@ func LoadConfigFromFile() error {
 		return nil
 	}
 
+	// WHY Mutate: these writes race with any goroutine reading AppConfig.
+	// The whole block runs under a single write lock so the fallback is atomic.
 	applied := 0
-
-	// Only fill in values that are currently empty/default.
-	// This is the fallback path when DB decryption fails for secrets.
-	stringFallbacks := map[string]*string{
-		"openai_api_key":       &AppConfig.OpenAIAPIKey,
-		"google_books_api_key": &AppConfig.GoogleBooksAPIKey,
-		"hardcover_api_token":  &AppConfig.HardcoverAPIToken,
-		"root_dir":             &AppConfig.RootDir,
-		"language":             &AppConfig.Language,
-	}
-	for key, ptr := range stringFallbacks {
-		if *ptr == "" {
-			if val, ok := fileConfig[key].(string); ok && val != "" {
-				*ptr = val
-				applied++
-				slog.Info("Loaded from config file", "key", key)
+	Mutate(func(c *Config) {
+		type sf struct {
+			key string
+			ptr *string
+		}
+		for _, s := range []sf{
+			{"openai_api_key", &c.OpenAIAPIKey},
+			{"google_books_api_key", &c.GoogleBooksAPIKey},
+			{"hardcover_api_token", &c.HardcoverAPIToken},
+			{"root_dir", &c.RootDir},
+			{"language", &c.Language},
+		} {
+			if *s.ptr == "" {
+				if val, ok := fileConfig[s.key].(string); ok && val != "" {
+					*s.ptr = val
+					applied++
+					slog.Info("Loaded from config file", "key", s.key)
+				}
 			}
 		}
-	}
-
-	if !AppConfig.EnableAIParsing {
-		if val, ok := fileConfig["enable_ai_parsing"].(bool); ok && val {
-			AppConfig.EnableAIParsing = true
-			applied++
-			slog.Info("Loaded enable_ai_parsing from config file")
+		if !c.EnableAIParsing {
+			if val, ok := fileConfig["enable_ai_parsing"].(bool); ok && val {
+				c.EnableAIParsing = true
+				applied++
+				slog.Info("Loaded enable_ai_parsing from config file")
+			}
 		}
-	}
+	})
 
 	if applied > 0 {
 		slog.Info("Applied settings from config file", "applied", applied, "path", path)
@@ -93,32 +99,34 @@ func SaveConfigToFile() error {
 		return fmt.Errorf("cannot determine config file path")
 	}
 
+	// WHY Snapshot: consistent read of many fields under a single read lock.
+	c := Snapshot()
 	fileConfig := map[string]any{
-		"root_dir":              AppConfig.RootDir,
-		"database_path":         AppConfig.DatabasePath,
-		"playlist_dir":          AppConfig.PlaylistDir,
-		"setup_complete":        AppConfig.SetupComplete,
-		"organization_strategy": AppConfig.OrganizationStrategy,
-		"scan_on_startup":       AppConfig.ScanOnStartup,
-		"auto_organize":         AppConfig.AutoOrganize,
-		"folder_naming_pattern": AppConfig.FolderNamingPattern,
-		"file_naming_pattern":   AppConfig.FileNamingPattern,
-		"auto_fetch_metadata":   AppConfig.AutoFetchMetadata,
-		"language":              AppConfig.Language,
-		"enable_ai_parsing":     AppConfig.EnableAIParsing,
-		"concurrent_scans":      AppConfig.ConcurrentScans,
-		"log_level":             AppConfig.LogLevel,
+		"root_dir":              c.RootDir,
+		"database_path":         c.DatabasePath,
+		"playlist_dir":          c.PlaylistDir,
+		"setup_complete":        c.SetupComplete,
+		"organization_strategy": c.OrganizationStrategy,
+		"scan_on_startup":       c.ScanOnStartup,
+		"auto_organize":         c.AutoOrganize,
+		"folder_naming_pattern": c.FolderNamingPattern,
+		"file_naming_pattern":   c.FileNamingPattern,
+		"auto_fetch_metadata":   c.AutoFetchMetadata,
+		"language":              c.Language,
+		"enable_ai_parsing":     c.EnableAIParsing,
+		"concurrent_scans":      c.ConcurrentScans,
+		"log_level":             c.LogLevel,
 	}
 
 	// Only write secrets if they're set (plaintext in file, file permissions protect them)
-	if AppConfig.OpenAIAPIKey != "" {
-		fileConfig["openai_api_key"] = AppConfig.OpenAIAPIKey
+	if c.OpenAIAPIKey != "" {
+		fileConfig["openai_api_key"] = c.OpenAIAPIKey
 	}
-	if AppConfig.GoogleBooksAPIKey != "" {
-		fileConfig["google_books_api_key"] = AppConfig.GoogleBooksAPIKey
+	if c.GoogleBooksAPIKey != "" {
+		fileConfig["google_books_api_key"] = c.GoogleBooksAPIKey
 	}
-	if AppConfig.HardcoverAPIToken != "" {
-		fileConfig["hardcover_api_token"] = AppConfig.HardcoverAPIToken
+	if c.HardcoverAPIToken != "" {
+		fileConfig["hardcover_api_token"] = c.HardcoverAPIToken
 	}
 
 	data, err := yaml.Marshal(fileConfig)
@@ -173,12 +181,16 @@ func LoadConfigFromDatabase(store database.SettingsStore) error {
 	if blob, ok := settingsMap["config_blob"]; ok && blob.Value != "" {
 		// Preserve immutable fields — they must come from the runtime environment,
 		// not from a stored blob that could have been created under different flags.
-		savedDBType := AppConfig.DatabaseType
+		// WHY Snapshot: reads AppConfig.DatabaseType under the read lock.
+		savedDBType := Snapshot().DatabaseType
 
 		var loaded Config
 		if err := json.Unmarshal([]byte(blob.Value), &loaded); err == nil {
-			AppConfig = loaded
-			AppConfig.DatabaseType = savedDBType
+			// WHY Mutate: whole-struct assignment races with HTTP readers.
+			Mutate(func(c *Config) {
+				*c = loaded
+				c.DatabaseType = savedDBType
+			})
 			blobFound = true
 			slog.Info("Loaded config from blob ( bytes)", "count", len(blob.Value))
 		} else {
@@ -230,15 +242,17 @@ func LoadConfigFromDatabase(store database.SettingsStore) error {
 		slog.Info("Re-encrypting corrupt secret(s) recovered from config file...", "corruptSecrets_count", len(corruptSecrets))
 		for _, key := range corruptSecrets {
 			var plaintext string
+			// WHY Snapshot: read multiple secret fields under a consistent lock.
+			snapSecrets := Snapshot()
 			switch key {
 			case "openai_api_key":
-				plaintext = AppConfig.OpenAIAPIKey
+				plaintext = snapSecrets.OpenAIAPIKey
 			case "google_books_api_key":
-				plaintext = AppConfig.GoogleBooksAPIKey
+				plaintext = snapSecrets.GoogleBooksAPIKey
 			case "hardcover_api_token":
-				plaintext = AppConfig.HardcoverAPIToken
+				plaintext = snapSecrets.HardcoverAPIToken
 			case "basic_auth_password":
-				plaintext = AppConfig.BasicAuthPassword
+				plaintext = snapSecrets.BasicAuthPassword
 			}
 			if plaintext != "" {
 				if err := store.SetSetting(key, plaintext, "string", true); err != nil {
@@ -256,15 +270,22 @@ func LoadConfigFromDatabase(store database.SettingsStore) error {
 		}
 	}
 
-	slog.Debug("After config load EnableAIParsing, OpenAIAPIKey length", "appConfig", AppConfig.EnableAIParsing, "count", len(AppConfig.OpenAIAPIKey))
+	{
+		// WHY Snapshot: multi-field read for the debug log.
+		snap := Snapshot()
+		slog.Debug("After config load EnableAIParsing, OpenAIAPIKey length", "appConfig", snap.EnableAIParsing, "count", len(snap.OpenAIAPIKey))
+	}
 
 	// Migrate auto-update window → maintenance window (idempotent)
 	MigrateMaintenanceWindow(store)
 
-	// Re-derive defaults that depend on RootDir
-	if AppConfig.OpenLibraryDumpDir == "" && AppConfig.RootDir != "" {
-		AppConfig.OpenLibraryDumpDir = filepath.Join(AppConfig.RootDir, "openlibrary-dumps")
-	}
+	// Re-derive defaults that depend on RootDir; use Mutate so the update is
+	// visible to concurrent readers via Snapshot().
+	Mutate(func(c *Config) {
+		if c.OpenLibraryDumpDir == "" && c.RootDir != "" {
+			c.OpenLibraryDumpDir = filepath.Join(c.RootDir, "openlibrary-dumps")
+		}
+	})
 
 	return nil
 }
@@ -277,417 +298,428 @@ func MigrateMaintenanceWindow(store database.SettingsStore) {
 		return
 	}
 
-	// Migrate auto-update window start/end if maintenance window not yet configured
-	if AppConfig.MaintenanceWindowStart == 0 && AppConfig.AutoUpdateWindowStart > 0 {
-		AppConfig.MaintenanceWindowStart = AppConfig.AutoUpdateWindowStart
-	}
-	if AppConfig.MaintenanceWindowEnd == 0 && AppConfig.AutoUpdateWindowEnd > 0 {
-		AppConfig.MaintenanceWindowEnd = AppConfig.AutoUpdateWindowEnd
-	}
-	// Ensure sensible defaults
-	if AppConfig.MaintenanceWindowStart == 0 && AppConfig.MaintenanceWindowEnd == 0 {
-		AppConfig.MaintenanceWindowStart = 1
-		AppConfig.MaintenanceWindowEnd = 4
-	}
+	// WHY Mutate: writes to multiple maintenance window fields race with readers.
+	var logStart, logEnd int
+	Mutate(func(c *Config) {
+		// Migrate auto-update window start/end if maintenance window not yet configured
+		if c.MaintenanceWindowStart == 0 && c.AutoUpdateWindowStart > 0 {
+			c.MaintenanceWindowStart = c.AutoUpdateWindowStart
+		}
+		if c.MaintenanceWindowEnd == 0 && c.AutoUpdateWindowEnd > 0 {
+			c.MaintenanceWindowEnd = c.AutoUpdateWindowEnd
+		}
+		// Ensure sensible defaults
+		if c.MaintenanceWindowStart == 0 && c.MaintenanceWindowEnd == 0 {
+			c.MaintenanceWindowStart = 1
+			c.MaintenanceWindowEnd = 4
+		}
+		logStart, logEnd = c.MaintenanceWindowStart, c.MaintenanceWindowEnd
+	})
 
 	_ = store.SetSetting("maintenance_window_migrated", "true", "bool", false)
-	slog.Info("Maintenance window migration complete (start, end)", "appConfig", AppConfig.MaintenanceWindowStart, "appConfig", AppConfig.MaintenanceWindowEnd)
+	slog.Info("Maintenance window migration complete (start, end)", "appConfig", logStart, "appConfig", logEnd)
 }
 
-// applySetting applies a single setting to AppConfig
+// applySetting applies a single setting to AppConfig.
+// WHY Mutate: every case here is a write to the global; Mutate serialises the
+// write under the write lock so concurrent Snapshot() callers see atomic updates.
 func applySetting(key, value, typ string) error {
+	// Internal-state keys are not mapped to Config fields; skip Mutate entirely.
 	switch key {
-	// Core paths
-	case "root_dir":
-		AppConfig.RootDir = value
-	case "database_path":
-		AppConfig.DatabasePath = value
-	case "playlist_dir":
-		AppConfig.PlaylistDir = value
-	case "setup_complete":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.SetupComplete = b
-		}
-
-	// Organization
-	case "organization_strategy":
-		AppConfig.OrganizationStrategy = value
-	case "scan_on_startup":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.ScanOnStartup = b
-		}
-	case "auto_organize":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.AutoOrganize = b
-		}
-	case "folder_naming_pattern":
-		AppConfig.FolderNamingPattern = value
-	case "file_naming_pattern":
-		AppConfig.FileNamingPattern = value
-	case "create_backups":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.CreateBackups = b
-		}
-	case "supported_extensions":
-		var extensions []string
-		if err := json.Unmarshal([]byte(value), &extensions); err == nil {
-			if len(extensions) > 0 {
-				AppConfig.SupportedExtensions = extensions
-			}
-		}
-	case "exclude_patterns":
-		var patterns []string
-		if err := json.Unmarshal([]byte(value), &patterns); err == nil {
-			AppConfig.ExcludePatterns = patterns
-		}
-
-	// Storage quotas
-	case "enable_disk_quota":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.EnableDiskQuota = b
-		}
-	case "disk_quota_percent":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.DiskQuotaPercent = i
-		}
-	case "enable_user_quotas":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.EnableUserQuotas = b
-		}
-	case "default_user_quota_gb":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.DefaultUserQuotaGB = i
-		}
-
-	// Metadata
-	case "auto_fetch_metadata":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.AutoFetchMetadata = b
-		}
-	case "language":
-		AppConfig.Language = value
-	case "metadata_review_default_view":
-		AppConfig.MetadataReviewDefaultView = value
-	case "metadata_sources":
-		var sources []MetadataSource
-		if err := json.Unmarshal([]byte(value), &sources); err == nil && len(sources) > 0 {
-			AppConfig.MetadataSources = sources
-		}
-
-	// Open Library dumps
-	case "openlibrary_dump_enabled":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.OpenLibraryDumpEnabled = b
-		}
-	case "openlibrary_dump_dir":
-		AppConfig.OpenLibraryDumpDir = value
-
-	// Hardcover.app
-	case "hardcover_api_token":
-		AppConfig.HardcoverAPIToken = value
-
-	// AI parsing
-	case "enable_ai_parsing":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.EnableAIParsing = b
-		}
-	case "openai_api_key":
-		AppConfig.OpenAIAPIKey = value
-	case "google_books_api_key":
-		AppConfig.GoogleBooksAPIKey = value
-
-	// Performance
-	case "concurrent_scans":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.ConcurrentScans = i
-		}
-	case "operation_timeout_minutes":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.OperationTimeoutMinutes = i
-		}
-	case "api_rate_limit_per_minute":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.APIRateLimitPerMinute = i
-		}
-	case "auth_rate_limit_per_minute":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.AuthRateLimitPerMinute = i
-		}
-	case "json_body_limit_mb":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.JSONBodyLimitMB = i
-		}
-	case "upload_body_limit_mb":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.UploadBodyLimitMB = i
-		}
-	case "enable_auth":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.EnableAuth = b
-		}
-	case "write_back_metadata":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.WriteBackMetadata = b
-		}
-	case "embed_cover_art":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.EmbedCoverArt = b
-		}
-	case "auto_scan_enabled":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.AutoScanEnabled = b
-		}
-	case "auto_scan_debounce_seconds":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.AutoScanDebounceSeconds = i
-		}
-
-	// Memory management
-	case "memory_limit_type":
-		AppConfig.MemoryLimitType = value
-	case "cache_size":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.CacheSize = i
-		}
-	case "cache_invalidate_on_book_update":
-		AppConfig.CacheInvalidateOnBookUpdate = value == "true"
-	case "metadata_fetch_cache_ttl_days":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.MetadataFetchCacheTTLDays = i
-		}
-	case "memory_limit_percent":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.MemoryLimitPercent = i
-		}
-	case "memory_limit_mb":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.MemoryLimitMB = i
-		}
-
-	// Logging
-	case "log_level":
-		AppConfig.LogLevel = value
-	case "log_format":
-		AppConfig.LogFormat = value
-	case "enable_json_logging":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.EnableJsonLogging = b
-		}
-
-	// Auto-update
-	case "auto_update_enabled":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.AutoUpdateEnabled = b
-		}
-	case "auto_update_channel":
-		AppConfig.AutoUpdateChannel = value
-	case "auto_update_check_minutes":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.AutoUpdateCheckMinutes = i
-		}
-	case "auto_update_window_start":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.AutoUpdateWindowStart = i
-		}
-	case "auto_update_window_end":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.AutoUpdateWindowEnd = i
-		}
-
-	// Lifecycle / retention
-	case "purge_soft_deleted_after_days":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.PurgeSoftDeletedAfterDays = i
-		}
-	case "purge_soft_deleted_delete_files":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.PurgeSoftDeletedDeleteFiles = b
-		}
-
-	// iTunes sync
-	case "itunes_sync_enabled":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.ITunesSyncEnabled = b
-		}
-	case "itunes_sync_interval":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.ITunesSyncInterval = i
-		}
-	case "itl_write_back_enabled":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.ITLWriteBackEnabled = b
-		}
-	case "itunes_library_write_path", "itunes_library_itl_path":
-		AppConfig.ITunesLibraryWritePath = value
-	case "itunes_library_read_path", "itunes_library_xml_path":
-		AppConfig.ITunesLibraryReadPath = value
-	case "itunes_auto_write_back":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.ITunesAutoWriteBack = b
-		}
-	case "itunes_path_trim_enabled":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.ITunesPathTrimEnabled = b
-		}
-	case "itunes_windows_root_path":
-		AppConfig.ITunesWindowsRootPath = value
-	case "itunes_media_root":
-		AppConfig.ITunesMediaRoot = value
-	case "itunes_path_mappings":
-		var mappings []ITunesPathMap
-		if err := json.Unmarshal([]byte(value), &mappings); err == nil {
-			AppConfig.ITunesPathMappings = mappings
-		}
-
-	// Maintenance window
-	case "maintenance_window_enabled":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.MaintenanceWindowEnabled = b
-		}
-	case "maintenance_window_start":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.MaintenanceWindowStart = i
-		}
-	case "maintenance_window_end":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.MaintenanceWindowEnd = i
-		}
-	case "maintenance_window_dedup_refresh":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.MaintenanceWindowDedupRefresh = b
-		}
-	case "maintenance_window_series_prune":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.MaintenanceWindowSeriesPrune = b
-		}
-	case "maintenance_window_author_split":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.MaintenanceWindowAuthorSplit = b
-		}
-	case "maintenance_window_tombstone_cleanup":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.MaintenanceWindowTombstoneCleanup = b
-		}
-	case "maintenance_window_reconcile":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.MaintenanceWindowReconcile = b
-		}
-	case "maintenance_window_purge_deleted":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.MaintenanceWindowPurgeDeleted = b
-		}
-	case "maintenance_window_purge_old_logs":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.MaintenanceWindowPurgeOldLogs = b
-		}
-	case "maintenance_window_db_optimize":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.MaintenanceWindowDbOptimize = b
-		}
-	case "maintenance_window_library_scan":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.MaintenanceWindowLibraryScan = b
-		}
-	case "maintenance_window_library_organize":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.MaintenanceWindowLibraryOrganize = b
-		}
-	case "maintenance_window_metadata_refresh":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.MaintenanceWindowMetadataRefresh = b
-		}
-
-	// Scheduled maintenance tasks
-	case "scheduled_dedup_refresh_enabled":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.ScheduledDedupRefreshEnabled = b
-		}
-	case "scheduled_dedup_refresh_interval":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.ScheduledDedupRefreshInterval = i
-		}
-	case "scheduled_dedup_refresh_on_startup":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.ScheduledDedupRefreshOnStartup = b
-		}
-	case "scheduled_author_split_enabled":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.ScheduledAuthorSplitEnabled = b
-		}
-	case "scheduled_author_split_interval":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.ScheduledAuthorSplitInterval = i
-		}
-	case "scheduled_author_split_on_startup":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.ScheduledAuthorSplitOnStartup = b
-		}
-	case "scheduled_db_optimize_enabled":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.ScheduledDbOptimizeEnabled = b
-		}
-	case "scheduled_db_optimize_interval":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.ScheduledDbOptimizeInterval = i
-		}
-	case "scheduled_db_optimize_on_startup":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.ScheduledDbOptimizeOnStartup = b
-		}
-	case "scheduled_metadata_refresh_enabled":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.ScheduledMetadataRefreshEnabled = b
-		}
-	case "scheduled_metadata_refresh_interval":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.ScheduledMetadataRefreshInterval = i
-		}
-	case "scheduled_metadata_refresh_on_startup":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.ScheduledMetadataRefreshOnStartup = b
-		}
-
-	case "scheduled_resolve_production_authors_enabled":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.ScheduledResolveProductionAuthorsEnabled = b
-		}
-	case "scheduled_resolve_production_authors_interval":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.ScheduledResolveProductionAuthorsInterval = i
-		}
-
-	case "scheduled_series_prune_enabled":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.ScheduledSeriesPruneEnabled = b
-		}
-	case "scheduled_series_prune_interval":
-		if i, err := strconv.Atoi(value); err == nil {
-			AppConfig.ScheduledSeriesPruneInterval = i
-		}
-	case "scheduled_series_prune_on_startup":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.ScheduledSeriesPruneOnStartup = b
-		}
-
-	// Basic auth
-	case "basic_auth_enabled":
-		if b, err := strconv.ParseBool(value); err == nil {
-			AppConfig.BasicAuthEnabled = b
-		}
-	case "basic_auth_username":
-		AppConfig.BasicAuthUsername = value
-	case "basic_auth_password":
-		AppConfig.BasicAuthPassword = value
-
 	case "maintenance_window_migrated", "maintenance_window_last_run", "maintenance_window_update_completed":
-		// Internal state keys — not mapped to AppConfig fields
 		return nil
-
-	default:
-		return fmt.Errorf("unknown setting key: %s", key)
 	}
 
-	return nil
+	var applyErr error
+	Mutate(func(c *Config) {
+		switch key {
+		// Core paths
+		case "root_dir":
+			c.RootDir = value
+		case "database_path":
+			c.DatabasePath = value
+		case "playlist_dir":
+			c.PlaylistDir = value
+		case "setup_complete":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.SetupComplete = b
+			}
+
+		// Organization
+		case "organization_strategy":
+			c.OrganizationStrategy = value
+		case "scan_on_startup":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.ScanOnStartup = b
+			}
+		case "auto_organize":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.AutoOrganize = b
+			}
+		case "folder_naming_pattern":
+			c.FolderNamingPattern = value
+		case "file_naming_pattern":
+			c.FileNamingPattern = value
+		case "create_backups":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.CreateBackups = b
+			}
+		case "supported_extensions":
+			var extensions []string
+			if err := json.Unmarshal([]byte(value), &extensions); err == nil {
+				if len(extensions) > 0 {
+					c.SupportedExtensions = extensions
+				}
+			}
+		case "exclude_patterns":
+			var patterns []string
+			if err := json.Unmarshal([]byte(value), &patterns); err == nil {
+				c.ExcludePatterns = patterns
+			}
+
+		// Storage quotas
+		case "enable_disk_quota":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.EnableDiskQuota = b
+			}
+		case "disk_quota_percent":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.DiskQuotaPercent = i
+			}
+		case "enable_user_quotas":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.EnableUserQuotas = b
+			}
+		case "default_user_quota_gb":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.DefaultUserQuotaGB = i
+			}
+
+		// Metadata
+		case "auto_fetch_metadata":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.AutoFetchMetadata = b
+			}
+		case "language":
+			c.Language = value
+		case "metadata_review_default_view":
+			c.MetadataReviewDefaultView = value
+		case "metadata_sources":
+			var sources []MetadataSource
+			if err := json.Unmarshal([]byte(value), &sources); err == nil && len(sources) > 0 {
+				c.MetadataSources = sources
+			}
+
+		// Open Library dumps
+		case "openlibrary_dump_enabled":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.OpenLibraryDumpEnabled = b
+			}
+		case "openlibrary_dump_dir":
+			c.OpenLibraryDumpDir = value
+
+		// Hardcover.app
+		case "hardcover_api_token":
+			c.HardcoverAPIToken = value
+
+		// AI parsing
+		case "enable_ai_parsing":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.EnableAIParsing = b
+			}
+		case "openai_api_key":
+			c.OpenAIAPIKey = value
+		case "google_books_api_key":
+			c.GoogleBooksAPIKey = value
+
+		// Performance
+		case "concurrent_scans":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.ConcurrentScans = i
+			}
+		case "operation_timeout_minutes":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.OperationTimeoutMinutes = i
+			}
+		case "api_rate_limit_per_minute":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.APIRateLimitPerMinute = i
+			}
+		case "auth_rate_limit_per_minute":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.AuthRateLimitPerMinute = i
+			}
+		case "json_body_limit_mb":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.JSONBodyLimitMB = i
+			}
+		case "upload_body_limit_mb":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.UploadBodyLimitMB = i
+			}
+		case "enable_auth":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.EnableAuth = b
+			}
+		case "write_back_metadata":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.WriteBackMetadata = b
+			}
+		case "embed_cover_art":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.EmbedCoverArt = b
+			}
+		case "auto_scan_enabled":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.AutoScanEnabled = b
+			}
+		case "auto_scan_debounce_seconds":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.AutoScanDebounceSeconds = i
+			}
+
+		// Memory management
+		case "memory_limit_type":
+			c.MemoryLimitType = value
+		case "cache_size":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.CacheSize = i
+			}
+		case "cache_invalidate_on_book_update":
+			c.CacheInvalidateOnBookUpdate = value == "true"
+		case "metadata_fetch_cache_ttl_days":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.MetadataFetchCacheTTLDays = i
+			}
+		case "memory_limit_percent":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.MemoryLimitPercent = i
+			}
+		case "memory_limit_mb":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.MemoryLimitMB = i
+			}
+
+		// Logging
+		case "log_level":
+			c.LogLevel = value
+		case "log_format":
+			c.LogFormat = value
+		case "enable_json_logging":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.EnableJsonLogging = b
+			}
+
+		// Auto-update
+		case "auto_update_enabled":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.AutoUpdateEnabled = b
+			}
+		case "auto_update_channel":
+			c.AutoUpdateChannel = value
+		case "auto_update_check_minutes":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.AutoUpdateCheckMinutes = i
+			}
+		case "auto_update_window_start":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.AutoUpdateWindowStart = i
+			}
+		case "auto_update_window_end":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.AutoUpdateWindowEnd = i
+			}
+
+		// Lifecycle / retention
+		case "purge_soft_deleted_after_days":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.PurgeSoftDeletedAfterDays = i
+			}
+		case "purge_soft_deleted_delete_files":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.PurgeSoftDeletedDeleteFiles = b
+			}
+
+		// iTunes sync
+		case "itunes_sync_enabled":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.ITunesSyncEnabled = b
+			}
+		case "itunes_sync_interval":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.ITunesSyncInterval = i
+			}
+		case "itl_write_back_enabled":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.ITLWriteBackEnabled = b
+			}
+		case "itunes_library_write_path", "itunes_library_itl_path":
+			c.ITunesLibraryWritePath = value
+		case "itunes_library_read_path", "itunes_library_xml_path":
+			c.ITunesLibraryReadPath = value
+		case "itunes_auto_write_back":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.ITunesAutoWriteBack = b
+			}
+		case "itunes_path_trim_enabled":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.ITunesPathTrimEnabled = b
+			}
+		case "itunes_windows_root_path":
+			c.ITunesWindowsRootPath = value
+		case "itunes_media_root":
+			c.ITunesMediaRoot = value
+		case "itunes_path_mappings":
+			var mappings []ITunesPathMap
+			if err := json.Unmarshal([]byte(value), &mappings); err == nil {
+				c.ITunesPathMappings = mappings
+			}
+
+		// Maintenance window
+		case "maintenance_window_enabled":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.MaintenanceWindowEnabled = b
+			}
+		case "maintenance_window_start":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.MaintenanceWindowStart = i
+			}
+		case "maintenance_window_end":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.MaintenanceWindowEnd = i
+			}
+		case "maintenance_window_dedup_refresh":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.MaintenanceWindowDedupRefresh = b
+			}
+		case "maintenance_window_series_prune":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.MaintenanceWindowSeriesPrune = b
+			}
+		case "maintenance_window_author_split":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.MaintenanceWindowAuthorSplit = b
+			}
+		case "maintenance_window_tombstone_cleanup":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.MaintenanceWindowTombstoneCleanup = b
+			}
+		case "maintenance_window_reconcile":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.MaintenanceWindowReconcile = b
+			}
+		case "maintenance_window_purge_deleted":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.MaintenanceWindowPurgeDeleted = b
+			}
+		case "maintenance_window_purge_old_logs":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.MaintenanceWindowPurgeOldLogs = b
+			}
+		case "maintenance_window_db_optimize":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.MaintenanceWindowDbOptimize = b
+			}
+		case "maintenance_window_library_scan":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.MaintenanceWindowLibraryScan = b
+			}
+		case "maintenance_window_library_organize":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.MaintenanceWindowLibraryOrganize = b
+			}
+		case "maintenance_window_metadata_refresh":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.MaintenanceWindowMetadataRefresh = b
+			}
+
+		// Scheduled maintenance tasks
+		case "scheduled_dedup_refresh_enabled":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.ScheduledDedupRefreshEnabled = b
+			}
+		case "scheduled_dedup_refresh_interval":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.ScheduledDedupRefreshInterval = i
+			}
+		case "scheduled_dedup_refresh_on_startup":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.ScheduledDedupRefreshOnStartup = b
+			}
+		case "scheduled_author_split_enabled":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.ScheduledAuthorSplitEnabled = b
+			}
+		case "scheduled_author_split_interval":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.ScheduledAuthorSplitInterval = i
+			}
+		case "scheduled_author_split_on_startup":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.ScheduledAuthorSplitOnStartup = b
+			}
+		case "scheduled_db_optimize_enabled":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.ScheduledDbOptimizeEnabled = b
+			}
+		case "scheduled_db_optimize_interval":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.ScheduledDbOptimizeInterval = i
+			}
+		case "scheduled_db_optimize_on_startup":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.ScheduledDbOptimizeOnStartup = b
+			}
+		case "scheduled_metadata_refresh_enabled":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.ScheduledMetadataRefreshEnabled = b
+			}
+		case "scheduled_metadata_refresh_interval":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.ScheduledMetadataRefreshInterval = i
+			}
+		case "scheduled_metadata_refresh_on_startup":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.ScheduledMetadataRefreshOnStartup = b
+			}
+
+		case "scheduled_resolve_production_authors_enabled":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.ScheduledResolveProductionAuthorsEnabled = b
+			}
+		case "scheduled_resolve_production_authors_interval":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.ScheduledResolveProductionAuthorsInterval = i
+			}
+
+		case "scheduled_series_prune_enabled":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.ScheduledSeriesPruneEnabled = b
+			}
+		case "scheduled_series_prune_interval":
+			if i, err := strconv.Atoi(value); err == nil {
+				c.ScheduledSeriesPruneInterval = i
+			}
+		case "scheduled_series_prune_on_startup":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.ScheduledSeriesPruneOnStartup = b
+			}
+
+		// Basic auth
+		case "basic_auth_enabled":
+			if b, err := strconv.ParseBool(value); err == nil {
+				c.BasicAuthEnabled = b
+			}
+		case "basic_auth_username":
+			c.BasicAuthUsername = value
+		case "basic_auth_password":
+			c.BasicAuthPassword = value
+
+		default:
+			applyErr = fmt.Errorf("unknown setting key: %s", key)
+		}
+	}) // end Mutate
+	return applyErr
 }
 
 // SaveConfigToDatabase persists current AppConfig to database AND config file.
@@ -706,8 +738,10 @@ func SaveConfigToDatabase(store database.SettingsStore) error {
 
 	slog.Info("Saving configuration to database...")
 
+	// WHY Snapshot: consistent read of all fields under a read lock before we
+	// build the blob; a concurrent Mutate could otherwise see a torn read.
 	// Build a safe copy with secrets zeroed — they are saved separately (encrypted).
-	safeConfig := AppConfig
+	safeConfig := Snapshot()
 	safeConfig.OpenAIAPIKey = ""
 	safeConfig.GoogleBooksAPIKey = ""
 	safeConfig.HardcoverAPIToken = ""
@@ -728,11 +762,12 @@ func SaveConfigToDatabase(store database.SettingsStore) error {
 		key   string
 		value string
 	}
+	snap := Snapshot()
 	secrets := []secretEntry{
-		{"openai_api_key", AppConfig.OpenAIAPIKey},
-		{"google_books_api_key", AppConfig.GoogleBooksAPIKey},
-		{"hardcover_api_token", AppConfig.HardcoverAPIToken},
-		{"basic_auth_password", AppConfig.BasicAuthPassword},
+		{"openai_api_key", snap.OpenAIAPIKey},
+		{"google_books_api_key", snap.GoogleBooksAPIKey},
+		{"hardcover_api_token", snap.HardcoverAPIToken},
+		{"basic_auth_password", snap.BasicAuthPassword},
 	}
 	for _, s := range secrets {
 		if s.value == "" {
@@ -760,25 +795,29 @@ func SaveConfigToDatabase(store database.SettingsStore) error {
 // SyncConfigFromEnv loads env vars from viper and overrides AppConfig (without saving to DB).
 // Only non-empty env values override DB-loaded values. This prevents empty env vars or
 // viper defaults from wiping out API keys that were loaded from the database.
+// WHY Mutate: each assignment here is a concurrent write to the global; use Mutate
+// so callers of Snapshot() see a consistent post-sync view.
 func SyncConfigFromEnv() {
-	if viper.IsSet("root_dir") {
-		if val := viper.GetString("root_dir"); val != "" {
-			AppConfig.RootDir = val
+	Mutate(func(c *Config) {
+		if viper.IsSet("root_dir") {
+			if val := viper.GetString("root_dir"); val != "" {
+				c.RootDir = val
+			}
 		}
-	}
-	if viper.IsSet("openai_api_key") {
-		if val := viper.GetString("openai_api_key"); val != "" {
-			AppConfig.OpenAIAPIKey = val
-			slog.Debug("SyncConfigFromEnv overriding OpenAI API key from env/config (length )", "val_count", len(val))
+		if viper.IsSet("openai_api_key") {
+			if val := viper.GetString("openai_api_key"); val != "" {
+				c.OpenAIAPIKey = val
+				slog.Debug("SyncConfigFromEnv overriding OpenAI API key from env/config (length )", "val_count", len(val))
+			}
 		}
-	}
-	if viper.IsSet("google_books_api_key") {
-		if val := viper.GetString("google_books_api_key"); val != "" {
-			AppConfig.GoogleBooksAPIKey = val
+		if viper.IsSet("google_books_api_key") {
+			if val := viper.GetString("google_books_api_key"); val != "" {
+				c.GoogleBooksAPIKey = val
+			}
 		}
-	}
-	if viper.IsSet("enable_ai_parsing") {
-		AppConfig.EnableAIParsing = viper.GetBool("enable_ai_parsing")
-	}
-	// Add more env overrides as needed
+		if viper.IsSet("enable_ai_parsing") {
+			c.EnableAIParsing = viper.GetBool("enable_ai_parsing")
+		}
+		// Add more env overrides as needed
+	})
 }

@@ -1,5 +1,5 @@
 // file: internal/server/handlers/system/handler.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 8475f406-df31-4286-95b0-30787397603e
 // last-edited: 2026-06-03
 
@@ -474,22 +474,28 @@ func (h *Handler) UpdateConfig(c *gin.Context) {
 		return
 	}
 
-	previousConfig := config.AppConfig
+	// WHY Snapshot/Mutate: saving the previous config and rolling it back on
+	// error are writes to the global AppConfig; use the accessors so concurrent
+	// HTTP requests or background goroutines see a consistent value.
+	previousConfig := config.Snapshot()
 	status, resp := h.configUpdate.UpdateConfig(payload)
 	if status >= 400 {
-		config.AppConfig = previousConfig
+		// Roll back to previous config under the write lock.
+		config.Mutate(func(cfg *config.Config) { *cfg = previousConfig })
 		errMsg, _ := resp["error"].(string)
 		httputil.RespondWithError(c, status, errMsg, "CONFIG_ERROR")
 		return
 	}
 
-	if err := config.AppConfig.Validate(); err != nil {
-		config.AppConfig = previousConfig
-		httputil.RespondWithBadRequest(c, err.Error())
+	if snapForValidate := config.Snapshot(); snapForValidate.Validate() != nil {
+		validateErr := snapForValidate.Validate()
+		// Roll back to previous config under the write lock.
+		config.Mutate(func(cfg *config.Config) { *cfg = previousConfig })
+		httputil.RespondWithBadRequest(c, validateErr.Error())
 		return
 	}
 
-	maskedConfig := h.configUpdate.MaskSecrets(config.AppConfig)
+	maskedConfig := h.configUpdate.MaskSecrets(config.Snapshot())
 	response := gin.H{"config": maskedConfig}
 	if raw, err := json.Marshal(maskedConfig); err == nil {
 		var flat map[string]any
