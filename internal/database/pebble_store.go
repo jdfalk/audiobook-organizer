@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.83.0
+// version: 1.84.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-06-10
 
@@ -8834,6 +8834,9 @@ func (s *PebbleStore) CreateBookFile(file *BookFile) error {
 	s.InvalidateLibraryStats()
 	s.MarkQuickQueryDirty("no_fingerprints", "create_book_file")
 	s.UpsertBookFileToMemDB(file)
+	// Recompute book-level Duration/FileSize aggregates now that a file was added.
+	// Best-effort: the file write already committed; don't fail on aggregate errors.
+	s.notifyBookFileChange(file.BookID)
 	return nil
 }
 
@@ -8883,6 +8886,9 @@ func (s *PebbleStore) UpdateBookFile(id string, file *BookFile) error {
 	s.InvalidateLibraryStats()
 	s.MarkQuickQueryDirty("no_fingerprints", "update_book_file")
 	s.UpsertBookFileToMemDB(file)
+	// Recompute book-level Duration/FileSize aggregates now that a file was updated.
+	// Best-effort: the file write already committed; don't fail on aggregate errors.
+	s.notifyBookFileChange(file.BookID)
 	return nil
 }
 
@@ -9239,6 +9245,9 @@ func (s *PebbleStore) DeleteBookFile(id string) error {
 	s.InvalidateLibraryStats()
 	s.MarkQuickQueryDirty("no_fingerprints", "delete_book_file")
 	s.DeleteBookFileFromMemDB(id)
+	// Recompute book-level Duration/FileSize aggregates now that a file was removed.
+	// Best-effort: the file delete already committed; don't fail on aggregate errors.
+	s.notifyBookFileChange(found.BookID)
 	return nil
 }
 
@@ -9272,6 +9281,9 @@ func (s *PebbleStore) DeleteBookFilesForBook(bookID string) error {
 		return err
 	}
 	s.InvalidateLibraryStats()
+	// Recompute book-level aggregates after bulk-deleting all files for this book.
+	// The book likely has Duration=0 after deletion, which is correct — nothing to sum.
+	s.notifyBookFileChange(bookID)
 	return nil
 }
 

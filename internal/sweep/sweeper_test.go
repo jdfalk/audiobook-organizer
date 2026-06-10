@@ -1,5 +1,5 @@
 // file: internal/sweep/sweeper_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: b2c3d4e5-f6a7-8910-abcd-ef2345678902
 
 package sweep
@@ -140,6 +140,7 @@ func (m *MockBookStore) MergeChapterBooks(primaryID string, srcIDs []string, com
 	return nil
 }
 func (m *MockBookStore) FlagMetadataHashDuplicate(primaryID, duplicateID string) error { return nil }
+func (m *MockBookStore) RecomputeBookAggregates(_ string) error                        { return nil }
 func (m *MockBookStore) ListBookIDs() ([]string, error)                                        { return nil, nil }
 func (m *MockBookStore) ListBooksByITunesPID(limit, offset int) ([]database.Book, error)       { return nil, nil }
 

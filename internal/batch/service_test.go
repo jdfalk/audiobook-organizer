@@ -1,5 +1,5 @@
 // file: internal/batch/service_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: b2c3d4e5-f6a7-b8c9-0d1e-2f3a4b5c6d7e
 
 package batch
@@ -167,6 +167,7 @@ func (m *MockBookStore) GetBooksWithUserTag(tag string) ([]string, error)       
 func (m *MockBookStore) GetAllBookUserTags() ([]string, error)                         { return nil, nil }
 func (m *MockBookStore) AdjustRating(id string, delta int) (*database.Book, error)     { return nil, nil }
 func (m *MockBookStore) FlagMetadataHashDuplicate(primaryID, duplicateID string) error { return nil }
+func (m *MockBookStore) RecomputeBookAggregates(_ string) error                        { return nil }
 func (m *MockBookStore) ListBookIDs() ([]string, error)                                        { return nil, nil }
 func (m *MockBookStore) ListBooksByITunesPID(limit, offset int) ([]database.Book, error)       { return nil, nil }
 
