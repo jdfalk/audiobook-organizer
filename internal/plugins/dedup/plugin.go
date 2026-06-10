@@ -1,5 +1,5 @@
 // file: internal/plugins/dedup/plugin.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: d1e2f3a4-b5c6-7890-abcd-ef1234567890
 // last-edited: 2026-06-10
 
@@ -55,6 +55,7 @@ func (p *Plugin) Register(r sdk.Registry) error {
 		p.purgeStaleDef(),
 		p.lshIndexBuildDef(),
 		p.purgeLegacyFPDef(), // T015: legacy fingerprint purge op
+		p.embReencodeDef(),   // T021: float16+zstd re-encode op
 	}
 
 	for _, op := range ops {
