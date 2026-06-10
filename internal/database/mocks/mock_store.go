@@ -20367,6 +20367,51 @@ func (_c *MockOperationStore_DeleteOperationsByStatus_Call) RunAndReturn(run fun
 	return _c
 }
 
+// DeleteOperationWithLogs provides a mock function for the type MockOperationStore
+func (_mock *MockOperationStore) DeleteOperationWithLogs(id string) error {
+	ret := _mock.Called(id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteOperationWithLogs")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(id)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockOperationStore_DeleteOperationWithLogs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteOperationWithLogs'
+type MockOperationStore_DeleteOperationWithLogs_Call struct {
+	*mock.Call
+}
+
+// DeleteOperationWithLogs is a helper method to define mock.On call
+//   - id string
+func (_e *MockOperationStore_Expecter) DeleteOperationWithLogs(id interface{}) *MockOperationStore_DeleteOperationWithLogs_Call {
+	return &MockOperationStore_DeleteOperationWithLogs_Call{Call: _e.mock.On("DeleteOperationWithLogs", id)}
+}
+
+func (_c *MockOperationStore_DeleteOperationWithLogs_Call) Run(run func(id string)) *MockOperationStore_DeleteOperationWithLogs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockOperationStore_DeleteOperationWithLogs_Call) Return(err error) *MockOperationStore_DeleteOperationWithLogs_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockOperationStore_DeleteOperationWithLogs_Call) RunAndReturn(run func(string) error) *MockOperationStore_DeleteOperationWithLogs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetBookChanges provides a mock function for the type MockOperationStore
 func (_mock *MockOperationStore) GetBookChanges(bookID string) ([]*database.OperationChange, error) {
 	ret := _mock.Called(bookID)
@@ -31221,6 +31266,51 @@ func (_c *MockStore_DeleteOperationsByStatus_Call) Return(n int, err error) *Moc
 }
 
 func (_c *MockStore_DeleteOperationsByStatus_Call) RunAndReturn(run func(statuses []string) (int, error)) *MockStore_DeleteOperationsByStatus_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeleteOperationWithLogs provides a mock function for the type MockStore
+func (_mock *MockStore) DeleteOperationWithLogs(id string) error {
+	ret := _mock.Called(id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteOperationWithLogs")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(id)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_DeleteOperationWithLogs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteOperationWithLogs'
+type MockStore_DeleteOperationWithLogs_Call struct {
+	*mock.Call
+}
+
+// DeleteOperationWithLogs is a helper method to define mock.On call
+//   - id string
+func (_e *MockStore_Expecter) DeleteOperationWithLogs(id interface{}) *MockStore_DeleteOperationWithLogs_Call {
+	return &MockStore_DeleteOperationWithLogs_Call{Call: _e.mock.On("DeleteOperationWithLogs", id)}
+}
+
+func (_c *MockStore_DeleteOperationWithLogs_Call) Run(run func(id string)) *MockStore_DeleteOperationWithLogs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockStore_DeleteOperationWithLogs_Call) Return(err error) *MockStore_DeleteOperationWithLogs_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_DeleteOperationWithLogs_Call) RunAndReturn(run func(string) error) *MockStore_DeleteOperationWithLogs_Call {
 	_c.Call.Return(run)
 	return _c
 }

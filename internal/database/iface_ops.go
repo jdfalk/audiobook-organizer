@@ -1,5 +1,5 @@
 // file: internal/database/iface_ops.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b93b0da0-8afb-46fb-983e-c43f238ea67c
 
 package database
@@ -53,4 +53,10 @@ type OperationStore interface {
 	PruneOperationLogs(olderThan time.Time) (int, error)
 	PruneOperationChanges(olderThan time.Time) (int, error)
 	DeleteOperationsByStatus(statuses []string) (int, error)
+
+	// DeleteOperationWithLogs removes the operation record (operation:<id>) and all
+	// associated log lines (operationlog:<id>:*) in a single atomic batch.
+	// This is the correct deletion primitive for the retention sweep — deleting the
+	// operation key alone would orphan its log lines in PebbleDB indefinitely.
+	DeleteOperationWithLogs(id string) error
 }

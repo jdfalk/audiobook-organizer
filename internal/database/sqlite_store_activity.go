@@ -1,7 +1,7 @@
 // file: internal/database/sqlite_store_activity.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: c1d2e3f4-5678-90ab-cdef-123456789012
-// last-edited: 2026-05-02
+// last-edited: 2026-06-10
 
 package database
 
@@ -581,6 +581,28 @@ func (s *SQLiteStore) GetAllSystemActivityLogRows() ([]SystemActivityLog, error)
 		logs = append(logs, l)
 	}
 	return logs, rows.Err()
+}
+
+// DeleteOperationWithLogs removes the operation record and all associated log entries
+// in a single database transaction.
+//
+// Why a transaction: the SQLite schema has operation_logs.operation_id referencing
+// operations.id. Deleting the parent row first (or not at all) could leave orphaned
+// log rows. A transaction ensures both tables are updated atomically.
+func (s *SQLiteStore) DeleteOperationWithLogs(id string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	if _, err := tx.Exec("DELETE FROM operation_logs WHERE operation_id = ?", id); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("delete operation logs: %w", err)
+	}
+	if _, err := tx.Exec("DELETE FROM operations WHERE id = ?", id); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("delete operation: %w", err)
+	}
+	return tx.Commit()
 }
 
 // PruneOperationLogs deletes operation log entries older than the given time.
