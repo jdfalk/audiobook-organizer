@@ -1,7 +1,7 @@
 // file: internal/dedup/engine.go
-// version: 1.23.0
+// version: 1.24.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
-// last-edited: 2026-05-18
+// last-edited: 2026-06-10
 
 package dedup
 
@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -27,24 +26,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
-
-// acoustidFuzzyEnabled gates the tier-2 fuzzy AcoustID lookup. Default OFF.
-//
-// Background: tier-2 is an O(N) similarity scan over all 308K+ BookFile rows
-// per query. The dedup engine calls it per seg per file per book when the
-// tier-1 exact lookup misses — which on a fresh corpus is most segments,
-// because rescan hasn't backfilled fingerprints for neighbouring books yet.
-// Even routed through memdb (PR #1194) the in-RAM walk is too slow to keep
-// the scan moving fast enough to dodge the registry's infinite-restart
-// force-drop guard.
-//
-// Until LSH/minhash bucketing lands (architecture proposal Stage B), tier-2
-// stays off by default. Set ACOUSTID_FUZZY_ENABLED=1 to re-enable for
-// experiments on small corpora.
-//
-// Tier-1 (exact) is O(1) via the pre-built book_file_acoustid: Pebble index
-// and catches the dominant case (identical fingerprints across duplicates).
-var acoustidFuzzyEnabled = os.Getenv("ACOUSTID_FUZZY_ENABLED") == "1"
 
 var dedupTracer = otel.Tracer("audiobook-organizer/dedup")
 
@@ -2260,8 +2241,7 @@ func (de *Engine) AcoustIDScan(ctx context.Context, progress func(done, total in
 		for _, f := range files {
 			// Tier-0: whole-file LSH candidate set + Hamming refine.
 			// Sub-linear via the fpidx: secondary index, so it runs
-			// unconditionally (no acoustidFuzzyEnabled gate needed —
-			// the index caps candidates so the work is bounded).
+			// unconditionally (index caps candidates, so work is bounded).
 			if lshStore != nil && len(f.AcoustIDFingerprint) > 0 {
 				cands, _ := lshStore.LookupAcoustIDCandidates(f.AcoustIDFingerprint, 200)
 				for _, candID := range cands {
@@ -2310,20 +2290,6 @@ func (de *Engine) AcoustIDScan(ctx context.Context, progress func(done, total in
 					continue
 				}
 
-				// Tier 2: legacy fuzzy walk over seg strings. Gated by
-				// ACOUSTID_FUZZY_ENABLED — OFF by default. Kept only as
-				// an emergency fallback for libraries without whole-file
-				// fingerprints (rare now that LSH is the default).
-				if !acoustidFuzzyEnabled {
-					continue
-				}
-				if match, _ := de.bookStore.GetBookFileByAcoustIDFuzzy(seg, fingerprint.FuzzyMinSimilarity); match != nil && match.BookID != book.ID {
-					sim, simErr := fingerprint.HammingSimilarity(seg, bestSeg(match))
-					if simErr != nil {
-						sim = fingerprint.FuzzyMinSimilarity
-					}
-					emit(book.ID, match.BookID, sim)
-				}
 			}
 		}
 
