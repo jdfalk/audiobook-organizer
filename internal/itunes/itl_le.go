@@ -1,5 +1,5 @@
 // file: internal/itunes/itl_le.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b4e8d927-6c3f-4a81-9e02-f7b3c8d4e56a
 
 package itunes
@@ -46,6 +46,13 @@ func walkChunksLEImpl(data []byte, lib *ITLLibrary) {
 }
 
 // walkMsdhTracksLE walks mith/mhoh blocks inside a track-list msdh container.
+//
+// iTunes LE libraries pack mhoh string blocks as children of mith — the mith
+// totalLen field encompasses both the fixed track header and its mhoh children.
+// Advancing by totalLen after parsing the mith header would skip every child,
+// leaving all string fields (Name, Album, Artist …) empty. The invariant is:
+//   - advance outer cursor by totalLen (so chunk accounting matches the on-disk layout)
+//   - but inner-walk [offset+headerLen, offset+totalLen) to reach the mhoh children
 func walkMsdhTracksLE(data []byte, start, end int, lib *ITLLibrary) {
 	offset := start
 	var currentTrack *ITLTrack
@@ -55,42 +62,84 @@ func walkMsdhTracksLE(data []byte, start, end int, lib *ITLLibrary) {
 		if tag == "" {
 			break
 		}
-		// In LE format: mith/mhoh have headerLen at +4, totalLen at +8.
-		// Use totalLen for mith/mhoh (includes sub-data), headerLen for others (mlth).
+		// headerLen is the fixed portion; totalLen covers headerLen + all children.
 		headerLen := int(readUint32LE(data, offset+4))
 		totalLen := int(readUint32LE(data, offset+8))
-		length := headerLen // default: use headerLen
+
+		// For containers that carry children, outer advancement uses totalLen;
+		// non-container tags (mlth, mhoh as sibling) use headerLen.
+		advanceBy := headerLen
 		if (tag == "mith" || tag == "mhoh" || tag == "miah" || tag == "miph") && totalLen > headerLen && totalLen <= end-offset {
-			length = totalLen // container: use totalLen
+			advanceBy = totalLen
 		}
-		if length < 8 || offset+length > end {
+		if advanceBy < 8 || offset+advanceBy > end {
 			break
 		}
 
 		switch tag {
 		case "mlth":
-			// Track list header — skip
+			// Track list header — no children to walk.
 
 		case "miah":
-			// Track item array — descend into it
-			walkMiahContent(data, offset, length, lib, &currentTrack)
+			// Track item array — descend into it.
+			walkMiahContent(data, offset, advanceBy, lib, &currentTrack)
 
 		case "mith":
-			t := parseMithLE(data, offset, length)
+			// Parse fixed track fields from the header portion only.
+			t := parseMithLE(data, offset, headerLen)
 			lib.Tracks = append(lib.Tracks, t)
 			currentTrack = &lib.Tracks[len(lib.Tracks)-1]
+			// When mith has children (totalLen > headerLen), the mhoh string
+			// blocks live in [offset+headerLen, offset+totalLen); walk them now
+			// rather than relying on the outer loop where they are unreachable.
+			if totalLen > headerLen {
+				childEnd := offset + totalLen
+				if childEnd > end {
+					childEnd = end
+				}
+				innerOffset := offset + headerLen
+				for innerOffset+8 <= childEnd {
+					childTag := readTag(data, innerOffset)
+					if childTag == "" {
+						break
+					}
+					childHeaderLen := int(readUint32LE(data, innerOffset+4))
+					childTotalLen := int(readUint32LE(data, innerOffset+8))
+					childLen := childHeaderLen
+					if childTag == "mhoh" && childTotalLen > childHeaderLen && innerOffset+childTotalLen <= childEnd {
+						childLen = childTotalLen
+					}
+					if childLen < 8 || innerOffset+childLen > childEnd {
+						break
+					}
+					if childTag == "mhoh" {
+						parseMhohLE(data, innerOffset, childLen, currentTrack)
+					}
+					innerOffset += childLen
+				}
+			}
 
 		case "mhoh":
+			// Flat-sibling layout (used by tests and some older writers):
+			// mhoh appears directly after mith with no nesting.
 			if currentTrack != nil {
-				parseMhohLE(data, offset, length, currentTrack)
+				mhohLen := headerLen
+				if totalLen > headerLen && totalLen <= end-offset {
+					mhohLen = totalLen
+				}
+				parseMhohLE(data, offset, mhohLen, currentTrack)
 			}
 		}
 
-		offset += length
+		offset += advanceBy
 	}
 }
 
 // walkMiahContent walks the sub-blocks inside a miah (track item array) wrapper.
+//
+// Mirrors the mhoh-descent fix applied in walkMsdhTracksLE: when a mith block
+// carries children (totalLen > headerLen), the mhoh string blocks live inside the
+// mith span and are invisible to the outer loop unless we inner-walk them here.
 func walkMiahContent(data []byte, miahStart, miahLen int, lib *ITLLibrary, currentTrack **ITLTrack) {
 	miahHeaderLen := int(readUint32LE(data, miahStart+4))
 	if miahHeaderLen < 8 {
@@ -104,30 +153,65 @@ func walkMiahContent(data []byte, miahStart, miahLen int, lib *ITLLibrary, curre
 		if tag == "" {
 			break
 		}
-		// In LE format: mith/mhoh have headerLen at +4, totalLen at +8.
-		// Use totalLen for mith/mhoh (includes sub-data), headerLen for others (mlth).
 		headerLen := int(readUint32LE(data, offset+4))
 		totalLen := int(readUint32LE(data, offset+8))
-		length := headerLen // default: use headerLen
+
+		// Outer advancement uses totalLen for containers (matches on-disk layout);
+		// inner-walk descends into [offset+headerLen, offset+totalLen) for children.
+		advanceBy := headerLen
 		if (tag == "mith" || tag == "mhoh" || tag == "miah" || tag == "miph") && totalLen > headerLen && totalLen <= end-offset {
-			length = totalLen // container: use totalLen
+			advanceBy = totalLen
 		}
-		if length < 8 || offset+length > end {
+		if advanceBy < 8 || offset+advanceBy > end {
 			break
 		}
 
 		switch tag {
 		case "mith":
-			t := parseMithLE(data, offset, length)
+			// Parse fixed track fields from the header portion only.
+			t := parseMithLE(data, offset, headerLen)
 			lib.Tracks = append(lib.Tracks, t)
 			*currentTrack = &lib.Tracks[len(lib.Tracks)-1]
+			// When mith has children (totalLen > headerLen), inner-walk the mhoh
+			// string blocks rather than skipping them via the outer advance.
+			if totalLen > headerLen {
+				childEnd := offset + totalLen
+				if childEnd > end {
+					childEnd = end
+				}
+				innerOffset := offset + headerLen
+				for innerOffset+8 <= childEnd {
+					childTag := readTag(data, innerOffset)
+					if childTag == "" {
+						break
+					}
+					childHeaderLen := int(readUint32LE(data, innerOffset+4))
+					childTotalLen := int(readUint32LE(data, innerOffset+8))
+					childLen := childHeaderLen
+					if childTag == "mhoh" && childTotalLen > childHeaderLen && innerOffset+childTotalLen <= childEnd {
+						childLen = childTotalLen
+					}
+					if childLen < 8 || innerOffset+childLen > childEnd {
+						break
+					}
+					if childTag == "mhoh" && *currentTrack != nil {
+						parseMhohLE(data, innerOffset, childLen, *currentTrack)
+					}
+					innerOffset += childLen
+				}
+			}
 
 		case "mhoh":
+			// Flat-sibling layout: mhoh appears directly after mith with no nesting.
 			if *currentTrack != nil {
-				parseMhohLE(data, offset, length, *currentTrack)
+				mhohLen := headerLen
+				if totalLen > headerLen && totalLen <= end-offset {
+					mhohLen = totalLen
+				}
+				parseMhohLE(data, offset, mhohLen, *currentTrack)
 			}
 		}
-		offset += length
+		offset += advanceBy
 	}
 }
 
