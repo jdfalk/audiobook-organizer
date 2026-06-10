@@ -1,7 +1,7 @@
 // file: internal/server/server.go
-// version: 2.25.0
+// version: 2.26.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-06-01
+// last-edited: 2026-06-09
 
 package server
 
@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -67,6 +68,12 @@ import (
 	"github.com/falkcorp/audiobook-organizer/internal/work"
 	"github.com/quic-go/quic-go/http3"
 )
+
+// isDebugMode returns true if logging is set to debug level, indicating
+// we should enable Gin debug logging for development.
+func isDebugMode() bool {
+	return strings.EqualFold(config.AppConfig.LogLevel, "debug")
+}
 
 // Cached library and import path sizes to avoid expensive recalculation on frequent status checks
 var cachedLibrarySize int64
@@ -300,6 +307,13 @@ func (s *Server) publishEvent(ctx context.Context, event plugin.Event) {
 // s.Store() is still assigned at startup for code that hasn't
 // been migrated to use s.Store() yet (see DI migration plan 4.4).
 func NewServer(store database.Store) *Server {
+	// Set Gin to release mode (production) unless debug flag is set.
+	// In release mode, Gin suppresses route-registration logging and uses optimized
+	// middleware. See MED-9 in fable5-review-findings.md.
+	if !isDebugMode() {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	router := gin.New() // don't use gin.Default() — we add our own middleware
 
 	// Trust no proxy headers. Without this, Gin honors X-Forwarded-For from any
