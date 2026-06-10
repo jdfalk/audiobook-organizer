@@ -1,7 +1,7 @@
 // file: web/src/services/api.ts
-// version: 2.36.0
+// version: 2.37.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
-// last-edited: 2026-05-31
+// last-edited: 2026-06-10
 
 // API service layer for audiobook-organizer backend
 // Provides typed functions for all backend endpoints
@@ -4446,6 +4446,27 @@ export async function deleteUserColumnConfig(): Promise<void> {
 
 // --- Embedding-based deduplication ---
 
+// T016: unified scoring band values (match internal/dedup/unified/score.go constants).
+export type DedupBand = 'CERTAIN' | 'HIGH' | 'MEDIUM' | 'REVIEW';
+
+// T016: single evidence signal stored in ScoreBreakdown.
+export interface DedupSignal {
+  kind: string;        // e.g. "exact_file", "embedding_high", "duration"
+  value: number;       // raw signal value 0–1
+  weight: number;      // calibration weight
+  evidence: string;    // human-readable description for UI
+  primary: boolean;    // whether this signal alone can indicate a duplicate
+}
+
+// T016: composite score breakdown stored on each candidate.
+export interface DedupScoreBreakdown {
+  score: number;       // 0–100 composite
+  band: string;        // CERTAIN | HIGH | MEDIUM | REVIEW
+  signals: DedupSignal[];
+  skipped_reason?: string;
+  formula: string;     // scoring algorithm version tag
+}
+
 export interface DedupCandidate {
   id: number;
   entity_type: 'book' | 'author';
@@ -4458,6 +4479,11 @@ export interface DedupCandidate {
   status: 'pending' | 'merged' | 'dismissed';
   created_at: string;
   updated_at: string;
+  // T016 extensions
+  band?: DedupBand;
+  formula_version?: string;
+  score?: number;
+  score_breakdown?: DedupScoreBreakdown;
 }
 
 export interface DedupCandidatesResponse {
@@ -4479,6 +4505,9 @@ export async function getDedupCandidates(params?: {
   min_similarity?: number;
   limit?: number;
   offset?: number;
+  // T016 extensions
+  band?: string;
+  include_breakdown?: boolean;
 }): Promise<DedupCandidatesResponse> {
   const qs = new URLSearchParams();
   if (params?.entity_type) qs.set('entity_type', params.entity_type);
@@ -4486,6 +4515,8 @@ export async function getDedupCandidates(params?: {
   if (params?.layer) qs.set('layer', params.layer);
   if (params?.min_similarity != null)
     qs.set('min_similarity', String(params.min_similarity));
+  if (params?.band) qs.set('band', params.band);
+  if (params?.include_breakdown) qs.set('include_breakdown', 'true');
   if (params?.limit != null) qs.set('limit', String(params.limit));
   if (params?.offset != null) qs.set('offset', String(params.offset));
   const url = qs.toString()
@@ -5301,4 +5332,75 @@ export async function getQuickQueries(): Promise<QuickQueryItem[]> {
   }
   const data = await response.json() as { queries: QuickQueryItem[] };
   return data.queries ?? [];
+}
+
+// --- T016: Unified Dedup API extensions ---
+
+// BookDetail returned by the breakdown endpoint (book + files).
+export interface DedupBookDetail {
+  id: string;
+  title: string;
+  author_id?: string | null;
+  author_name?: string;
+  series_id?: number | null;
+  series_name?: string;
+  format?: string;
+  duration?: number;
+  file_path?: string;
+  cover_url?: string;
+  files: Array<{
+    id: string;
+    file_path: string;
+    format?: string;
+    bitrate?: number;
+    file_size?: number;
+    duration?: number;
+  }>;
+}
+
+// Response shape for GET /api/v1/dedup/candidates/:id/breakdown.
+export interface DedupCandidateBreakdownResponse {
+  candidate: DedupCandidate;
+  book_a: DedupBookDetail | null;
+  book_b: DedupBookDetail | null;
+}
+
+// Fetch a single candidate with full score breakdown + both books' details.
+// Used by CandidateCompareDrawer to render the side-by-side comparison.
+export async function getDedupCandidateBreakdown(
+  id: number,
+  signal?: AbortSignal
+): Promise<DedupCandidateBreakdownResponse> {
+  const response = await fetch(`${API_BASE}/dedup/candidates/${id}/breakdown`, { signal });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch candidate breakdown');
+  }
+  const responseData = await response.json();
+  return responseData.data;
+}
+
+// Response shape for POST /api/v1/dedup/rescore.
+export interface DedupRescoreResult {
+  inspected: number;
+  skipped: number;
+  changed: number;
+  applied: boolean;
+  band_deltas: Record<string, number>; // e.g. {"HIGH→CERTAIN": 3}
+}
+
+// Re-run unified.ComposeScore over stored signal sets of all pending candidates.
+// Pass apply=false for a dry-run (returns counts without persisting).
+export async function rescoreDedupCandidates(
+  apply = false
+): Promise<DedupRescoreResult> {
+  const response = await fetch(`${API_BASE}/dedup/rescore`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apply }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to rescore dedup candidates');
+  }
+  const responseData = await response.json();
+  return responseData.data;
 }

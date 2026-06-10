@@ -1,10 +1,12 @@
 // file: web/src/components/FingerprintVisualsColumn.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: f1a2b3c4-d5e6-7890-abcd-ef1234567890
-// last-edited: 2026-05-19
+// last-edited: 2026-06-10
 
 import React from "react";
-import { Box, Tooltip } from "@mui/material";
+import { Box, IconButton, Tooltip } from "@mui/material";
+import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
+import { useNavigate } from "react-router-dom";
 
 interface FingerprintVisualProps {
   book: any; // Book object from API
@@ -67,6 +69,26 @@ export const FingerprintWaveform: React.FC<FingerprintVisualProps> = ({ book }) 
           />
         ))}
       </Box>
+    </Tooltip>
+  );
+};
+
+// CompareInDedupButton renders a small icon button that deep-links to the
+// unified dedup tab filtered to this book's candidates.
+// URL: /dedup?tab=unified&book=<book.id>  (tab param consumed by BookDedup)
+export const CompareInDedupButton: React.FC<FingerprintVisualProps> = ({ book }) => {
+  const navigate = useNavigate();
+  if (!book?.id) return null;
+  return (
+    <Tooltip title="Compare in Dedup — find candidates for this book">
+      <IconButton
+        size="small"
+        onClick={() => navigate(`/dedup?book=${encodeURIComponent(book.id)}`)}
+        aria-label="Compare in Dedup"
+        data-testid="compare-in-dedup-btn"
+      >
+        <CompareArrowsIcon fontSize="small" />
+      </IconButton>
     </Tooltip>
   );
 };
