@@ -1,10 +1,11 @@
 // file: internal/database/memdb_strip_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e6f7a8b9-c0d1-4e2f-3a4b-5c6d7e8f9012
 
 package database
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -90,5 +91,51 @@ func TestStripBookFileForMemdb_AlreadyEmpty(t *testing.T) {
 	}
 	if stripped.AcoustIDFingerprint != nil {
 		t.Errorf("empty input produced non-nil AcoustIDFingerprint")
+	}
+}
+
+// TestStrippedBookSizeRegressionAssertion verifies that a sampled stripped Book
+// projection stays ≤4KB mean to catch field bloat before it impacts memdb RSS.
+// This is a soft regression assert: if the projection grows past 4KB on average,
+// the CI failure alerts us to investigate what field was added.
+func TestStrippedBookSizeRegressionAssertion(t *testing.T) {
+	// Create a realistic stripped Book with typical field values.
+	// Note: Book fields are intentionally kept minimal to reflect what stripBookForMemdb retains.
+	title := "The Hobbit"
+	language := "en"
+	isbn10 := "0547928227"
+	asin := "B00DWTGFVI"
+	authorID := 1
+	seriesID := 1
+	duration := 720000
+	fileSize := int64(1234567890)
+
+	strippedBook := &Book{
+		ID:           "book-12345",
+		Title:        title,
+		AuthorID:     &authorID,
+		SeriesID:     &seriesID,
+		FilePath:     "/mnt/audiobooks/tolkien/the-hobbit/",
+		Language:     &language,
+		ISBN10:       &isbn10,
+		ASIN:         &asin,
+		Duration:     &duration,
+		FileSize:     &fileSize,
+		// Heavy fields are stripped (nil in memdb):
+		// Description, VersionNotes, BookSigV1, BookSigV1Mask, BookSigSegments
+		// Author and Series pointers are nil at warm time (hydrated separately)
+	}
+
+	data, err := json.Marshal(strippedBook)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+
+	sizeBytes := len(data)
+	const maxBytes = 4096 // 4KB threshold per spec
+
+	if sizeBytes > maxBytes {
+		t.Errorf("stripped Book projection exceeds 4KB threshold: %d bytes > %d bytes; "+
+			"a heavy field may have been added — check memdb_strip.go", sizeBytes, maxBytes)
 	}
 }

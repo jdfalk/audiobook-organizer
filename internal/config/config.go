@@ -160,6 +160,8 @@ type Config struct {
 	MinBookSizeBytes int64 `json:"min_book_size_bytes"`
 	// Log retention in days (0 = keep forever)
 	LogRetentionDays int `json:"log_retention_days"`
+	// Operation log retention in days (0 = keep forever; default 90)
+	OperationLogRetentionDays int `json:"operation_log_retention_days"`
 	// Activity log retention (separate from operation log retention)
 	ActivityLogRetentionChangeDays int `json:"activity_log_retention_change_days"` // default 90
 	ActivityLogRetentionDebugDays  int `json:"activity_log_retention_debug_days"`  // default 30

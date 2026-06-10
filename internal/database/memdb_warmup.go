@@ -1,5 +1,5 @@
 // file: internal/database/memdb_warmup.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-mema-aaaa-aaaa-000000000004
 
 package database
@@ -244,6 +244,12 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 			"skipped_by_table", skips)
 	}
 
+	// Emit sampled memdb size telemetry post-warmup.
+	if err := emitMemdbSizeTelemetry(ctx, m, counts); err != nil {
+		slog.Warn("memdb warmup: telemetry emission failed", "error", err)
+		// Don't fail warmup for telemetry errors — they're observability only.
+	}
+
 	return nil
 }
 
@@ -253,6 +259,98 @@ func sumInts(m map[string]int) int {
 		total += v
 	}
 	return total
+}
+
+// emitMemdbSizeTelemetry samples N=100 random rows per memdb table, marshals them,
+// extrapolates total bytes, and logs the per-table size estimates at INFO level.
+func emitMemdbSizeTelemetry(ctx context.Context, m *MemStore, counts map[string]int) error {
+	const sampleSize = 100
+
+	type memdbtableInfo struct {
+		name       string
+		indexName  string
+		maxSamples int
+	}
+
+	tables := []memdbtableInfo{
+		{memTableBooks, memIdxID, counts[memTableBooks]},
+		{memTableAuthors, memIdxID, counts[memTableAuthors]},
+		{memTableSeries, memIdxID, counts[memTableSeries]},
+		{memTableBookFiles, memIdxID, counts[memTableBookFiles]},
+		{memTableBookAuthors, memIdxID, counts[memTableBookAuthors]},
+		{memTableBookNarrators, memIdxID, counts[memTableBookNarrators]},
+		{memTableNarrators, memIdxID, counts[memTableNarrators]},
+		{memTableImportPaths, memIdxID, counts[memTableImportPaths]},
+		{memTableAuthorAliases, memIdxID, counts[memTableAuthorAliases]},
+		{memTableBlockedHashes, memIdxID, counts[memTableBlockedHashes]},
+	}
+
+	for _, tbl := range tables {
+		// Skip empty tables.
+		if tbl.maxSamples == 0 {
+			continue
+		}
+
+		// Sample up to sampleSize rows.
+		actualSamples := sampleSize
+		if tbl.maxSamples < sampleSize {
+			actualSamples = tbl.maxSamples
+		}
+
+		// Collect sampled rows.
+		var totalBytes int64
+		sampled := 0
+		txn := m.db.Txn(false)
+		it, err := txn.Get(tbl.name, tbl.indexName)
+		if err != nil {
+			txn.Abort()
+			slog.Warn("memdb telemetry: failed to query table",
+				"table", tbl.name, "error", err)
+			continue
+		}
+
+		// Iterate all rows, randomly selecting actualSamples of them.
+		stride := tbl.maxSamples / actualSamples
+		if stride == 0 {
+			stride = 1
+		}
+		idx := 0
+
+		for row := it.Next(); row != nil; row = it.Next() {
+			if idx%stride == 0 {
+				data, err := json.Marshal(row)
+				if err != nil {
+					slog.Warn("memdb telemetry: marshal failed for table",
+						"table", tbl.name, "error", err)
+					continue
+				}
+				totalBytes += int64(len(data))
+				sampled++
+				if sampled >= actualSamples {
+					break
+				}
+			}
+			idx++
+		}
+		txn.Abort()
+
+		// Extrapolate total bytes from sample.
+		var estimatedTotalBytes int64
+		if sampled > 0 {
+			avgBytes := totalBytes / int64(sampled)
+			estimatedTotalBytes = avgBytes * int64(tbl.maxSamples)
+		}
+
+		slog.Info("memdb telemetry: table size",
+			"table", tbl.name,
+			"row_count", tbl.maxSamples,
+			"sampled_rows", sampled,
+			"sample_total_bytes", totalBytes,
+			"estimated_total_bytes", estimatedTotalBytes,
+		)
+	}
+
+	return nil
 }
 
 // warmIter iterates every key under a given prefix and invokes the callback.
