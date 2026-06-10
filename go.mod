@@ -11,7 +11,6 @@ require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/hashicorp/go-memdb v1.3.5
 	github.com/lithammer/fuzzysearch v1.1.8
-	github.com/mattn/go-sqlite3 v1.14.44
 	github.com/nutsdb/nutsdb v1.1.0
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/openai/openai-go/v3 v3.39.0

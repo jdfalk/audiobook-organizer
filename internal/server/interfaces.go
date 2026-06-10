@@ -1,5 +1,5 @@
 // file: internal/server/interfaces.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9a8b7c6d-5e4f-3a2b-1c0d-efaebdacbbaa
 // last-edited: 2026-05-04
 
@@ -60,12 +60,12 @@ type metadataHandlerStore interface {
 	database.BookVersionStore
 }
 
-// Compile-time assertions verify that database.SQLiteStore satisfies
+// Compile-time assertions verify that database.PebbleStore satisfies
 // all narrow handler interfaces. If these fail, the Store interface
 // has changed and these narrow interfaces need updating.
 var (
-	_ bookHandlerStore     = (*database.SQLiteStore)(nil)
-	_ userHandlerStore     = (*database.SQLiteStore)(nil)
-	_ playlistHandlerStore = (*database.SQLiteStore)(nil)
-	_ metadataHandlerStore = (*database.SQLiteStore)(nil)
+	_ bookHandlerStore     = (*database.PebbleStore)(nil)
+	_ userHandlerStore     = (*database.PebbleStore)(nil)
+	_ playlistHandlerStore = (*database.PebbleStore)(nil)
+	_ metadataHandlerStore = (*database.PebbleStore)(nil)
 )

@@ -1,5 +1,5 @@
 // file: internal/database/memdb_reads.go
-// version: 1.1.0
+// version: 1.3.0
 // guid: a1b2c3d4-mema-aaaa-aaaa-000000000006
 
 package database
@@ -105,21 +105,43 @@ func (m *MemStore) GetAllAuthorAliases() ([]AuthorAlias, error) {
 // hit PebbleStore.GetAllWorks_Pebble directly via the routing in
 // PebbleStore.GetAllWorks.
 
-// CountFiles returns the total number of non-missing BookFile rows.
+// CountFiles returns the total number of audio files across all primary,
+// non-deleted books. Books with no BookFile records count as 1 each —
+// matching the Pebble scan behaviour in PebbleStore.CountFiles.
 func (m *MemStore) CountFiles() (int, error) {
 	txn := m.db.Txn(false)
 	defer txn.Abort()
 
-	// Use the Missing index to scan only non-missing files.
-	iter, err := txn.Get(memTableBookFiles, memIdxMissing, false)
+	// Count non-missing book files per book.
+	fileIter, err := txn.Get(memTableBookFiles, memIdxMissing, false)
 	if err != nil {
 		return 0, fmt.Errorf("memdb book_files count: %w", err)
 	}
-	count := 0
-	for obj := iter.Next(); obj != nil; obj = iter.Next() {
-		count++
+	bookFileCounts := make(map[string]int)
+	for obj := fileIter.Next(); obj != nil; obj = fileIter.Next() {
+		f := obj.(*BookFile)
+		bookFileCounts[f.BookID]++
 	}
-	return count, nil
+
+	// Iterate primary, non-deleted books. For each, use its file count or 1.
+	bookIter, err := txn.Get(memTableBooks, memIdxIsPrimaryVersion, true)
+	if err != nil {
+		return 0, fmt.Errorf("memdb books scan: %w", err)
+	}
+	total := 0
+	for obj := bookIter.Next(); obj != nil; obj = bookIter.Next() {
+		b := obj.(*Book)
+		if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
+			continue
+		}
+		n := bookFileCounts[b.ID]
+		if n == 0 {
+			total++ // no file records → count the book as 1 file
+		} else {
+			total += n
+		}
+	}
+	return total, nil
 }
 
 // GetAllSeriesBookCounts returns map[seriesID] → count of primary, not-deleted
@@ -148,18 +170,49 @@ func (m *MemStore) GetAllSeriesBookCounts() (map[int]int, error) {
 }
 
 // GetAllAuthorBookCounts returns map[authorID] → count of primary, not-deleted
-// books for which the author is the primary AuthorID on the Book row.
+// books for which the author appears (either via the book_authors junction table
+// or the legacy AuthorID field on the Book row).
 func (m *MemStore) GetAllAuthorBookCounts() (map[int]int, error) {
 	txn := m.db.Txn(false)
 	defer txn.Abort()
 
 	out := make(map[int]int)
-	iter, err := txn.Get(memTableBooks, memIdxIsPrimaryVersion, true)
+
+	// Pass 1: scan book_authors junction table (multi-author support).
+	// Track which bookIDs have junction entries to avoid double-counting legacy.
+	bookHasJunction := make(map[string]bool)
+	baIter, err := txn.Get(memTableBookAuthors, memIdxID)
+	if err != nil {
+		return nil, fmt.Errorf("memdb book_authors scan: %w", err)
+	}
+	for obj := baIter.Next(); obj != nil; obj = baIter.Next() {
+		ba := obj.(*BookAuthor)
+		// Check that the book is primary and not deleted.
+		raw, bErr := txn.First(memTableBooks, memIdxID, ba.BookID)
+		if bErr != nil || raw == nil {
+			continue
+		}
+		b := raw.(*Book)
+		if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
+			continue
+		}
+		if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
+			continue
+		}
+		bookHasJunction[ba.BookID] = true
+		out[ba.AuthorID]++
+	}
+
+	// Pass 2: scan books for the legacy AuthorID field (books without junction entries).
+	bIter, err := txn.Get(memTableBooks, memIdxIsPrimaryVersion, true)
 	if err != nil {
 		return nil, fmt.Errorf("memdb books scan: %w", err)
 	}
-	for obj := iter.Next(); obj != nil; obj = iter.Next() {
+	for obj := bIter.Next(); obj != nil; obj = bIter.Next() {
 		b := obj.(*Book)
+		if bookHasJunction[b.ID] {
+			continue // already counted via junction
+		}
 		if b.AuthorID == nil {
 			continue
 		}
@@ -198,13 +251,17 @@ func (m *MemStore) GetAllWorkBookCounts() (map[string]int, error) {
 }
 
 // GetAllSeriesFileCounts returns map[seriesID] → count of non-missing
-// book_files that belong to a primary book in that series.
+// book_files that belong to a primary book in that series. Books with no
+// files count as 1 (to ensure series with only unscanned books have a
+// non-zero file count).
 func (m *MemStore) GetAllSeriesFileCounts() (map[int]int, error) {
 	txn := m.db.Txn(false)
 	defer txn.Abort()
 
 	// Pass 1: build bookID → seriesID for primary books only.
+	// Also initialise every book's count to 0 so we can detect zero-file books.
 	bookToSeries := make(map[string]int, 0)
+	bookFileCounts := make(map[string]int, 0)
 	bIter, err := txn.Get(memTableBooks, memIdxIsPrimaryVersion, true)
 	if err != nil {
 		return nil, fmt.Errorf("memdb books scan: %w", err)
@@ -218,30 +275,44 @@ func (m *MemStore) GetAllSeriesFileCounts() (map[int]int, error) {
 			continue
 		}
 		bookToSeries[b.ID] = *b.SeriesID
+		bookFileCounts[b.ID] = 0
 	}
 
 	// Pass 2: count non-missing files for those books.
-	out := make(map[int]int)
 	fIter, err := txn.Get(memTableBookFiles, memIdxMissing, false)
 	if err != nil {
 		return nil, fmt.Errorf("memdb book_files scan: %w", err)
 	}
 	for obj := fIter.Next(); obj != nil; obj = fIter.Next() {
 		bf := obj.(*BookFile)
-		if seriesID, ok := bookToSeries[bf.BookID]; ok {
-			out[seriesID]++
+		if _, ok := bookToSeries[bf.BookID]; ok {
+			bookFileCounts[bf.BookID]++
 		}
+	}
+
+	// Pass 3: aggregate to series, using max(count, 1) per book.
+	out := make(map[int]int)
+	for bookID, seriesID := range bookToSeries {
+		n := bookFileCounts[bookID]
+		if n == 0 {
+			n = 1
+		}
+		out[seriesID] += n
 	}
 	return out, nil
 }
 
 // GetAllAuthorFileCounts returns map[authorID] → count of non-missing
-// book_files belonging to primary books whose primary AuthorID matches.
+// book_files belonging to primary books for each author. Books with no
+// files count as 1. Looks up both the legacy AuthorID field and the
+// book_authors junction table.
 func (m *MemStore) GetAllAuthorFileCounts() (map[int]int, error) {
 	txn := m.db.Txn(false)
 	defer txn.Abort()
 
+	// bookToAuthor: bookID → authorID (from legacy field, primary only).
 	bookToAuthor := make(map[string]int, 0)
+	bookFileCounts := make(map[string]int, 0)
 	bIter, err := txn.Get(memTableBooks, memIdxIsPrimaryVersion, true)
 	if err != nil {
 		return nil, fmt.Errorf("memdb books scan: %w", err)
@@ -255,18 +326,29 @@ func (m *MemStore) GetAllAuthorFileCounts() (map[int]int, error) {
 			continue
 		}
 		bookToAuthor[b.ID] = *b.AuthorID
+		bookFileCounts[b.ID] = 0
 	}
 
-	out := make(map[int]int)
+	// Count actual non-missing files.
 	fIter, err := txn.Get(memTableBookFiles, memIdxMissing, false)
 	if err != nil {
 		return nil, fmt.Errorf("memdb book_files scan: %w", err)
 	}
 	for obj := fIter.Next(); obj != nil; obj = fIter.Next() {
 		bf := obj.(*BookFile)
-		if authorID, ok := bookToAuthor[bf.BookID]; ok {
-			out[authorID]++
+		if _, ok := bookToAuthor[bf.BookID]; ok {
+			bookFileCounts[bf.BookID]++
 		}
+	}
+
+	// Aggregate with min-1 per book.
+	out := make(map[int]int)
+	for bookID, authorID := range bookToAuthor {
+		n := bookFileCounts[bookID]
+		if n == 0 {
+			n = 1
+		}
+		out[authorID] += n
 	}
 	return out, nil
 }
@@ -320,21 +402,44 @@ func (m *MemStore) GetBooksBySeriesID(seriesID int, limit, offset int) ([]Book, 
 }
 
 // GetBooksByAuthorID returns primary, not-deleted books for an author with
-// pagination. No default sort — matches the Pebble path (which returned
-// books in key/ULID order) and avoids per-call sort cost. Callers that
-// need a specific order should sort the slice themselves.
+// pagination. Checks both the book_authors junction table and the legacy
+// AuthorID field on the Book row. No default sort — matches the Pebble path
+// (which returned books in key/ULID order) and avoids per-call sort cost.
+// Callers that need a specific order should sort the slice themselves.
 func (m *MemStore) GetBooksByAuthorID(authorID int, limit, offset int) ([]Book, error) {
 	txn := m.db.Txn(false)
 	defer txn.Abort()
 
-	iter, err := txn.Get(memTableBooks, memIdxAuthorID, authorID)
+	bookIDSet := make(map[string]struct{})
+
+	// Pass 1: collect bookIDs from book_authors junction table.
+	baIter, err := txn.Get(memTableBookAuthors, memIdxAuthorID, authorID)
+	if err != nil {
+		return nil, fmt.Errorf("memdb book_authors by author: %w", err)
+	}
+	for obj := baIter.Next(); obj != nil; obj = baIter.Next() {
+		ba := obj.(*BookAuthor)
+		bookIDSet[ba.BookID] = struct{}{}
+	}
+
+	// Pass 2: collect bookIDs from legacy AuthorID field.
+	legacyIter, err := txn.Get(memTableBooks, memIdxAuthorID, authorID)
 	if err != nil {
 		return nil, fmt.Errorf("memdb books by author: %w", err)
 	}
-
-	all := make([]Book, 0, 32)
-	for obj := iter.Next(); obj != nil; obj = iter.Next() {
+	for obj := legacyIter.Next(); obj != nil; obj = legacyIter.Next() {
 		b := obj.(*Book)
+		bookIDSet[b.ID] = struct{}{}
+	}
+
+	// Pass 3: fetch the actual book objects for all collected IDs.
+	all := make([]Book, 0, len(bookIDSet))
+	for bookID := range bookIDSet {
+		raw, bErr := txn.First(memTableBooks, memIdxID, bookID)
+		if bErr != nil || raw == nil {
+			continue
+		}
+		b := raw.(*Book)
 		if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
 			continue
 		}
@@ -343,6 +448,7 @@ func (m *MemStore) GetBooksByAuthorID(authorID int, limit, offset int) ([]Book, 
 		}
 		all = append(all, *b)
 	}
+
 	return paginate(all, limit, offset), nil
 }
 

@@ -1,6 +1,9 @@
 // file: internal/server/server_narrators_fieldstates_test.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: a1b2c3d4-e5f6-7890-abcd-narrator0test
+// last-edited: 2026-06-10
+
+// NOTE(fable5 T022): SQLiteStore type assertions replaced with Store interface calls.
 
 package server
 
@@ -34,7 +37,7 @@ func TestListNarrators(t *testing.T) {
 	assert.Empty(t, wrapper.Data)
 
 	// Add a narrator and re-check
-	store := database.GetGlobalStore().(*database.SQLiteStore)
+	store := database.GetGlobalStore()
 	_, err = store.CreateNarrator("Morgan Freeman")
 	require.NoError(t, err)
 	_, err = store.CreateNarrator("Stephen Fry")
@@ -67,7 +70,7 @@ func TestCountNarrators(t *testing.T) {
 	assert.Equal(t, float64(0), resp["count"])
 
 	// Add narrators
-	store := database.GetGlobalStore().(*database.SQLiteStore)
+	store := database.GetGlobalStore()
 	_, err = store.CreateNarrator("Narrator A")
 	require.NoError(t, err)
 	_, err = store.CreateNarrator("Narrator B")
@@ -109,7 +112,7 @@ func TestListAudiobookNarrators(t *testing.T) {
 	assert.Empty(t, wrapper.Data)
 
 	// Create narrator and assign to book
-	store := database.GetGlobalStore().(*database.SQLiteStore)
+	store := database.GetGlobalStore()
 	narrator, err := store.CreateNarrator("Test Narrator")
 	require.NoError(t, err)
 
@@ -140,7 +143,7 @@ func TestSetAudiobookNarrators(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	store := database.GetGlobalStore().(*database.SQLiteStore)
+	store := database.GetGlobalStore()
 	narrator, err := store.CreateNarrator("PUT Narrator")
 	require.NoError(t, err)
 

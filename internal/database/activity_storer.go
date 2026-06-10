@@ -1,5 +1,5 @@
 // file: internal/database/activity_storer.go
-// version: 1.0.2
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-0001-abcd-000000000001
 
 package database
@@ -10,7 +10,7 @@ import (
 )
 
 // ActivityStorer is the minimal interface required by activity.Service and
-// activity.Writer. Both ActivityStore (SQLite) and NutsActivityStore satisfy it.
+// activity.Writer. NutsActivityStore is the production implementation.
 type ActivityStorer interface {
 	Record(ActivityEntry) (int64, error)
 	Query(ActivityFilter) ([]ActivityEntry, int, error)
@@ -25,7 +25,7 @@ type ActivityStorer interface {
 }
 
 // MetricsStorer is the minimal interface required by server cache handlers.
-// Both MetricsStore (SQLite) and NutsMetricsStore satisfy it.
+// NutsMetricsStore is the production implementation.
 type MetricsStorer interface {
 	RecordCacheStatsSnapshots([]CacheStatsSnapshot) error
 	GetCacheStatsHistory(cacheName string, since time.Time, limit int) ([]CacheStatsSnapshot, error)

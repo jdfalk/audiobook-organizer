@@ -1,6 +1,9 @@
 // file: internal/ai/aijobs/integration_test.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: 69ad37a4-c90e-4dc4-92a5-155b51f85263
+// last-edited: 2026-06-10
+
+// NOTE(fable5 T022): Ported from NewSQLiteStore to NewPebbleStore.
 
 package aijobs
 
@@ -18,7 +21,7 @@ import (
 // Submit → (mock batch completes) → Dispatch → callback applies results →
 // ai_jobs row is marked completed.
 func TestIntegration_SubmitDispatchRoundTrip(t *testing.T) {
-	store, err := database.NewSQLiteStore(":memory:")
+	store, err := database.NewPebbleStore(t.TempDir())
 	require.NoError(t, err)
 	defer store.Close()
 	require.NoError(t, database.RunMigrations(store))
@@ -65,7 +68,7 @@ func TestIntegration_SubmitDispatchRoundTrip(t *testing.T) {
 // TestIntegration_SubmitFailureMarksRowFailed verifies that an upload
 // or create error during Submit leaves the ai_jobs row in "failed" state.
 func TestIntegration_SubmitFailureMarksRowFailed(t *testing.T) {
-	store, err := database.NewSQLiteStore(":memory:")
+	store, err := database.NewPebbleStore(t.TempDir())
 	require.NoError(t, err)
 	defer store.Close()
 	require.NoError(t, database.RunMigrations(store))

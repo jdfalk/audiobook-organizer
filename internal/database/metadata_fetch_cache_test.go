@@ -1,5 +1,5 @@
 // file: internal/database/metadata_fetch_cache_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 6f5e4d3c-2b1a-0f9e-8d7c-6b5a4f3e2d1c
 
 package database
@@ -16,9 +16,10 @@ import (
 // metadata fetch cache tests. The cache only needs the raw
 // kv_store table (created lazily by SetRaw/GetRaw), so we
 // don't need to run migrations.
-func newCacheTestStore(t *testing.T) *SQLiteStore {
+func newCacheTestStore(t *testing.T) *PebbleStore {
 	t.Helper()
-	store, err := NewSQLiteStore(":memory:")
+	dbPath := t.TempDir()
+	store, err := NewPebbleStore(dbPath)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 	return store

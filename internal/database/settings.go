@@ -1,5 +1,5 @@
 // file: internal/database/settings.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 8a7b6c5d-4e3f-2a1b-0c9d-8e7f6a5b4c3d
 
 package database
@@ -8,13 +8,11 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -273,106 +271,10 @@ func (s *PebbleStore) DeleteSetting(key string) error {
 }
 
 // SQLite implementation
-func (s *SQLiteStore) GetSetting(key string) (*Setting, error) {
-	var setting Setting
-	var isSecret any
 
-	err := s.db.QueryRow(`
-		SELECT key, value, type, is_secret
-		FROM settings
-		WHERE key = ?
-	`, key).Scan(&setting.Key, &setting.Value, &setting.Type, &isSecret)
 
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("setting not found: %s: %w", key, ErrSettingNotFound)
-		}
-		return nil, err
-	}
 
-	setting.IsSecret = parseSQLiteBool(isSecret)
-	return &setting, nil
-}
 
-func (s *SQLiteStore) SetSetting(key, value, typ string, isSecret bool) error {
-	// Encrypt if secret
-	storedValue := value
-	if isSecret && value != "" {
-		encrypted, err := EncryptValue(value)
-		if err != nil {
-			return fmt.Errorf("encryption failed: %w", err)
-		}
-		storedValue = encrypted
-	}
-
-	isSecretInt := 0
-	if isSecret {
-		isSecretInt = 1
-	}
-
-	_, err := s.db.Exec(`
-		INSERT INTO settings (key, value, type, is_secret, updated_at)
-		VALUES (?, ?, ?, ?, datetime('now'))
-		ON CONFLICT(key) DO UPDATE SET
-			value = excluded.value,
-			type = excluded.type,
-			is_secret = excluded.is_secret,
-			updated_at = excluded.updated_at
-	`, key, storedValue, typ, isSecretInt)
-
-	return err
-}
-
-func (s *SQLiteStore) GetAllSettings() ([]Setting, error) {
-	rows, err := s.db.Query(`
-		SELECT key, value, type, is_secret
-		FROM settings
-		ORDER BY key
-	`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var settings []Setting
-	for rows.Next() {
-		var setting Setting
-		var isSecret any
-
-		if err := rows.Scan(&setting.Key, &setting.Value, &setting.Type, &isSecret); err != nil {
-			slog.Warn("Failed to scan setting row", "err", err)
-			continue
-		}
-
-		setting.IsSecret = parseSQLiteBool(isSecret)
-
-		settings = append(settings, setting)
-	}
-
-	return settings, rows.Err()
-}
-
-// parseSQLiteBool handles SQLite's loose boolean typing — values can be
-// int64(0/1), bool, or string("true"/"false"/"0"/"1").
-func parseSQLiteBool(v any) bool {
-	switch val := v.(type) {
-	case int64:
-		return val == 1
-	case int:
-		return val == 1
-	case bool:
-		return val
-	case string:
-		return val == "1" || val == "true"
-	default:
-		return false
-	}
-}
-
-func (s *SQLiteStore) DeleteSetting(key string) error {
-	_, err := s.db.Exec("DELETE FROM settings WHERE key = ?", key)
-	return err
-}
 
 // Helper functions to get decrypted setting value from stores
 func GetDecryptedSetting(store Store, key string) (string, error) {

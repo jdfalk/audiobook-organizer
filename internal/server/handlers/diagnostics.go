@@ -1,7 +1,7 @@
 // file: internal/server/handlers/diagnostics.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 14e70c44-73ca-456a-bc67-8dc6ba6e5736
-// last-edited: 2026-06-03
+// last-edited: 2026-06-10
 
 // DiagnosticsHandler hosts the diagnostics HTTP endpoints extracted from the
 // server package: ZIP export start/download, AI batch submit + results, applying
@@ -606,24 +606,8 @@ func (h *DiagnosticsHandler) GetDBHealth(c *gin.Context) {
 
 	resp := dbHealthResponse{}
 
-	// Main store stats — branch on concrete type.
-	switch st := store.(type) {
-	case *database.SQLiteStore:
-		tables, err := st.TableRowCounts()
-		if err != nil {
-			slog.Warn("db-health sqlite table counts", "err", err)
-		}
-		resp.SQLite = &dbHealthSQLite{
-			Tables:    tables,
-			SizeBytes: st.SQLitePageSizeBytes(),
-		}
-		prefixes, pErr := st.GetBookPathPrefixes(20)
-		if pErr != nil {
-			slog.Warn("db-health book path prefixes", "pErr", pErr)
-		} else {
-			resp.BookPathPrefixes = prefixes
-		}
-	case *database.PebbleStore:
+	// Main store stats — PebbleDB only since fable5 T022.
+	if st, ok := store.(*database.PebbleStore); ok {
 		keyCount, sizeBytes, err := st.KeyCount()
 		if err != nil {
 			slog.Warn("db-health pebble key count", "err", err)

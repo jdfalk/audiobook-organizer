@@ -1,7 +1,9 @@
 // file: internal/server/activity_integration_test.go
-// version: 2.0.1
+// version: 3.0.0
 // guid: f8a3b2c1-d4e5-6f7a-8b9c-0d1e2f3a4b5c
-// last-edited: 2026-04-30
+// last-edited: 2026-06-10
+
+// NOTE(fable5 T022): Ported NewSQLiteActivityStore → NewNutsActivityStore.
 
 package server
 
@@ -11,7 +13,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -22,10 +23,9 @@ import (
 
 func TestActivity_Integration_RecordAndHTTPQuery(t *testing.T) {
 	// Setup: create temp store, service, and router
-	dbPath := filepath.Join(t.TempDir(), "activity_integ.db")
-	store, err := database.NewActivityStore(dbPath)
+	store, err := database.NewNutsActivityStore(t.TempDir())
 	if err != nil {
-		t.Fatalf("NewActivityStore: %v", err)
+		t.Fatalf("NewNutsActivityStore: %v", err)
 	}
 	defer store.Close()
 
@@ -143,10 +143,9 @@ func TestActivity_Integration_RecordAndHTTPQuery(t *testing.T) {
 }
 
 func TestActivity_Integration_TeeWriterCapture(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "tee_integ.db")
-	store, err := database.NewActivityStore(dbPath)
+	store, err := database.NewNutsActivityStore(t.TempDir())
 	if err != nil {
-		t.Fatalf("NewActivityStore: %v", err)
+		t.Fatalf("NewNutsActivityStore: %v", err)
 	}
 	defer store.Close()
 

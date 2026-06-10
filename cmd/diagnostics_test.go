@@ -1,6 +1,11 @@
 // file: cmd/diagnostics_test.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: 5480d7f7-4a6a-4b7f-9d16-6b589c8a3c0b
+// last-edited: 2026-06-10
+
+// NOTE(fable5 T022): Tests that used NewSQLiteStore have been ported to
+// PebbleStore. Tests that set DatabaseType="sqlite" now verify that
+// InitializeStore rejects SQLite with an error (it was removed in T022).
 
 package cmd
 
@@ -66,6 +71,7 @@ func TestRunDiagnosticsQueryErrors(t *testing.T) {
 		t.Fatal("expected error for invalid limit")
 	}
 
+	// SQLite is no longer supported; raw query with sqlite type should error.
 	config.AppConfig.DatabaseType = "sqlite"
 	if err := runDiagnosticsQuery(1, "book:", true); err == nil {
 		t.Fatal("expected error for raw query with non-pebble db")
@@ -79,10 +85,9 @@ func TestRunDiagnosticsQuerySuccess(t *testing.T) {
 	}()
 
 	tempDir := t.TempDir()
-	dbPath := filepath.Join(tempDir, "diag.db")
-	store, err := database.NewSQLiteStore(dbPath)
+	store, err := database.NewPebbleStore(tempDir)
 	if err != nil {
-		t.Fatalf("failed to create sqlite store: %v", err)
+		t.Fatalf("failed to create pebble store: %v", err)
 	}
 	_, err = store.CreateBook(&database.Book{
 		Title:    "Diag Book",
@@ -93,9 +98,8 @@ func TestRunDiagnosticsQuerySuccess(t *testing.T) {
 	}
 	_ = store.Close()
 
-	config.AppConfig.DatabaseType = "sqlite"
-	config.AppConfig.DatabasePath = dbPath
-	config.AppConfig.EnableSQLite = true
+	config.AppConfig.DatabaseType = "pebble"
+	config.AppConfig.DatabasePath = tempDir
 
 	if err := runDiagnosticsQuery(5, "book:", false); err != nil {
 		t.Fatalf("runDiagnosticsQuery failed: %v", err)
@@ -109,16 +113,14 @@ func TestRunDiagnosticsQueryNoBooks(t *testing.T) {
 	}()
 
 	tempDir := t.TempDir()
-	dbPath := filepath.Join(tempDir, "diag-empty.db")
-	store, err := database.NewSQLiteStore(dbPath)
+	store, err := database.NewPebbleStore(tempDir)
 	if err != nil {
-		t.Fatalf("failed to create sqlite store: %v", err)
+		t.Fatalf("failed to create pebble store: %v", err)
 	}
 	_ = store.Close()
 
-	config.AppConfig.DatabaseType = "sqlite"
-	config.AppConfig.DatabasePath = dbPath
-	config.AppConfig.EnableSQLite = true
+	config.AppConfig.DatabaseType = "pebble"
+	config.AppConfig.DatabasePath = tempDir
 
 	if err := runDiagnosticsQuery(5, "book:", false); err != nil {
 		t.Fatalf("runDiagnosticsQuery failed: %v", err)
@@ -132,10 +134,9 @@ func TestRunDiagnosticsQueryPrintsHashes(t *testing.T) {
 	}()
 
 	tempDir := t.TempDir()
-	dbPath := filepath.Join(tempDir, "diag-hashes.db")
-	store, err := database.NewSQLiteStore(dbPath)
+	store, err := database.NewPebbleStore(tempDir)
 	if err != nil {
-		t.Fatalf("failed to create sqlite store: %v", err)
+		t.Fatalf("failed to create pebble store: %v", err)
 	}
 	hash := "hash"
 	origHash := "orig"
@@ -152,9 +153,8 @@ func TestRunDiagnosticsQueryPrintsHashes(t *testing.T) {
 	}
 	_ = store.Close()
 
-	config.AppConfig.DatabaseType = "sqlite"
-	config.AppConfig.DatabasePath = dbPath
-	config.AppConfig.EnableSQLite = true
+	config.AppConfig.DatabaseType = "pebble"
+	config.AppConfig.DatabasePath = tempDir
 
 	if err := runDiagnosticsQuery(5, "book:", false); err != nil {
 		t.Fatalf("runDiagnosticsQuery failed: %v", err)
@@ -168,10 +168,9 @@ func TestRunCleanupInvalidBooksDryRun(t *testing.T) {
 	}()
 
 	tempDir := t.TempDir()
-	dbPath := filepath.Join(tempDir, "cleanup.db")
-	store, err := database.NewSQLiteStore(dbPath)
+	store, err := database.NewPebbleStore(tempDir)
 	if err != nil {
-		t.Fatalf("failed to create sqlite store: %v", err)
+		t.Fatalf("failed to create pebble store: %v", err)
 	}
 	_, err = store.CreateBook(&database.Book{
 		Title:    "Bad Book",
@@ -182,9 +181,8 @@ func TestRunCleanupInvalidBooksDryRun(t *testing.T) {
 	}
 	_ = store.Close()
 
-	config.AppConfig.DatabaseType = "sqlite"
-	config.AppConfig.DatabasePath = dbPath
-	config.AppConfig.EnableSQLite = true
+	config.AppConfig.DatabaseType = "pebble"
+	config.AppConfig.DatabasePath = tempDir
 
 	if err := runCleanupInvalidBooks(false, true); err != nil {
 		t.Fatalf("runCleanupInvalidBooks failed: %v", err)
@@ -198,10 +196,9 @@ func TestRunCleanupInvalidBooksPromptAbort(t *testing.T) {
 	}()
 
 	tempDir := t.TempDir()
-	dbPath := filepath.Join(tempDir, "cleanup-abort.db")
-	store, err := database.NewSQLiteStore(dbPath)
+	store, err := database.NewPebbleStore(tempDir)
 	if err != nil {
-		t.Fatalf("failed to create sqlite store: %v", err)
+		t.Fatalf("failed to create pebble store: %v", err)
 	}
 	_, err = store.CreateBook(&database.Book{
 		Title:    "Bad Book",
@@ -212,9 +209,8 @@ func TestRunCleanupInvalidBooksPromptAbort(t *testing.T) {
 	}
 	_ = store.Close()
 
-	config.AppConfig.DatabaseType = "sqlite"
-	config.AppConfig.DatabasePath = dbPath
-	config.AppConfig.EnableSQLite = true
+	config.AppConfig.DatabaseType = "pebble"
+	config.AppConfig.DatabasePath = tempDir
 
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -241,10 +237,9 @@ func TestRunCleanupInvalidBooksDelete(t *testing.T) {
 	}()
 
 	tempDir := t.TempDir()
-	dbPath := filepath.Join(tempDir, "cleanup-delete.db")
-	store, err := database.NewSQLiteStore(dbPath)
+	store, err := database.NewPebbleStore(tempDir)
 	if err != nil {
-		t.Fatalf("failed to create sqlite store: %v", err)
+		t.Fatalf("failed to create pebble store: %v", err)
 	}
 	_, err = store.CreateBook(&database.Book{
 		Title:    "Bad Book",
@@ -255,9 +250,8 @@ func TestRunCleanupInvalidBooksDelete(t *testing.T) {
 	}
 	_ = store.Close()
 
-	config.AppConfig.DatabaseType = "sqlite"
-	config.AppConfig.DatabasePath = dbPath
-	config.AppConfig.EnableSQLite = true
+	config.AppConfig.DatabaseType = "pebble"
+	config.AppConfig.DatabasePath = tempDir
 
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -311,7 +305,7 @@ func TestExecuteHelp(t *testing.T) {
 	}()
 
 	cfgFile = filepath.Join(tempDir, "config.yaml")
-	databasePath = filepath.Join(tempDir, "db.sqlite")
+	databasePath = filepath.Join(tempDir, "db.pebble")
 	playlistDir = filepath.Join(tempDir, "playlists")
 
 	rootCmd.SetArgs([]string{"--db", databasePath, "--playlists", playlistDir, "--help"})
@@ -395,10 +389,9 @@ func TestRunCleanupInvalidBooksForceMode(t *testing.T) {
 	}()
 
 	tempDir := t.TempDir()
-	dbPath := filepath.Join(tempDir, "cleanup-force.db")
-	store, err := database.NewSQLiteStore(dbPath)
+	store, err := database.NewPebbleStore(tempDir)
 	if err != nil {
-		t.Fatalf("failed to create sqlite store: %v", err)
+		t.Fatalf("failed to create pebble store: %v", err)
 	}
 	_, err = store.CreateBook(&database.Book{
 		Title:    "Bad Book",
@@ -409,9 +402,8 @@ func TestRunCleanupInvalidBooksForceMode(t *testing.T) {
 	}
 	_ = store.Close()
 
-	config.AppConfig.DatabaseType = "sqlite"
-	config.AppConfig.DatabasePath = dbPath
-	config.AppConfig.EnableSQLite = true
+	config.AppConfig.DatabaseType = "pebble"
+	config.AppConfig.DatabasePath = tempDir
 
 	// Test force mode (no prompt)
 	if err := runCleanupInvalidBooks(true, true); err != nil {

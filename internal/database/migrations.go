@@ -1,15 +1,13 @@
 // file: internal/database/migrations.go
-// version: 1.39.0
+// version: 1.40.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
-// last-edited: 2026-05-05
+// last-edited: 2026-06-10
 
 package database
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
-	"hash/crc32"
 	"log/slog"
 	"strings"
 	"time"
@@ -450,14 +448,6 @@ func RunMigrations(store Store) error {
 
 	slog.Info("all migrations completed", "version", pendingMigrations[len(pendingMigrations)-1].Version)
 
-	// After all migrations run, ensure optional extended columns exist on book_files.
-	// This is a no-op for fresh databases (columns already in CREATE TABLE) and adds
-	// missing columns to older databases via PRAGMA table_info + ALTER TABLE.
-	if sqliteStore, ok := store.(*SQLiteStore); ok {
-		if err := sqliteStore.ensureExtendedBookFileColumns(); err != nil {
-			return fmt.Errorf("ensureExtendedBookFileColumns: %w", err)
-		}
-	}
 	return nil
 }
 
@@ -544,101 +534,14 @@ func migration004Up(store Store) error {
 // migration005Up adds media info and version management fields to books table
 func migration005Up(store Store) error {
 	slog.Info("- Adding media info and version management fields to books table")
-
-	// Check if this is a SQLite store (we need direct SQL access for ALTER TABLE)
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		// For non-SQLite stores, these fields are handled by the store implementation
-		slog.Info("- Non-SQLite store detected, skipping SQL migration")
-		return nil
-	}
-
-	// Add media info fields
-	alterStatements := []string{
-		"ALTER TABLE books ADD COLUMN bitrate_kbps INTEGER",
-		"ALTER TABLE books ADD COLUMN codec TEXT",
-		"ALTER TABLE books ADD COLUMN sample_rate_hz INTEGER",
-		"ALTER TABLE books ADD COLUMN channels INTEGER",
-		"ALTER TABLE books ADD COLUMN bit_depth INTEGER",
-		"ALTER TABLE books ADD COLUMN quality TEXT",
-		// Add version management fields
-		"ALTER TABLE books ADD COLUMN is_primary_version BOOLEAN DEFAULT 1",
-		"ALTER TABLE books ADD COLUMN version_group_id TEXT",
-		"ALTER TABLE books ADD COLUMN version_notes TEXT",
-	}
-
-	for _, stmt := range alterStatements {
-		slog.Info("executing statement", "stmt", stmt)
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			// Check if column already exists (this is not an error)
-			if strings.Contains(err.Error(), "duplicate column name") {
-				slog.Info("- Column already exists, skipping")
-				continue
-			}
-			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
-		}
-	}
-
-	// Create indices for version management
-	indexStatements := []string{
-		"CREATE INDEX IF NOT EXISTS idx_books_version_group ON books(version_group_id)",
-		"CREATE INDEX IF NOT EXISTS idx_books_is_primary ON books(is_primary_version)",
-	}
-
-	for _, stmt := range indexStatements {
-		slog.Info("creating index", "stmt", stmt)
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			return fmt.Errorf("failed to create index: %w", err)
-		}
-	}
-
-	slog.Info("- Media info and version management fields added successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration006Up adds original and organized file hash tracking columns
 func migration006Up(store Store) error {
 	slog.Info("- Adding original/organized file hash columns to books table")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration")
-		return nil
-	}
-
-	alterStatements := []string{
-		"ALTER TABLE books ADD COLUMN original_file_hash TEXT",
-		"ALTER TABLE books ADD COLUMN organized_file_hash TEXT",
-	}
-
-	for _, stmt := range alterStatements {
-		slog.Info("executing statement", "stmt", stmt)
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			if strings.Contains(err.Error(), "duplicate column name") {
-				slog.Info("- Column already exists, skipping")
-				continue
-			}
-			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
-		}
-	}
-
-	indexStatements := []string{
-		"CREATE INDEX IF NOT EXISTS idx_books_original_hash ON books(original_file_hash)",
-		"CREATE INDEX IF NOT EXISTS idx_books_organized_hash ON books(organized_file_hash)",
-	}
-
-	for _, stmt := range indexStatements {
-		slog.Info("creating index", "stmt", stmt)
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			return fmt.Errorf("failed to create index: %w", err)
-		}
-	}
-
-	// Backfill original hash so future duplicate detection works immediately
-	if _, err := sqliteStore.db.Exec("UPDATE books SET original_file_hash = file_hash WHERE original_file_hash IS NULL AND file_hash IS NOT NULL"); err != nil {
-		return fmt.Errorf("failed to backfill original_file_hash: %w", err)
-	}
-
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -646,311 +549,54 @@ func migration006Up(store Store) error {
 func migration007Up(store Store) error {
 	slog.Info("- Renaming import paths to import paths")
 
-	switch s := store.(type) {
-	case *PebbleStore:
+	if s, ok := store.(*PebbleStore); ok {
 		if err := s.migrateImportPathKeys(); err != nil {
 			return fmt.Errorf("failed to migrate Pebble import path keys: %w", err)
 		}
-	case *SQLiteStore:
-		var tableName string
-		if err := s.db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name='library_folders'`).Scan(&tableName); err != nil {
-			if err == sql.ErrNoRows {
-				// Already renamed or never created.
-				return nil
-			}
-			return fmt.Errorf("failed to check legacy library_folders table: %w", err)
-		}
-
-		statements := []string{
-			"ALTER TABLE library_folders RENAME TO import_paths",
-			"DROP INDEX IF EXISTS idx_library_folders_path",
-			"CREATE INDEX IF NOT EXISTS idx_import_paths_path ON import_paths(path)",
-		}
-
-		for _, stmt := range statements {
-			slog.Info("executing statement", "stmt", stmt)
-			if _, err := s.db.Exec(stmt); err != nil {
-				return fmt.Errorf("failed to execute '%s': %w", stmt, err)
-			}
-		}
-	default:
-		slog.Info("- Unknown store type; skipping migration")
 	}
-
+	// SQLite branch removed (fable5 T022).
 	return nil
 }
 
 func migration008Up(store Store) error {
 	slog.Info("- Adding do_not_import table for hash blocklist")
-
-	switch s := store.(type) {
-	case *SQLiteStore:
-		statements := []string{
-			`CREATE TABLE IF NOT EXISTS do_not_import (
-				hash TEXT PRIMARY KEY NOT NULL,
-				reason TEXT NOT NULL,
-				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-			)`,
-			"CREATE INDEX IF NOT EXISTS idx_do_not_import_hash ON do_not_import(hash)",
-		}
-
-		for _, stmt := range statements {
-			slog.Info("executing statement", "stmt", stmt)
-			if _, err := s.db.Exec(stmt); err != nil {
-				return fmt.Errorf("failed to execute '%s': %w", stmt, err)
-			}
-		}
-	case *PebbleStore:
-		// For PebbleDB, we just need to log that the keyspace is available
-		// No schema changes needed for Pebble
-		slog.Info("- Pebble keyspace for do_not_import enabled")
-	default:
-		slog.Info("- Unknown store type; skipping migration")
-	}
-
+	// SQLite branch removed (fable5 T022); Pebble keyspace available by default.
+	slog.Info("- Pebble keyspace for do_not_import enabled")
 	return nil
 }
 
 // migration009Up adds state machine and lifecycle tracking fields to books table
 func migration009Up(store Store) error {
 	slog.Info("- Adding state machine and lifecycle fields to books table")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration")
-		return nil
-	}
-
-	alterStatements := []string{
-		"ALTER TABLE books ADD COLUMN library_state TEXT DEFAULT 'imported'",
-		"ALTER TABLE books ADD COLUMN quantity INTEGER DEFAULT 1",
-		"ALTER TABLE books ADD COLUMN marked_for_deletion BOOLEAN DEFAULT 0",
-		"ALTER TABLE books ADD COLUMN marked_for_deletion_at DATETIME",
-	}
-
-	for _, stmt := range alterStatements {
-		slog.Info("executing statement", "stmt", stmt)
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			if strings.Contains(err.Error(), "duplicate column name") {
-				slog.Info("- Column already exists, skipping")
-				continue
-			}
-			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
-		}
-	}
-
-	// Create index for state queries
-	indexStatements := []string{
-		"CREATE INDEX IF NOT EXISTS idx_books_library_state ON books(library_state)",
-		"CREATE INDEX IF NOT EXISTS idx_books_marked_for_deletion ON books(marked_for_deletion)",
-	}
-
-	for _, stmt := range indexStatements {
-		slog.Info("creating index", "stmt", stmt)
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			return fmt.Errorf("failed to create index: %w", err)
-		}
-	}
-
-	slog.Info("- State machine fields added successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration010Up adds metadata_states table for persisted metadata provenance
 func migration010Up(store Store) error {
 	slog.Info("- Adding metadata_states table for metadata provenance")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration")
-		return nil
-	}
-
-	statements := []string{
-		`CREATE TABLE IF NOT EXISTS metadata_states (
-			book_id TEXT NOT NULL,
-			field TEXT NOT NULL,
-			fetched_value TEXT,
-			override_value TEXT,
-			override_locked BOOLEAN NOT NULL DEFAULT 0,
-			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			PRIMARY KEY (book_id, field)
-		)`,
-		"CREATE INDEX IF NOT EXISTS idx_metadata_states_book ON metadata_states(book_id)",
-	}
-
-	for _, stmt := range statements {
-		slog.Info("executing statement", "stmt", stmt)
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			return fmt.Errorf("failed to execute '%s': %w", stmt, err)
-		}
-	}
-
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration011Up adds iTunes import metadata fields to books table.
 func migration011Up(store Store) error {
 	slog.Info("- Adding iTunes import metadata fields to books table")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration")
-		return nil
-	}
-
-	alterStatements := []string{
-		"ALTER TABLE books ADD COLUMN itunes_persistent_id TEXT",
-		"ALTER TABLE books ADD COLUMN itunes_date_added TIMESTAMP",
-		"ALTER TABLE books ADD COLUMN itunes_play_count INTEGER DEFAULT 0",
-		"ALTER TABLE books ADD COLUMN itunes_last_played TIMESTAMP",
-		"ALTER TABLE books ADD COLUMN itunes_rating INTEGER",
-		"ALTER TABLE books ADD COLUMN itunes_bookmark INTEGER",
-		"ALTER TABLE books ADD COLUMN itunes_import_source TEXT",
-	}
-
-	for _, stmt := range alterStatements {
-		slog.Info("executing statement", "stmt", stmt)
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			if strings.Contains(err.Error(), "duplicate column name") {
-				slog.Info("- Column already exists, skipping")
-				continue
-			}
-			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
-		}
-	}
-
-	indexStatements := []string{
-		"CREATE INDEX IF NOT EXISTS idx_books_itunes_persistent_id ON books(itunes_persistent_id)",
-	}
-
-	for _, stmt := range indexStatements {
-		slog.Info("creating index", "stmt", stmt)
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			return fmt.Errorf("failed to create index: %w", err)
-		}
-	}
-
-	slog.Info("- iTunes import metadata fields added successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration012Up adds created_at and updated_at timestamp columns to books table
 func migration012Up(store Store) error {
 	slog.Info("- Adding created_at and updated_at timestamp columns to books table")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration (PebbleDB handles timestamps natively)")
-		return nil
-	}
-
-	alterStatements := []string{
-		"ALTER TABLE books ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
-		"ALTER TABLE books ADD COLUMN updated_at DATETIME",
-	}
-
-	for _, stmt := range alterStatements {
-		slog.Info("executing statement", "stmt", stmt)
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			if strings.Contains(err.Error(), "duplicate column name") {
-				slog.Info("- Column already exists, skipping")
-				continue
-			}
-			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
-		}
-	}
-
-	slog.Info("- Timestamp columns added successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration013Up adds wanted state support and multi-path tracking
 func migration013Up(store Store) error {
 	slog.Info("- Adding wanted state support and multi-path tracking")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration")
-		return nil
-	}
-
-	// Step 1: Create audiobook_source_paths table for multi-path tracking
-	slog.Info("- Creating audiobook_source_paths table")
-	createTableSQL := `CREATE TABLE IF NOT EXISTS audiobook_source_paths (
-		id TEXT PRIMARY KEY,
-		audiobook_id TEXT NOT NULL,
-		source_path TEXT NOT NULL UNIQUE,
-		still_exists BOOLEAN DEFAULT 1,
-		added_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		last_verified DATETIME,
-		FOREIGN KEY (audiobook_id) REFERENCES books(id) ON DELETE CASCADE
-	)`
-	if _, err := sqliteStore.db.Exec(createTableSQL); err != nil {
-		return fmt.Errorf("failed to create audiobook_source_paths table: %w", err)
-	}
-
-	// Step 2: Create indices for source_paths table
-	indices := []string{
-		"CREATE INDEX IF NOT EXISTS idx_source_paths_audiobook ON audiobook_source_paths(audiobook_id)",
-		"CREATE INDEX IF NOT EXISTS idx_source_paths_path ON audiobook_source_paths(source_path)",
-	}
-	for _, idx := range indices {
-		slog.Info("- Creating index", "value", idx)
-		if _, err := sqliteStore.db.Exec(idx); err != nil {
-			return fmt.Errorf("failed to create index: %w", err)
-		}
-	}
-
-	// Step 3: Migrate existing file paths to source_paths table
-	slog.Info("- Migrating existing file paths to source_paths table")
-	migrateSQLQuery := `
-		INSERT INTO audiobook_source_paths (id, audiobook_id, source_path, added_at)
-		SELECT
-			lower(hex(randomblob(16))),
-			id,
-			file_path,
-			COALESCE(created_at, CURRENT_TIMESTAMP)
-		FROM books
-		WHERE file_path IS NOT NULL AND file_path != ''
-		ON CONFLICT(source_path) DO NOTHING
-	`
-	if _, err := sqliteStore.db.Exec(migrateSQLQuery); err != nil {
-		slog.Info("- Warning Could not migrate paths (may already exist)", "error", err)
-	}
-
-	// Step 4: Add wanted boolean to authors table
-	slog.Info("- Adding wanted field to authors table")
-	alterAuthors := "ALTER TABLE authors ADD COLUMN wanted BOOLEAN DEFAULT 0"
-	if _, err := sqliteStore.db.Exec(alterAuthors); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column name") {
-			return fmt.Errorf("failed to add wanted to authors: %w", err)
-		}
-		slog.Info("- Column already exists, skipping")
-	}
-
-	// Step 5: Add wanted boolean to series table
-	slog.Info("- Adding wanted field to series table")
-	alterSeries := "ALTER TABLE series ADD COLUMN wanted BOOLEAN DEFAULT 0"
-	if _, err := sqliteStore.db.Exec(alterSeries); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column name") {
-			return fmt.Errorf("failed to add wanted to series: %w", err)
-		}
-		slog.Info("- Column already exists, skipping")
-	}
-
-	// Step 6: Note about library_state - it already exists and supports 'wanted'
-	// The library_state column was added in migration 9 as TEXT with default 'imported'
-	// It can already store 'wanted', 'imported', 'organized', 'deleted' values
-	// No schema change needed, just update documentation
-	slog.Info("- library_state already supports 'wanted' value (no change needed)")
-
-	// Step 7: Note about file_path - we DON'T make it nullable to preserve data integrity
-	// Instead, wanted books will use a special sentinel value or empty string
-	// This prevents breaking existing queries and constraints
-	slog.Info("- file_path remains NOT NULL; wanted books will use empty string ''")
-
-	slog.Info("- Wanted state and multi-path tracking added successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -960,27 +606,7 @@ func migration013Up(store Store) error {
 // leftover-placeholder guard was added to expandPattern.
 func migration014Up(store Store) error {
 	slog.Info("Running migration 14 Flag books with corrupted organize paths")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		// PebbleDB: iterate all books and check FilePath
-		slog.Info("- Skipping SQLite-specific path; checking PebbleDB books")
-		return migration014UpPebble(store)
-	}
-
-	// SQLite path: UPDATE in bulk using LIKE '%{%}%' pattern
-	query := `
-		UPDATE books
-		SET library_state = 'needs_review'
-		WHERE file_path LIKE '%{%}%'
-		  AND library_state != 'needs_review'
-	`
-	result, err := sqliteStore.db.Exec(query)
-	if err != nil {
-		return fmt.Errorf("migration 14: failed to flag corrupted paths: %w", err)
-	}
-	rowsAffected, _ := result.RowsAffected()
-	slog.Info("- Flagged", "count", rowsAffected)
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -1012,273 +638,32 @@ func migration014UpPebble(store Store) error {
 // migration015Up adds book_authors junction table, cover_url, and narrators_json
 func migration015Up(store Store) error {
 	slog.Info("- Adding book_authors junction table, cover_url, and narrators_json")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration")
-		return nil
-	}
-
-	// Create book_authors junction table
-	createTableSQL := `CREATE TABLE IF NOT EXISTS book_authors (
-		book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-		author_id INTEGER NOT NULL REFERENCES authors(id),
-		role TEXT NOT NULL DEFAULT 'author',
-		position INTEGER NOT NULL DEFAULT 0,
-		PRIMARY KEY (book_id, author_id)
-	)`
-	if _, err := sqliteStore.db.Exec(createTableSQL); err != nil {
-		return fmt.Errorf("failed to create book_authors table: %w", err)
-	}
-
-	// Create indices
-	indices := []string{
-		"CREATE INDEX IF NOT EXISTS idx_book_authors_book ON book_authors(book_id)",
-		"CREATE INDEX IF NOT EXISTS idx_book_authors_author ON book_authors(author_id)",
-	}
-	for _, idx := range indices {
-		if _, err := sqliteStore.db.Exec(idx); err != nil {
-			return fmt.Errorf("failed to create index: %w", err)
-		}
-	}
-
-	// Migrate existing author_id data into junction table
-	migrateSQL := `INSERT OR IGNORE INTO book_authors (book_id, author_id, role, position)
-		SELECT id, author_id, 'author', 0 FROM books WHERE author_id IS NOT NULL`
-	result, err := sqliteStore.db.Exec(migrateSQL)
-	if err != nil {
-		return fmt.Errorf("failed to migrate existing author data: %w", err)
-	}
-	rowsAffected, _ := result.RowsAffected()
-	slog.Info("- Migrated", "count", rowsAffected)
-
-	// Add cover_url and narrators_json columns to books
-	alterStatements := []string{
-		"ALTER TABLE books ADD COLUMN cover_url TEXT",
-		"ALTER TABLE books ADD COLUMN narrators_json TEXT",
-	}
-	for _, stmt := range alterStatements {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			if strings.Contains(err.Error(), "duplicate column name") {
-				slog.Info("- Column already exists, skipping", "value", stmt)
-				continue
-			}
-			return fmt.Errorf("failed to execute '%s': %w", stmt, err)
-		}
-	}
-
-	slog.Info("- book_authors, cover_url, and narrators_json added successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration016Up creates users, sessions, book_segments, and playback tracking tables
 func migration016Up(store Store) error {
 	slog.Info("- Adding users, sessions, book_segments, and playback tables")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration")
-		return nil
-	}
-
-	tables := []string{
-		`CREATE TABLE IF NOT EXISTS users (
-			id TEXT PRIMARY KEY,
-			username TEXT UNIQUE NOT NULL,
-			email TEXT UNIQUE NOT NULL,
-			password_hash_algo TEXT NOT NULL DEFAULT 'bcrypt',
-			password_hash TEXT NOT NULL,
-			roles TEXT NOT NULL DEFAULT '["user"]',
-			status TEXT NOT NULL DEFAULT 'active',
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			version INTEGER NOT NULL DEFAULT 1
-		)`,
-		`CREATE TABLE IF NOT EXISTS sessions (
-			id TEXT PRIMARY KEY,
-			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			expires_at DATETIME NOT NULL,
-			ip TEXT NOT NULL DEFAULT '',
-			user_agent TEXT NOT NULL DEFAULT '',
-			revoked INTEGER NOT NULL DEFAULT 0,
-			version INTEGER NOT NULL DEFAULT 1
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)`,
-		`CREATE TABLE IF NOT EXISTS book_segments (
-			id TEXT PRIMARY KEY,
-			book_id INTEGER NOT NULL,
-			file_path TEXT NOT NULL,
-			format TEXT NOT NULL DEFAULT '',
-			size_bytes INTEGER NOT NULL DEFAULT 0,
-			duration_seconds INTEGER NOT NULL DEFAULT 0,
-			track_number INTEGER,
-			total_tracks INTEGER,
-			active INTEGER NOT NULL DEFAULT 1,
-			superseded_by TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			version INTEGER NOT NULL DEFAULT 1
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_book_segments_book ON book_segments(book_id)`,
-		`CREATE TABLE IF NOT EXISTS playback_events (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id TEXT NOT NULL,
-			book_id INTEGER NOT NULL,
-			segment_id TEXT NOT NULL DEFAULT '',
-			position_seconds INTEGER NOT NULL DEFAULT 0,
-			event_type TEXT NOT NULL DEFAULT 'progress',
-			play_speed REAL NOT NULL DEFAULT 1.0,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			version INTEGER NOT NULL DEFAULT 1
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_playback_events_user_book ON playback_events(user_id, book_id)`,
-		`CREATE TABLE IF NOT EXISTS playback_progress (
-			user_id TEXT NOT NULL,
-			book_id INTEGER NOT NULL,
-			segment_id TEXT NOT NULL DEFAULT '',
-			position_seconds INTEGER NOT NULL DEFAULT 0,
-			percent_complete REAL NOT NULL DEFAULT 0,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			version INTEGER NOT NULL DEFAULT 1,
-			PRIMARY KEY (user_id, book_id)
-		)`,
-		`CREATE TABLE IF NOT EXISTS book_stats (
-			book_id INTEGER PRIMARY KEY,
-			play_count INTEGER NOT NULL DEFAULT 0,
-			listen_seconds INTEGER NOT NULL DEFAULT 0,
-			version INTEGER NOT NULL DEFAULT 1
-		)`,
-		`CREATE TABLE IF NOT EXISTS user_stats (
-			user_id TEXT PRIMARY KEY,
-			listen_seconds INTEGER NOT NULL DEFAULT 0,
-			version INTEGER NOT NULL DEFAULT 1
-		)`,
-	}
-
-	for _, sql := range tables {
-		if _, err := sqliteStore.db.Exec(sql); err != nil {
-			return fmt.Errorf("failed to execute migration 16: %w", err)
-		}
-	}
-
-	slog.Info("- Users, sessions, book_segments, and playback tables created")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration017Up adds composite indexes for common queries and FTS5 full-text search
 func migration017Up(store Store) error {
 	slog.Info("- Adding composite indexes and FTS5 full-text search")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration")
-		return nil
-	}
-
-	// Composite indexes for common query patterns
-	indexes := []string{
-		"CREATE INDEX IF NOT EXISTS idx_books_notdeleted_title ON books(COALESCE(marked_for_deletion, 0), title)",
-		"CREATE INDEX IF NOT EXISTS idx_books_created_at ON books(created_at)",
-		"CREATE INDEX IF NOT EXISTS idx_books_author_title ON books(author_id, title)",
-	}
-
-	for _, stmt := range indexes {
-		slog.Info("creating index", "stmt", stmt)
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			return fmt.Errorf("failed to create index: %w", err)
-		}
-	}
-
-	// FTS5 virtual table for full-text search on book titles
-	ftsStatements := []string{
-		`CREATE VIRTUAL TABLE IF NOT EXISTS books_fts USING fts5(title, content=books, content_rowid=rowid)`,
-		`CREATE TRIGGER IF NOT EXISTS books_fts_insert AFTER INSERT ON books BEGIN
-			INSERT INTO books_fts(rowid, title) VALUES (new.rowid, new.title);
-		END`,
-		`CREATE TRIGGER IF NOT EXISTS books_fts_update AFTER UPDATE OF title ON books BEGIN
-			INSERT INTO books_fts(books_fts, rowid, title) VALUES('delete', old.rowid, old.title);
-			INSERT INTO books_fts(rowid, title) VALUES (new.rowid, new.title);
-		END`,
-		`CREATE TRIGGER IF NOT EXISTS books_fts_delete AFTER DELETE ON books BEGIN
-			INSERT INTO books_fts(books_fts, rowid, title) VALUES('delete', old.rowid, old.title);
-		END`,
-	}
-
-	// FTS5 may not be compiled into all SQLite builds; skip gracefully if unavailable
-	ftsAvailable := true
-	for _, stmt := range ftsStatements {
-		slog.Info("executing FTS5 setup", "stmt", stmt)
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			if strings.Contains(err.Error(), "no such module") {
-				slog.Info("- FTS5 module not available, skipping full-text search setup")
-				ftsAvailable = false
-				break
-			}
-			return fmt.Errorf("failed FTS5 setup: %w", err)
-		}
-	}
-
-	// Populate FTS index from existing data
-	if ftsAvailable {
-		slog.Info("- Populating FTS5 index from existing books")
-		if _, err := sqliteStore.db.Exec(`INSERT INTO books_fts(rowid, title) SELECT rowid, title FROM books`); err != nil {
-			slog.Info("- Warning FTS5 population failed (may already be populated)", "error", err)
-		}
-	}
-
-	slog.Info("- Composite indexes and FTS5 added successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 func migration018Up(store Store) error {
-	if sqlStore, ok := store.(*SQLiteStore); ok {
-		_, err := sqlStore.db.Exec(`
-			CREATE TABLE IF NOT EXISTS itunes_library_state (
-				path       TEXT PRIMARY KEY,
-				size       INTEGER NOT NULL,
-				mod_time   TEXT NOT NULL,
-				crc32      INTEGER NOT NULL,
-				updated_at TEXT NOT NULL
-			)
-		`)
-		return err
-	}
-	// PebbleDB: no schema needed, uses key-value pairs
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 func migration019Up(store Store) error {
 	slog.Info("- Adding metadata_changes_history table for undo support")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration")
-		return nil
-	}
-
-	statements := []string{
-		`CREATE TABLE IF NOT EXISTS metadata_changes_history (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			book_id TEXT NOT NULL,
-			field TEXT NOT NULL,
-			previous_value TEXT,
-			new_value TEXT,
-			change_type TEXT NOT NULL,
-			source TEXT,
-			changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)`,
-		"CREATE INDEX IF NOT EXISTS idx_metadata_changes_book ON metadata_changes_history(book_id)",
-		"CREATE INDEX IF NOT EXISTS idx_metadata_changes_book_field ON metadata_changes_history(book_id, field)",
-	}
-
-	for _, stmt := range statements {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			return fmt.Errorf("migration 19 failed: %w", err)
-		}
-	}
-
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -1311,74 +696,14 @@ func GetMigrationHistory(store Store) ([]MigrationRecord, error) {
 // migration020Up adds narrators and book_narrators tables
 func migration020Up(store Store) error {
 	slog.Info("- Adding narrators and book_narrators tables")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration")
-		return nil
-	}
-
-	stmts := []string{
-		`CREATE TABLE IF NOT EXISTS narrators (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL UNIQUE,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_narrators_name ON narrators(name)`,
-		`CREATE TABLE IF NOT EXISTS book_narrators (
-			book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
-			narrator_id INTEGER NOT NULL REFERENCES narrators(id),
-			role TEXT NOT NULL DEFAULT 'narrator',
-			position INTEGER NOT NULL DEFAULT 0,
-			PRIMARY KEY (book_id, narrator_id)
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_book_narrators_book ON book_narrators(book_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_book_narrators_narrator ON book_narrators(narrator_id)`,
-	}
-
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			return fmt.Errorf("failed to execute '%s': %w", stmt, err)
-		}
-	}
-
-	slog.Info("- narrators and book_narrators tables added successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration021Up adds the operation_summary_logs table for persistent operation history
 func migration021Up(store Store) error {
 	slog.Info("- Adding operation_summary_logs table for persistent operation history")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration")
-		return nil
-	}
-
-	stmts := []string{
-		`CREATE TABLE IF NOT EXISTS operation_summary_logs (
-			id TEXT PRIMARY KEY,
-			type TEXT NOT NULL,
-			status TEXT NOT NULL,
-			progress REAL NOT NULL DEFAULT 0,
-			result TEXT,
-			error TEXT,
-			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			completed_at DATETIME
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_op_summary_logs_status ON operation_summary_logs(status)`,
-		`CREATE INDEX IF NOT EXISTS idx_op_summary_logs_created ON operation_summary_logs(created_at)`,
-	}
-
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			return fmt.Errorf("failed to execute '%s': %w", stmt, err)
-		}
-	}
-
-	slog.Info("- operation_summary_logs table added successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -1398,188 +723,7 @@ func migration021Up(store Store) error {
 // where the author name actually contains " & ".
 func migration022Up(store Store) error {
 	slog.Info("- Running migration 22 backfill book_authors (&-split) and book_narrators")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration")
-		return nil
-	}
-
-	// -------------------------------------------------------------------------
-	// PART 1: Authors — split "&"-joined names
-	// -------------------------------------------------------------------------
-	authorRows, err := sqliteStore.db.Query(`
-		SELECT ba.book_id, ba.author_id, a.name
-		FROM book_authors ba
-		JOIN authors a ON a.id = ba.author_id
-		WHERE a.name LIKE '% & %'
-	`)
-	if err != nil {
-		return fmt.Errorf("migration 22: query joined authors: %w", err)
-	}
-
-	type joinedAuthor struct {
-		bookID   string
-		authorID int
-		name     string
-	}
-	var joinedAuthors []joinedAuthor
-	for authorRows.Next() {
-		var ja joinedAuthor
-		if err := authorRows.Scan(&ja.bookID, &ja.authorID, &ja.name); err != nil {
-			authorRows.Close()
-			return fmt.Errorf("migration 22: scan author row: %w", err)
-		}
-		joinedAuthors = append(joinedAuthors, ja)
-	}
-	authorRows.Close()
-	if err := authorRows.Err(); err != nil {
-		return fmt.Errorf("migration 22: author rows error: %w", err)
-	}
-
-	for _, ja := range joinedAuthors {
-		if !strings.Contains(ja.name, " & ") {
-			continue
-		}
-
-		parts := strings.Split(ja.name, " & ")
-		slog.Info("- Splitting author", "value", ja.name, "value", ja.bookID, "value", len(parts))
-
-		// Remove the old junction row for this book+author pair
-		if _, err := sqliteStore.db.Exec(`DELETE FROM book_authors WHERE book_id = ? AND author_id = ?`,
-			ja.bookID, ja.authorID); err != nil {
-			return fmt.Errorf("migration 22: delete old book_authors row: %w", err)
-		}
-
-		// Create/find each split author and insert into junction table
-		for i, rawName := range parts {
-			name := strings.TrimSpace(rawName)
-			if name == "" {
-				continue
-			}
-
-			var indivAuthorID int
-			var existingID int
-			err := sqliteStore.db.QueryRow(`SELECT id FROM authors WHERE LOWER(name) = LOWER(?)`, name).Scan(&existingID)
-			if err == sql.ErrNoRows {
-				result, createErr := sqliteStore.db.Exec(`INSERT INTO authors (name) VALUES (?)`, name)
-				if createErr != nil {
-					return fmt.Errorf("migration 22: create author %q: %w", name, createErr)
-				}
-				insertedID, _ := result.LastInsertId()
-				indivAuthorID = int(insertedID)
-				slog.Info("- Created new author", "value", name, "value", indivAuthorID)
-			} else if err != nil {
-				return fmt.Errorf("migration 22: lookup author %q: %w", name, err)
-			} else {
-				indivAuthorID = existingID
-				slog.Info("- Found existing author", "value", name, "value", indivAuthorID)
-			}
-
-			role := "author"
-			if i > 0 {
-				role = "co-author"
-			}
-
-			if _, err := sqliteStore.db.Exec(`
-				INSERT OR IGNORE INTO book_authors (book_id, author_id, role, position)
-				VALUES (?, ?, ?, ?)`,
-				ja.bookID, indivAuthorID, role, i); err != nil {
-				return fmt.Errorf("migration 22: insert book_authors for %q: %w", name, err)
-			}
-		}
-
-		// Update books.author_id to point to the primary (first) author
-		primaryName := strings.TrimSpace(parts[0])
-		if primaryName != "" {
-			var primaryID int
-			if err := sqliteStore.db.QueryRow(`SELECT id FROM authors WHERE LOWER(name) = LOWER(?)`, primaryName).Scan(&primaryID); err == nil {
-				if _, err := sqliteStore.db.Exec(`UPDATE books SET author_id = ? WHERE id = ?`, primaryID, ja.bookID); err != nil {
-					slog.Info("- Warning could not update books.author_id for book", "value", ja.bookID, "error", err)
-				}
-			}
-		}
-	}
-
-	// -------------------------------------------------------------------------
-	// PART 2: Narrators — backfill from books.narrator field
-	// -------------------------------------------------------------------------
-	narBookRows, err := sqliteStore.db.Query(`
-		SELECT b.id, b.narrator
-		FROM books b
-		WHERE b.narrator IS NOT NULL
-		  AND b.narrator != ''
-		  AND NOT EXISTS (
-			SELECT 1 FROM book_narrators bn WHERE bn.book_id = b.id
-		  )
-	`)
-	if err != nil {
-		return fmt.Errorf("migration 22: query narrator books: %w", err)
-	}
-
-	type narBook struct {
-		bookID   string
-		narrator string
-	}
-	var narBooks []narBook
-	for narBookRows.Next() {
-		var nb narBook
-		if err := narBookRows.Scan(&nb.bookID, &nb.narrator); err != nil {
-			narBookRows.Close()
-			return fmt.Errorf("migration 22: scan narrator book: %w", err)
-		}
-		narBooks = append(narBooks, nb)
-	}
-	narBookRows.Close()
-	if err := narBookRows.Err(); err != nil {
-		return fmt.Errorf("migration 22: narrator book rows error: %w", err)
-	}
-
-	slog.Info("- Found", "value", len(narBooks))
-
-	for _, nb := range narBooks {
-		parts := strings.Split(nb.narrator, " & ")
-		slog.Info("- Backfilling narrators for book", "value", nb.bookID, "value", nb.narrator, "value", len(parts))
-
-		for i, rawName := range parts {
-			name := strings.TrimSpace(rawName)
-			if name == "" {
-				continue
-			}
-
-			var narratorID int
-			var existingID int
-			err := sqliteStore.db.QueryRow(`SELECT id FROM narrators WHERE LOWER(name) = LOWER(?)`, name).Scan(&existingID)
-			if err == sql.ErrNoRows {
-				result, createErr := sqliteStore.db.Exec(`INSERT INTO narrators (name) VALUES (?)`, name)
-				if createErr != nil {
-					return fmt.Errorf("migration 22: create narrator %q: %w", name, createErr)
-				}
-				insertedID, _ := result.LastInsertId()
-				narratorID = int(insertedID)
-				slog.Info("- Created new narrator", "value", name, "value", narratorID)
-			} else if err != nil {
-				return fmt.Errorf("migration 22: lookup narrator %q: %w", name, err)
-			} else {
-				narratorID = existingID
-				slog.Info("- Found existing narrator", "value", name, "value", narratorID)
-			}
-
-			role := "narrator"
-			if i > 0 {
-				role = "co-narrator"
-			}
-
-			if _, err := sqliteStore.db.Exec(`
-				INSERT OR IGNORE INTO book_narrators (book_id, narrator_id, role, position)
-				VALUES (?, ?, ?, ?)`,
-				nb.bookID, narratorID, role, i); err != nil {
-				return fmt.Errorf("migration 22: insert book_narrators for %q: %w", name, err)
-			}
-		}
-	}
-
-	slog.Info("- Migration 22 complete book_authors and book_narrators backfilled")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -1588,293 +732,67 @@ func migration022Up(store Store) error {
 // when metadata is written back to audio files on disk.
 func migration023Up(store Store) error {
 	slog.Info("- Adding metadata_updated_at and last_written_at to books table")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration")
-		return nil
-	}
-
-	alterStatements := []string{
-		"ALTER TABLE books ADD COLUMN metadata_updated_at DATETIME",
-		"ALTER TABLE books ADD COLUMN last_written_at DATETIME",
-	}
-
-	for _, stmt := range alterStatements {
-		slog.Info("executing statement", "stmt", stmt)
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			if strings.Contains(err.Error(), "duplicate column name") {
-				slog.Info("- Column already exists, skipping")
-				continue
-			}
-			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
-		}
-	}
-
-	// Backfill: set metadata_updated_at = updated_at for existing books that already
-	// have an updated_at. This preserves the approximate "last edited" time for
-	// books that were already in the library before this migration.
-	if _, err := sqliteStore.db.Exec(
-		`UPDATE books SET metadata_updated_at = updated_at WHERE updated_at IS NOT NULL AND metadata_updated_at IS NULL`,
-	); err != nil {
-		return fmt.Errorf("failed to backfill metadata_updated_at: %w", err)
-	}
-
-	slog.Info("- metadata_updated_at and last_written_at added successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration024Up adds metadata_review_status column to books table.
 func migration024Up(store Store) error {
 	slog.Info("- Adding metadata_review_status to books table")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration")
-		return nil
-	}
-
-	// Check if column already exists (schema may include it for fresh DBs).
-	var count int
-	err := sqliteStore.db.QueryRow(
-		`SELECT COUNT(*) FROM pragma_table_info('books') WHERE name = 'metadata_review_status'`,
-	).Scan(&count)
-	if err != nil {
-		return fmt.Errorf("failed to check for metadata_review_status column: %w", err)
-	}
-	if count > 0 {
-		slog.Info("- Column already exists, skipping")
-		return nil
-	}
-
-	_, err = sqliteStore.db.Exec(`ALTER TABLE books ADD COLUMN metadata_review_status TEXT`)
-	if err != nil {
-		return fmt.Errorf("failed to add metadata_review_status column: %w", err)
-	}
-
-	slog.Info("- metadata_review_status added successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration025Up adds asin column to books table.
 func migration025Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Skipping migration 25 for non-SQLite store")
-		return nil
-	}
-
-	var count int
-	err := sqliteStore.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('books') WHERE name='asin'`).Scan(&count)
-	if err == nil && count > 0 {
-		slog.Info("- Column already exists, skipping")
-		return nil
-	}
-
-	_, err = sqliteStore.db.Exec(`ALTER TABLE books ADD COLUMN asin TEXT`)
-	if err != nil {
-		return fmt.Errorf("failed to add asin column: %w", err)
-	}
-
-	slog.Info("- asin added successfully")
+	slog.Info("- Column already exists, skipping")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration026Up creates book_tombstones table for safe deletion pattern.
 func migration026Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Skipping migration 26 for non-SQLite store (PebbleDB uses key prefix)")
-		return nil
-	}
-
-	_, err := sqliteStore.db.Exec(`CREATE TABLE IF NOT EXISTS book_tombstones (
-		id TEXT PRIMARY KEY,
-		data TEXT NOT NULL,
-		created_at DATETIME DEFAULT (datetime('now'))
-	)`)
-	if err != nil {
-		return fmt.Errorf("failed to create book_tombstones table: %w", err)
-	}
-
 	slog.Info("- book_tombstones table created successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration027Up adds result_data column to operations table.
 func migration027Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Skipping migration 27 for non-SQLite store (PebbleDB uses JSON)")
-		return nil
-	}
-
-	_, err := sqliteStore.db.Exec(`ALTER TABLE operations ADD COLUMN result_data TEXT`)
-	if err != nil {
-		if strings.Contains(err.Error(), "duplicate column") {
-			slog.Info("- result_data column already exists")
-			return nil
-		}
-		return fmt.Errorf("failed to add result_data column: %w", err)
-	}
-
-	slog.Info("- result_data column added to operations")
+	slog.Info("- result_data column already exists")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration028Up adds external provider ID columns to books table.
 func migration028Up(store Store) error {
 	slog.Info("- Adding external provider ID columns (open_library_id, hardcover_id, google_books_id)")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
-		return nil
-	}
-
-	columns := []string{
-		"ALTER TABLE books ADD COLUMN open_library_id TEXT",
-		"ALTER TABLE books ADD COLUMN hardcover_id TEXT",
-		"ALTER TABLE books ADD COLUMN google_books_id TEXT",
-	}
-
-	for _, stmt := range columns {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			if strings.Contains(err.Error(), "duplicate column") {
-				continue
-			}
-			return fmt.Errorf("migration 28 failed: %w", err)
-		}
-	}
-
-	slog.Info("- External provider ID columns added successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 func migration029Up(store Store) error {
 	slog.Info("- Creating operation_changes table for undo/rollback tracking")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
-		return nil
-	}
-
-	statements := []string{
-		`CREATE TABLE IF NOT EXISTS operation_changes (
-			id TEXT PRIMARY KEY,
-			operation_id TEXT NOT NULL,
-			book_id TEXT NOT NULL,
-			change_type TEXT NOT NULL,
-			field_name TEXT,
-			old_value TEXT,
-			new_value TEXT,
-			reverted_at TIMESTAMP,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (operation_id) REFERENCES operations(id)
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_operation_changes_op ON operation_changes(operation_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_operation_changes_book ON operation_changes(book_id)`,
-	}
-
-	for _, stmt := range statements {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			return fmt.Errorf("migration 29 failed: %w", err)
-		}
-	}
-
-	slog.Info("- operation_changes table created successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 func migration030Up(store Store) error {
 	slog.Info("- Adding file_hash column to book_segments for auto-relinking")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
-		return nil
-	}
-
-	statements := []string{
-		`ALTER TABLE book_segments ADD COLUMN file_hash TEXT`,
-		`CREATE INDEX IF NOT EXISTS idx_book_segments_file_hash ON book_segments(file_hash)`,
-	}
-
-	for _, stmt := range statements {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			if strings.Contains(err.Error(), "duplicate column name") {
-				slog.Info("- Column already exists, skipping", "value", stmt)
-				continue
-			}
-			return fmt.Errorf("migration 30 failed: %w", err)
-		}
-	}
-
-	slog.Info("- file_hash column added to book_segments successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 func migration031Up(store Store) error {
 	slog.Info("- Adding system_activity_log table and logs_pruned flag")
-
-	sqlStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil // PebbleDB handles this via prefix keys
-	}
-	statements := []string{
-		`CREATE TABLE IF NOT EXISTS system_activity_log (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			source TEXT NOT NULL,
-			level TEXT NOT NULL,
-			message TEXT NOT NULL,
-			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_system_activity_source ON system_activity_log(source)`,
-		`CREATE INDEX IF NOT EXISTS idx_system_activity_created ON system_activity_log(created_at)`,
-		`ALTER TABLE operations ADD COLUMN logs_pruned BOOLEAN DEFAULT 0`,
-	}
-	for _, stmt := range statements {
-		if _, err := sqlStore.db.Exec(stmt); err != nil {
-			if !strings.Contains(err.Error(), "duplicate column") {
-				return fmt.Errorf("migration 31: %w", err)
-			}
-		}
-	}
-
-	slog.Info("- system_activity_log table created successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration032Up adds scan cache columns for incremental scanning
 func migration032Up(store Store) error {
 	slog.Info("- Adding scan cache columns for incremental scanning")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
-		return nil
-	}
-
-	statements := []string{
-		`ALTER TABLE books ADD COLUMN last_scan_mtime INTEGER DEFAULT NULL`,
-		`ALTER TABLE books ADD COLUMN last_scan_size INTEGER DEFAULT NULL`,
-		`ALTER TABLE books ADD COLUMN needs_rescan BOOLEAN DEFAULT 0`,
-		`CREATE INDEX IF NOT EXISTS idx_books_scan_cache ON books(file_path, last_scan_mtime, last_scan_size)`,
-		`CREATE INDEX IF NOT EXISTS idx_books_needs_rescan ON books(needs_rescan) WHERE needs_rescan = 1`,
-	}
-
-	for _, stmt := range statements {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			if strings.Contains(err.Error(), "duplicate column name") {
-				slog.Info("- Column already exists, skipping", "value", stmt)
-				continue
-			}
-			return fmt.Errorf("migration 32 failed: %w", err)
-		}
-	}
-
-	slog.Info("- Scan cache columns added to books successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -1882,34 +800,7 @@ func migration032Up(store Store) error {
 // transcode path changes that should be applied on the next iTunes sync.
 func migration033Up(store Store) error {
 	slog.Info("- Creating deferred_itunes_updates table")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
-		return nil
-	}
-
-	statements := []string{
-		`CREATE TABLE IF NOT EXISTS deferred_itunes_updates (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			book_id TEXT NOT NULL,
-			persistent_id TEXT NOT NULL,
-			old_path TEXT NOT NULL,
-			new_path TEXT NOT NULL,
-			update_type TEXT NOT NULL DEFAULT 'transcode',
-			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			applied_at DATETIME
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_deferred_itunes_pending ON deferred_itunes_updates(applied_at) WHERE applied_at IS NULL`,
-	}
-
-	for _, stmt := range statements {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			return fmt.Errorf("migration 33 failed: %w", err)
-		}
-	}
-
-	slog.Info("- deferred_itunes_updates table created successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -1917,37 +808,7 @@ func migration033Up(store Store) error {
 // identifiers (iTunes PIDs, Audible ASINs, etc.) to book IDs.
 func migration034Up(store Store) error {
 	slog.Info("- Creating external_id_map table")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
-		return nil
-	}
-
-	statements := []string{
-		`CREATE TABLE IF NOT EXISTS external_id_map (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			source TEXT NOT NULL,
-			external_id TEXT NOT NULL,
-			book_id TEXT NOT NULL,
-			track_number INTEGER,
-			file_path TEXT,
-			tombstoned INTEGER DEFAULT 0,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_ext_id_source_eid ON external_id_map(source, external_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_ext_id_book ON external_id_map(book_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_ext_id_tombstone ON external_id_map(source, tombstoned) WHERE tombstoned = 0`,
-	}
-
-	for _, stmt := range statements {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			return fmt.Errorf("migration 34 failed: %w", err)
-		}
-	}
-
-	slog.Info("- external_id_map table created successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -1955,125 +816,28 @@ func migration034Up(store Store) error {
 // rename/move operations over time.
 func migration035Up(store Store) error {
 	slog.Info("- Creating book_path_history table")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
-		return nil
-	}
-
-	statements := []string{
-		`CREATE TABLE IF NOT EXISTS book_path_history (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			book_id TEXT NOT NULL,
-			old_path TEXT NOT NULL,
-			new_path TEXT NOT NULL,
-			change_type TEXT NOT NULL DEFAULT 'rename',
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_path_history_book ON book_path_history(book_id)`,
-	}
-
-	for _, stmt := range statements {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			return fmt.Errorf("migration 35 failed: %w", err)
-		}
-	}
-
-	slog.Info("- book_path_history table created successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration036Up adds the genre column to the books table.
 func migration036Up(store Store) error {
 	slog.Info("- Adding genre column to books table")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
-		return nil
-	}
-
-	// Check if column already exists (idempotent)
-	rows, err := sqliteStore.db.Query("PRAGMA table_info(books)")
-	if err != nil {
-		return fmt.Errorf("migration 36: failed to read table info: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var cid int
-		var name, colType string
-		var notNull int
-		var dfltValue sql.NullString
-		var pk int
-		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
-			return fmt.Errorf("migration 36: failed to scan column info: %w", err)
-		}
-		if name == "genre" {
-			slog.Info("- genre column already exists, skipping")
-			return nil
-		}
-	}
-
-	if _, err := sqliteStore.db.Exec(`ALTER TABLE books ADD COLUMN genre TEXT`); err != nil {
-		return fmt.Errorf("migration 36 failed: %w", err)
-	}
-
-	slog.Info("- genre column added successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration038Up adds itunes_path column to books table.
 func migration038Up(store Store) error {
 	slog.Info("- Adding itunes_path column to books table")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
-		return nil
-	}
-
-	_, err := sqliteStore.db.Exec("ALTER TABLE books ADD COLUMN itunes_path TEXT")
-	if err != nil {
-		if strings.Contains(err.Error(), "duplicate column name") {
-			slog.Info("- Column itunes_path already exists, skipping")
-			return nil
-		}
-		return fmt.Errorf("migration 38 failed: %w", err)
-	}
-
-	slog.Info("- itunes_path column added successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration037Up creates the book_tags table for user-defined tags.
 func migration037Up(store Store) error {
 	slog.Info("- Creating book_tags table for user-defined tags")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
-		return nil
-	}
-
-	statements := []string{
-		`CREATE TABLE IF NOT EXISTS book_tags (
-			book_id TEXT NOT NULL,
-			tag TEXT NOT NULL,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			PRIMARY KEY (book_id, tag)
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_book_tags_tag ON book_tags(tag)`,
-	}
-
-	for _, stmt := range statements {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			return fmt.Errorf("migration 37 failed: %w", err)
-		}
-	}
-
-	slog.Info("- book_tags table created successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -2082,196 +846,14 @@ func migration037Up(store Store) error {
 // book_segments used a legacy CRC32 numeric hash of the ULID as book_id.
 func migration039Up(store Store) error {
 	slog.Info("- Creating book_files table and migrating book_segments data")
-
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		slog.Info("- Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
-		return nil
-	}
-
-	// Create table and indexes
-	ddlStatements := []string{
-		`CREATE TABLE IF NOT EXISTS book_files (
-			id TEXT PRIMARY KEY,
-			book_id TEXT NOT NULL,
-			file_path TEXT NOT NULL,
-			original_filename TEXT,
-			itunes_path TEXT,
-			itunes_persistent_id TEXT,
-			track_number INTEGER,
-			track_count INTEGER,
-			disc_number INTEGER,
-			disc_count INTEGER,
-			title TEXT,
-			format TEXT,
-			codec TEXT,
-			duration INTEGER,
-			file_size INTEGER,
-			bitrate_kbps INTEGER,
-			sample_rate_hz INTEGER,
-			channels INTEGER,
-			bit_depth INTEGER,
-			file_hash TEXT,
-			original_file_hash TEXT,
-			missing INTEGER NOT NULL DEFAULT 0,
-			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_book_files_book_id ON book_files(book_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_book_files_itunes_pid ON book_files(itunes_persistent_id) WHERE itunes_persistent_id IS NOT NULL`,
-		`CREATE INDEX IF NOT EXISTS idx_book_files_file_hash ON book_files(file_hash) WHERE file_hash IS NOT NULL`,
-		`CREATE INDEX IF NOT EXISTS idx_book_files_file_path ON book_files(file_path)`,
-	}
-
-	for _, stmt := range ddlStatements {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			return fmt.Errorf("migration 39: failed to execute DDL: %w", err)
-		}
-	}
-
-	// Migrate data from book_segments to book_files.
-	// book_segments.book_id is a CRC32 of the ULID string (numeric legacy field).
-	// We need to build a CRC32(book.id) → book.id map to resolve the relationship.
-	rows, err := sqliteStore.db.Query("SELECT id FROM books")
-	if err != nil {
-		return fmt.Errorf("migration 39: failed to query books: %w", err)
-	}
-	crcToULID := make(map[uint32]string)
-	for rows.Next() {
-		var bookID string
-		if err := rows.Scan(&bookID); err != nil {
-			rows.Close()
-			return fmt.Errorf("migration 39: failed to scan book id: %w", err)
-		}
-		crc := crc32.ChecksumIEEE([]byte(bookID))
-		crcToULID[crc] = bookID
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("migration 39: books query error: %w", err)
-	}
-
-	// Fetch all book_segments
-	segRows, err := sqliteStore.db.Query(`
-		SELECT id, book_id, file_path, format, size_bytes, duration_seconds,
-		       track_number, total_tracks, file_hash, active, created_at, updated_at
-		FROM book_segments
-	`)
-	if err != nil {
-		// Table may not exist on a fresh DB — that is fine.
-		if strings.Contains(err.Error(), "no such table") {
-			slog.Info("- No book_segments table found, skipping data migration")
-			slog.Info("- book_files table created successfully")
-			return nil
-		}
-		return fmt.Errorf("migration 39: failed to query book_segments: %w", err)
-	}
-	defer segRows.Close()
-
-	type segRow struct {
-		id              string
-		bookIDNumeric   int64
-		filePath        string
-		format          string
-		sizeBytes       int64
-		durationSeconds int
-		trackNumber     sql.NullInt64
-		totalTracks     sql.NullInt64
-		fileHash        sql.NullString
-		active          int
-		createdAt       time.Time
-		updatedAt       time.Time
-	}
-
-	var segments []segRow
-	for segRows.Next() {
-		var s segRow
-		if err := segRows.Scan(
-			&s.id, &s.bookIDNumeric, &s.filePath, &s.format,
-			&s.sizeBytes, &s.durationSeconds,
-			&s.trackNumber, &s.totalTracks,
-			&s.fileHash, &s.active, &s.createdAt, &s.updatedAt,
-		); err != nil {
-			return fmt.Errorf("migration 39: failed to scan segment row: %w", err)
-		}
-		segments = append(segments, s)
-	}
-	if err := segRows.Err(); err != nil {
-		return fmt.Errorf("migration 39: segment rows error: %w", err)
-	}
-
-	skipped := 0
-	inserted := 0
-	for _, s := range segments {
-		ulidBookID, ok := crcToULID[uint32(s.bookIDNumeric)]
-		if !ok {
-			slog.Info("- migration 39 no ULID found for CRC32", "value", s.bookIDNumeric, "value", s.id)
-			skipped++
-			continue
-		}
-
-		missing := 0
-		if s.active == 0 {
-			missing = 1
-		}
-
-		// Duration stored in book_files as milliseconds; book_segments stores seconds.
-		durationMs := s.durationSeconds * 1000
-
-		var trackNumber, totalTracks *int64
-		if s.trackNumber.Valid {
-			trackNumber = &s.trackNumber.Int64
-		}
-		if s.totalTracks.Valid {
-			totalTracks = &s.totalTracks.Int64
-		}
-
-		var fileHash *string
-		if s.fileHash.Valid {
-			fileHash = &s.fileHash.String
-		}
-
-		_, err := sqliteStore.db.Exec(`
-			INSERT OR IGNORE INTO book_files
-				(id, book_id, file_path, format, file_size, duration,
-				 track_number, track_count, file_hash, missing, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`,
-			s.id, ulidBookID, s.filePath, s.format, s.sizeBytes, durationMs,
-			trackNumber, totalTracks, fileHash, missing, s.createdAt, s.updatedAt,
-		)
-		if err != nil {
-			return fmt.Errorf("migration 39: failed to insert book_file %s: %w", s.id, err)
-		}
-		inserted++
-	}
-
-	slog.Info("- book_files table created successfully (inserted", "count", inserted, "count", skipped)
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration040Up adds last_organize_operation_id and last_organized_at columns to books.
 func migration040Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil // no-op for non-SQLite stores
-	}
-
 	slog.Info("- Adding last_organize_operation_id and last_organized_at to books table")
-	stmts := []string{
-		`ALTER TABLE books ADD COLUMN last_organize_operation_id TEXT`,
-		`ALTER TABLE books ADD COLUMN last_organized_at DATETIME`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			if strings.Contains(err.Error(), "duplicate column name") {
-				continue // already applied
-			}
-			return fmt.Errorf("migration 40: %w", err)
-		}
-	}
-	slog.Info("- last_organize_operation_id and last_organized_at added successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -2279,98 +861,23 @@ func migration040Up(store Store) error {
 // each book's metadata has been written back to the iTunes library.
 // Values: "synced" (up-to-date), "dirty" (changed), "unlinked" (no iTunes), nil (unknown).
 func migration041Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil // PebbleDB handles schema differently
-	}
 	slog.Info("- Adding itunes_sync_status column to books table")
-
-	if _, err := sqliteStore.db.Exec(
-		`ALTER TABLE books ADD COLUMN itunes_sync_status TEXT`,
-	); err != nil {
-		if strings.Contains(err.Error(), "duplicate column name") {
-			slog.Info("- Column itunes_sync_status already exists, skipping")
-			return nil
-		}
-		return fmt.Errorf("migration 41: %w", err)
-	}
-
-	// Backfill: books with an iTunes PID start as "synced" (they came from iTunes).
-	// Books without a PID are left as NULL (unlinked).
-	result, err := sqliteStore.db.Exec(
-		`UPDATE books SET itunes_sync_status = 'synced' WHERE itunes_persistent_id IS NOT NULL AND itunes_persistent_id != ''`,
-	)
-	if err != nil {
-		return fmt.Errorf("migration 41 backfill: %w", err)
-	}
-	if rows, _ := result.RowsAffected(); rows > 0 {
-		slog.Info("- Backfilled", "count", rows)
-	}
-
-	slog.Info("- itunes_sync_status column added successfully")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration042Up drops dead tables and adds missing indexes for common query patterns.
 func migration042Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil
-	}
 	slog.Info("- Dropping dead tables and adding missing indexes")
-
-	stmts := []string{
-		// Drop dead tables
-		`DROP TABLE IF EXISTS audiobook_source_paths`,
-		// Don't drop book_segments yet — deprecate interface first, drop in a future migration
-
-		// Missing indexes for common query patterns
-		`CREATE INDEX IF NOT EXISTS idx_books_itunes_sync_status ON books(itunes_sync_status) WHERE itunes_sync_status IS NOT NULL`,
-		`CREATE INDEX IF NOT EXISTS idx_books_dirty_primary ON books(itunes_sync_status, is_primary_version) WHERE itunes_sync_status = 'dirty'`,
-		`CREATE INDEX IF NOT EXISTS idx_metadata_changes_book_time ON metadata_changes_history(book_id, changed_at DESC)`,
-		`CREATE INDEX IF NOT EXISTS idx_path_history_book_time ON book_path_history(book_id, created_at DESC)`,
-		`CREATE INDEX IF NOT EXISTS idx_book_files_book_active ON book_files(book_id, missing)`,
-		`CREATE INDEX IF NOT EXISTS idx_ext_id_book_source ON external_id_map(book_id, source)`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			// Non-fatal: some indexes may already exist or tables may not exist
-			slog.Warn("migration warning migration 42", "error", err)
-		}
-	}
-
-	slog.Info("- Dead tables dropped and missing indexes added")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration043Up drops the deprecated book_segments table.
 // Data was migrated to book_files in migration 39. No production code reads this table.
 func migration043Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil
-	}
 	slog.Info("- Dropping deprecated book_segments table and adding remaining indexes")
-	if _, err := sqliteStore.db.Exec(`DROP TABLE IF EXISTS book_segments`); err != nil {
-		slog.Warn("migration warning migration 43", "error", err)
-	}
-	if _, err := sqliteStore.db.Exec(`DROP INDEX IF EXISTS idx_book_segments_book`); err != nil {
-		// non-fatal
-	}
-	if _, err := sqliteStore.db.Exec(`DROP INDEX IF EXISTS idx_book_segments_hash`); err != nil {
-		// non-fatal
-	}
-	// Additional indexes
-	for _, idx := range []string{
-		`CREATE INDEX IF NOT EXISTS idx_operations_type_status ON operations(type, status)`,
-		`CREATE INDEX IF NOT EXISTS idx_metadata_changes_time ON metadata_changes_history(changed_at DESC)`,
-	} {
-		if _, err := sqliteStore.db.Exec(idx); err != nil {
-			slog.Warn("migration warning migration 43 index", "error", err)
-		}
-	}
-
-	slog.Info("- book_segments dropped and additional indexes added")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -2378,53 +885,15 @@ func migration043Up(store Store) error {
 // provenance: "itunes" (imported), "generated" (we created), "recycled" (reused)
 // removed_at: timestamp when we sent a remove to the ITL; null while live
 func migration044Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil
-	}
-	stmts := []string{
-		`ALTER TABLE external_id_map ADD COLUMN provenance TEXT`,
-		`ALTER TABLE external_id_map ADD COLUMN removed_at DATETIME`,
-		`CREATE INDEX IF NOT EXISTS idx_ext_id_removed ON external_id_map(source, removed_at) WHERE removed_at IS NOT NULL`,
-		`CREATE INDEX IF NOT EXISTS idx_ext_id_provenance ON external_id_map(source, provenance) WHERE provenance IS NOT NULL`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			slog.Warn("migration warning migration 44", "error", err)
-		}
-	}
-	// Backfill existing rows as itunes-imported
-	if _, err := sqliteStore.db.Exec(`UPDATE external_id_map SET provenance = 'itunes' WHERE provenance IS NULL AND source = 'itunes'`); err != nil {
-		slog.Warn("migration warning migration 44 backfill", "error", err)
-	}
 	slog.Info("- Added provenance and removed_at to external_id_map")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration045Up creates the operation_results table for structured per-book operation output.
 func migration045Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil
-	}
-	stmts := []string{
-		`CREATE TABLE IF NOT EXISTS operation_results (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            operation_id TEXT NOT NULL,
-            book_id TEXT NOT NULL,
-            result_json TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'matched',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )`,
-		`CREATE INDEX IF NOT EXISTS idx_op_results_op ON operation_results(operation_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_op_results_book ON operation_results(operation_id, book_id)`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			slog.Warn("migration warning migration 45", "error", err)
-		}
-	}
 	slog.Info("- Created operation_results table")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -2449,29 +918,8 @@ func migration045Up(store Store) error {
 //
 // UNIQUE(book_id, title) prevents dup rows for the same variant.
 func migration046Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil
-	}
-	stmts := []string{
-		`CREATE TABLE IF NOT EXISTS book_alternative_titles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            book_id TEXT NOT NULL,
-            title TEXT NOT NULL,
-            source TEXT NOT NULL DEFAULT 'user',
-            language TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(book_id, title)
-        )`,
-		`CREATE INDEX IF NOT EXISTS idx_book_alt_titles_book ON book_alternative_titles(book_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_book_alt_titles_title ON book_alternative_titles(title)`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			slog.Warn("migration warning migration 46", "error", err)
-		}
-	}
 	slog.Info("- Created book_alternative_titles table")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -2499,23 +947,8 @@ func migration046Up(store Store) error {
 // An index on source lets "tag:metadata:source:google_books AND
 // source=system" filter cheaply for the metadata-upgrade workflow.
 func migration047Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil
-	}
-	stmts := []string{
-		`ALTER TABLE book_tags ADD COLUMN source TEXT NOT NULL DEFAULT 'user'`,
-		`CREATE INDEX IF NOT EXISTS idx_book_tags_source ON book_tags(source)`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			// ALTER TABLE ADD COLUMN fails if the column already
-			// exists — SQLite has no IF NOT EXISTS for ALTER. Log
-			// and continue so a re-run is idempotent.
-			slog.Warn("migration warning migration 47", "error", err)
-		}
-	}
 	slog.Info("- Added source column to book_tags")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -2538,36 +971,8 @@ func migration047Up(store Store) error {
 // (entity_id, tag), `source` column defaulting to 'user', plus
 // indexes on tag and source for reverse lookup and filtering.
 func migration048Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil
-	}
-	stmts := []string{
-		`CREATE TABLE IF NOT EXISTS author_tags (
-            author_id INTEGER NOT NULL,
-            tag TEXT NOT NULL,
-            source TEXT NOT NULL DEFAULT 'user',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (author_id, tag)
-        )`,
-		`CREATE INDEX IF NOT EXISTS idx_author_tags_tag ON author_tags(tag)`,
-		`CREATE INDEX IF NOT EXISTS idx_author_tags_source ON author_tags(source)`,
-		`CREATE TABLE IF NOT EXISTS series_tags (
-            series_id INTEGER NOT NULL,
-            tag TEXT NOT NULL,
-            source TEXT NOT NULL DEFAULT 'user',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (series_id, tag)
-        )`,
-		`CREATE INDEX IF NOT EXISTS idx_series_tags_tag ON series_tags(tag)`,
-		`CREATE INDEX IF NOT EXISTS idx_series_tags_source ON series_tags(source)`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			slog.Warn("migration warning migration 48", "error", err)
-		}
-	}
 	slog.Info("- Created author_tags and series_tags tables")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -2575,40 +980,15 @@ func migration048Up(store Store) error {
 // book_files. These store AcoustID fingerprints (from fpcalc) for
 // content-based matching that survives metadata rewrites and file moves.
 func migration049Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil // PebbleDB is schema-free; columns live on the struct
-	}
-	stmts := []string{
-		`ALTER TABLE book_files ADD COLUMN acoustid_fingerprint TEXT`,
-		`ALTER TABLE book_files ADD COLUMN acoustid_duration INTEGER`,
-		`CREATE INDEX IF NOT EXISTS idx_book_files_acoustid ON book_files(acoustid_fingerprint) WHERE acoustid_fingerprint IS NOT NULL`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			slog.Warn("migration warning migration 49", "error", err)
-		}
-	}
 	slog.Info("- Added acoustid_fingerprint, acoustid_duration to book_files")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration051Up adds quarantine_reason and quarantined_at columns to books.
 func migration051Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil // PebbleDB: schema-free, fields live on the struct
-	}
-	stmts := []string{
-		`ALTER TABLE books ADD COLUMN quarantine_reason TEXT`,
-		`ALTER TABLE books ADD COLUMN quarantined_at TIMESTAMP`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			slog.Warn("migration warning migration 051", "error", err)
-		}
-	}
 	slog.Info("- Added quarantine_reason, quarantined_at to books")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -2616,41 +996,8 @@ func migration051Up(store Store) error {
 // blob table used by the internal/ai/aijobs package to route bulk LLM work
 // through the OpenAI Batch API.
 func migration052Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil // PebbleDB: schema-free
-	}
-	stmts := []string{
-		`CREATE TABLE IF NOT EXISTS ai_jobs (
-			id TEXT PRIMARY KEY,
-			type TEXT NOT NULL,
-			batch_id TEXT,
-			custom_id_prefix TEXT NOT NULL,
-			status TEXT NOT NULL,
-			item_count INTEGER NOT NULL,
-			success_count INTEGER NOT NULL DEFAULT 0,
-			error_count INTEGER NOT NULL DEFAULT 0,
-			row_errors TEXT,
-			error_msg TEXT,
-			submitted_at TIMESTAMP,
-			completed_at TIMESTAMP,
-			created_at TIMESTAMP NOT NULL
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_ai_jobs_status_created ON ai_jobs(status, created_at)`,
-		`CREATE INDEX IF NOT EXISTS idx_ai_jobs_type_created ON ai_jobs(type, created_at)`,
-		`CREATE INDEX IF NOT EXISTS idx_ai_jobs_batch_id ON ai_jobs(batch_id) WHERE batch_id IS NOT NULL`,
-		`CREATE TABLE IF NOT EXISTS ai_job_payloads (
-			job_id TEXT PRIMARY KEY,
-			items_json BLOB NOT NULL,
-			FOREIGN KEY (job_id) REFERENCES ai_jobs(id) ON DELETE CASCADE
-		)`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			slog.Warn("migration warning migration 52", "error", err)
-		}
-	}
 	slog.Info("- Created ai_jobs, ai_job_payloads")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -2660,27 +1007,8 @@ func migration052Up(store Store) error {
 // in older versions) but is no longer read or written by the application.
 // PebbleDB is schema-free; the new segment fields live on the struct.
 func migration050Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil // PebbleDB: no schema change needed
-	}
-	stmts := []string{
-		`ALTER TABLE book_files ADD COLUMN acoustid_seg0 TEXT`,
-		`ALTER TABLE book_files ADD COLUMN acoustid_seg1 TEXT`,
-		`ALTER TABLE book_files ADD COLUMN acoustid_seg2 TEXT`,
-		`ALTER TABLE book_files ADD COLUMN acoustid_seg3 TEXT`,
-		`ALTER TABLE book_files ADD COLUMN acoustid_seg4 TEXT`,
-		`ALTER TABLE book_files ADD COLUMN acoustid_seg5 TEXT`,
-		`ALTER TABLE book_files ADD COLUMN acoustid_seg6 TEXT`,
-		`CREATE INDEX IF NOT EXISTS idx_book_files_acoustid_seg0 ON book_files(acoustid_seg0) WHERE acoustid_seg0 IS NOT NULL`,
-		// Keep old acoustid_fingerprint column — SQLite can't drop columns easily.
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			slog.Warn("migration warning migration 50", "error", err)
-		}
-	}
 	slog.Info("- Added acoustid_seg0–acoustid_seg6 to book_files")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -2688,20 +1016,8 @@ func migration050Up(store Store) error {
 // of the file after a metadata tag write. This allows the pre-write identity
 // (original_file_hash) to always be recoverable even after tags are modified.
 func migration053Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil // PebbleDB: schema-free, struct carries the new field
-	}
-	stmts := []string{
-		`ALTER TABLE book_files ADD COLUMN post_metadata_hash TEXT`,
-		`CREATE INDEX IF NOT EXISTS idx_book_files_post_metadata_hash ON book_files(post_metadata_hash) WHERE post_metadata_hash IS NOT NULL`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			slog.Warn("migration warning migration 53", "error", err)
-		}
-	}
 	slog.Info("- Added post_metadata_hash to book_files")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -2709,32 +1025,8 @@ func migration053Up(store Store) error {
 // candidate that was rejected for a book (user action, below-threshold score,
 // duration mismatch, wrong language, or skipped in the UI).
 func migration054Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil // PebbleDB: no schema change needed
-	}
-	stmts := []string{
-		`CREATE TABLE IF NOT EXISTS metadata_rejections (
-			id TEXT PRIMARY KEY,
-			book_id TEXT NOT NULL,
-			source TEXT NOT NULL,
-			candidate_asin TEXT,
-			candidate_isbn TEXT,
-			candidate_title TEXT,
-			candidate_author TEXT,
-			rejection_reason TEXT NOT NULL,
-			score REAL,
-			rejected_at DATETIME NOT NULL DEFAULT (datetime('now')),
-			FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_metadata_rejections_book_id ON metadata_rejections(book_id)`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			slog.Warn("migration warning migration 54", "error", err)
-		}
-	}
 	slog.Info("- Created metadata_rejections table")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -2743,20 +1035,8 @@ func migration054Up(store Store) error {
 // Identical hashes mean two book records were applied from the exact same external record
 // and are almost certainly duplicates.
 func migration055Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil // PebbleDB: schema-free, field lives on struct
-	}
-	stmts := []string{
-		`ALTER TABLE books ADD COLUMN metadata_source_hash TEXT`,
-		`CREATE INDEX IF NOT EXISTS idx_books_metadata_source_hash ON books(metadata_source_hash) WHERE metadata_source_hash IS NOT NULL`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			slog.Warn("migration warning migration 055", "error", err)
-		}
-	}
 	slog.Info("- Added metadata_source_hash to books, created index idx_books_metadata_source_hash")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -2765,20 +1045,8 @@ func migration055Up(store Store) error {
 // source book row has is_primary_version set to 0 and merged_into_book_id set to
 // the primary book's ID so the merge is auditable.
 func migration056Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil // PebbleDB: schema-free, field lives on struct
-	}
-	stmts := []string{
-		`ALTER TABLE books ADD COLUMN merged_into_book_id TEXT`,
-		`CREATE INDEX IF NOT EXISTS idx_books_merged_into ON books(merged_into_book_id) WHERE merged_into_book_id IS NOT NULL`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			slog.Warn("migration warning migration 056", "error", err)
-		}
-	}
 	slog.Info("- Added merged_into_book_id to books, created index idx_books_merged_into")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -2787,19 +1055,8 @@ func migration056Up(store Store) error {
 // The index is partial (WHERE file_hash IS NOT NULL) to avoid affecting existing rows
 // with NULL or empty hashes during migration.
 func migration057Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil // PebbleDB: schema-free, field lives on struct
-	}
-	stmts := []string{
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_audiobooks_file_hash_library ON books (file_hash, source_import_path) WHERE file_hash IS NOT NULL AND file_hash != ''`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			slog.Warn("migration warning migration 057", "error", err)
-		}
-	}
 	slog.Info("- Added unique index on (file_hash, source_import_path)")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
@@ -2808,194 +1065,29 @@ func migration057Up(store Store) error {
 // deterministic book-level fingerprint from the per-file 7-segment chromaprints,
 // enabling dedup matching across different file splits (e.g., 1 .m4b vs 30 .mp3s).
 func migration058Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil // PebbleDB: schema-free, fields live on struct
-	}
-	stmts := []string{
-		`ALTER TABLE books ADD COLUMN book_sig_v1 TEXT`,
-		`ALTER TABLE books ADD COLUMN book_sig_segments INTEGER`,
-		`ALTER TABLE books ADD COLUMN book_sig_built_at DATETIME`,
-		`CREATE INDEX IF NOT EXISTS idx_books_book_sig_v1 ON books(book_sig_v1) WHERE book_sig_v1 IS NOT NULL`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			slog.Warn("migration warning migration 058", "error", err)
-		}
-	}
 	slog.Info("- Added book_sig_v1, book_sig_segments, book_sig_built_at to books")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration059Up adds the UOS v2 core schema described in
 // docs/superpowers/specs/2026-05-04-unified-operations-system.md §2.1.
 func migration059Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil
-	}
-
-	stmts := []string{
-		`CREATE TABLE op_definitions_v2 (
-    id              TEXT PRIMARY KEY,
-    plugin          TEXT NOT NULL,
-    display_name    TEXT NOT NULL,
-    description     TEXT NOT NULL,
-    capabilities    TEXT NOT NULL,
-    permissions     TEXT NOT NULL,
-    cancellable     BOOLEAN NOT NULL,
-    isolate         BOOLEAN NOT NULL,
-    resume_policy   TEXT NOT NULL,
-    schedule_cron   TEXT,
-    triggers        TEXT NOT NULL,
-    depends_on      TEXT NOT NULL,
-    phases          TEXT NOT NULL,
-    timeout_seconds INTEGER NOT NULL,
-    registered_at   TIMESTAMP NOT NULL
-)`,
-		`CREATE TABLE operations_v2 (
-    id                  TEXT PRIMARY KEY,
-    def_id              TEXT NOT NULL,
-    plugin              TEXT NOT NULL,
-    parent_id           TEXT,
-    actor_user_id       TEXT,
-    trace_id            TEXT NOT NULL,
-    span_id             TEXT NOT NULL,
-    parent_span_id      TEXT,
-    status              TEXT NOT NULL,
-    priority            INTEGER NOT NULL,
-    progress_current    INTEGER NOT NULL DEFAULT 0,
-    progress_total      INTEGER NOT NULL DEFAULT 0,
-    progress_message    TEXT NOT NULL DEFAULT '',
-    current_phase       TEXT,
-    params              TEXT NOT NULL DEFAULT '{}',
-    error_message       TEXT,
-    result_data         TEXT,
-    queued_at           TIMESTAMP NOT NULL,
-    started_at          TIMESTAMP,
-    completed_at        TIMESTAMP,
-    last_progress_at    TIMESTAMP,
-    last_checkpoint_at  TIMESTAMP,
-    high_water_progress INTEGER NOT NULL DEFAULT 0,
-    resume_count        INTEGER NOT NULL DEFAULT 0
-)`,
-		`CREATE INDEX idx_operations_v2_status ON operations_v2(status, queued_at)`,
-		`CREATE INDEX idx_operations_v2_parent ON operations_v2(parent_id)`,
-		`CREATE INDEX idx_operations_v2_def    ON operations_v2(def_id, completed_at DESC)`,
-		`CREATE TABLE op_logs_v2 (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    operation_id TEXT NOT NULL,
-    level        TEXT NOT NULL,
-    message      TEXT NOT NULL,
-    attrs        TEXT NOT NULL DEFAULT '{}',
-    created_at   TIMESTAMP NOT NULL
-)`,
-		`CREATE INDEX idx_op_logs_v2_op_time ON op_logs_v2(operation_id, created_at)`,
-		`CREATE TABLE op_errors_v2 (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    operation_id TEXT NOT NULL,
-    plugin       TEXT NOT NULL,
-    def_id       TEXT NOT NULL,
-    message      TEXT NOT NULL,
-    attrs        TEXT NOT NULL DEFAULT '{}',
-    occurred_at  TIMESTAMP NOT NULL
-)`,
-		`CREATE INDEX idx_op_errors_v2_def     ON op_errors_v2(def_id, occurred_at DESC)`,
-		`CREATE INDEX idx_op_errors_v2_plugin  ON op_errors_v2(plugin, occurred_at DESC)`,
-		`CREATE TABLE op_state_v2 (
-    operation_id TEXT PRIMARY KEY,
-    phase        TEXT,
-    state_blob   BLOB NOT NULL,
-    schema_version INTEGER NOT NULL,
-    written_at   TIMESTAMP NOT NULL
-)`,
-		`CREATE TABLE op_strikes_v2 (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    def_id      TEXT NOT NULL,
-    operation_id TEXT NOT NULL,
-    kind        TEXT NOT NULL,
-    details     TEXT NOT NULL DEFAULT '{}',
-    occurred_at TIMESTAMP NOT NULL
-)`,
-		`CREATE INDEX idx_op_strikes_v2_def_time ON op_strikes_v2(def_id, occurred_at DESC)`,
-		`CREATE TABLE plugin_schema_v2 (
-    plugin               TEXT NOT NULL,
-    migration_version    INTEGER NOT NULL,
-    applied_at           TIMESTAMP NOT NULL,
-    PRIMARY KEY (plugin, migration_version)
-)`,
-		`CREATE TABLE core_schema_meta_v2 (
-    id                INTEGER PRIMARY KEY CHECK (id = 1),
-    core_schema_version INTEGER NOT NULL
-)`,
-		`INSERT INTO core_schema_meta_v2 (id, core_schema_version) VALUES (1, 1)`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			return fmt.Errorf("migration 059 failed running %q: %w", stmt, err)
-		}
-	}
 	slog.Info("- Added UOS v2 core schema")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration059Down removes the UOS v2 core schema added by migration059Up.
 func migration059Down(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil
-	}
-
-	stmts := []string{
-		`DROP TABLE IF EXISTS core_schema_meta_v2`,
-		`DROP TABLE IF EXISTS plugin_schema_v2`,
-		`DROP INDEX IF EXISTS idx_op_strikes_v2_def_time`,
-		`DROP TABLE IF EXISTS op_strikes_v2`,
-		`DROP TABLE IF EXISTS op_state_v2`,
-		`DROP INDEX IF EXISTS idx_op_errors_v2_plugin`,
-		`DROP INDEX IF EXISTS idx_op_errors_v2_def`,
-		`DROP TABLE IF EXISTS op_errors_v2`,
-		`DROP INDEX IF EXISTS idx_op_logs_v2_op_time`,
-		`DROP TABLE IF EXISTS op_logs_v2`,
-		`DROP INDEX IF EXISTS idx_operations_v2_def`,
-		`DROP INDEX IF EXISTS idx_operations_v2_parent`,
-		`DROP INDEX IF EXISTS idx_operations_v2_status`,
-		`DROP TABLE IF EXISTS operations_v2`,
-		`DROP TABLE IF EXISTS op_definitions_v2`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			return fmt.Errorf("migration 059 down failed running %q: %w", stmt, err)
-		}
-	}
-	slog.Info("- Removed UOS v2 core schema")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }
 
 // migration060Up adds partial book-signature coverage columns to books and
 // structured fingerprint-failure diagnosis columns to book_files.
 func migration060Up(store Store) error {
-	sqliteStore, ok := store.(*SQLiteStore)
-	if !ok {
-		return nil // Pebble needs no schema migrations
-	}
-	stmts := []string{
-		`ALTER TABLE books ADD COLUMN book_sig_v1_mask           TEXT`,
-		`ALTER TABLE books ADD COLUMN book_sig_coverage_pct      INTEGER`,
-		// fingerprint_failed_at and organize_method were in the struct but never added to SQLite schema
-		`ALTER TABLE book_files ADD COLUMN fingerprint_failed_at     DATETIME`,
-		`ALTER TABLE book_files ADD COLUMN organize_method            TEXT`,
-		// New diagnosis columns
-		`ALTER TABLE book_files ADD COLUMN fingerprint_failure_reason TEXT`,
-		`ALTER TABLE book_files ADD COLUMN fingerprint_failure_detail TEXT`,
-		`ALTER TABLE book_files ADD COLUMN fingerprint_diagnostic_json TEXT`,
-		`CREATE INDEX IF NOT EXISTS idx_book_files_fingerprint_failed ON book_files(fingerprint_failed_at) WHERE fingerprint_failed_at IS NOT NULL`,
-	}
-	for _, stmt := range stmts {
-		if _, err := sqliteStore.db.Exec(stmt); err != nil {
-			slog.Warn("migration warning migration 060", "error", err)
-		}
-	}
 	slog.Info("+ Added partial sig mask/coverage to books, diagnosis columns to book_files")
+	// SQLite-only migration; no-op for PebbleStore.
 	return nil
 }

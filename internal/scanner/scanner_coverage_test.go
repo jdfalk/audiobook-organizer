@@ -1,6 +1,12 @@
 // file: internal/scanner/scanner_coverage_test.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: 7d8e9f0a-1b2c-3d4e-5f6a-7b8c9d0e1f2a
+// last-edited: 2026-06-10
+
+// NOTE(fable5 T022): Removed tests that used database.DB, database.Initialize,
+// or database.Close (legacy SQLite path removed). TestSaveBookToDatabaseWithoutStore
+// and the "with GlobalStore path exercised" sub-test of
+// TestSaveBookToDatabaseCodePaths were dropped; both tested dead fallback code.
 
 package scanner
 
@@ -439,19 +445,13 @@ func TestProcessBooksParallelNoProgressCallback(t *testing.T) {
 
 // TestSaveBookToDatabaseCodePaths tests saveBookToDatabase code paths with mocking
 func TestSaveBookToDatabaseCodePaths(t *testing.T) {
-	// This test focuses on code coverage of saveBookToDatabase without requiring
-	// a full database setup, which can be complex and fragile in tests.
-
 	t.Run("no database available", func(t *testing.T) {
 		origStore := database.GetGlobalStore()
-		origDB := database.DB
 		defer func() {
 			database.SetGlobalStore(origStore)
-			database.DB = origDB
 		}()
 
 		database.SetGlobalStore(nil)
-		database.DB = nil
 
 		book := &Book{
 			FilePath: "/tmp/test.m4b",
@@ -464,100 +464,14 @@ func TestSaveBookToDatabaseCodePaths(t *testing.T) {
 			t.Error("expected error when no database available")
 		}
 	})
-
-	t.Run("with GlobalStore path exercised", func(t *testing.T) {
-		// Skip if we can't initialize a real database
-		tmpDir := t.TempDir()
-		dbPath := filepath.Join(tmpDir, "test.db")
-
-		// Try to initialize - if it fails, skip the test
-		if err := database.Initialize(dbPath); err != nil {
-			t.Skip("cannot initialize database for this test")
-		}
-		defer database.Close()
-
-		if _, err := database.InitializeStore("sqlite", dbPath, true); err != nil {
-			t.Skip("cannot initialize store for this test")
-		}
-		defer database.CloseStore()
-
-		origStore := database.GetGlobalStore()
-		defer func() { database.SetGlobalStore(origStore) }()
-
-		config.AppConfig.RootDir = tmpDir
-
-		book := &Book{
-			FilePath:  filepath.Join(tmpDir, "test.m4b"),
-			Title:     "Test Book",
-			Author:    "Test Author",
-			Series:    "Test Series",
-			Position:  1,
-			Format:    ".m4b",
-			Duration:  3600,
-			Narrator:  "Test Narrator",
-			Language:  "en",
-			Publisher: "Test Publisher",
-		}
-
-		if err := os.WriteFile(book.FilePath, []byte("test"), 0o644); err != nil {
-			t.Fatalf("write file: %v", err)
-		}
-
-		// This exercises the GlobalStore path
-		if err := saveBookToDatabase(context.Background(), book); err != nil {
-			t.Logf("saveBookToDatabase error (may be expected): %v", err)
-		}
-	})
-}
-
-// TestSaveBookToDatabaseWithoutStore tests fallback when GlobalStore is nil
-func TestSaveBookToDatabaseWithoutStore(t *testing.T) {
-	// Save and clear GlobalStore
-	origStore := database.GetGlobalStore()
-	database.SetGlobalStore(nil)
-	t.Cleanup(func() {
-		database.SetGlobalStore(origStore)
-	})
-
-	// Also need to set database.DB for the fallback path
-	origDB := database.DB
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "fallback.db")
-
-	if err := database.Initialize(dbPath); err != nil {
-		t.Fatalf("init db: %v", err)
-	}
-	t.Cleanup(func() {
-		database.DB = origDB
-		database.Close()
-	})
-
-	book := &Book{
-		FilePath: filepath.Join(tmpDir, "fallback.m4b"),
-		Title:    "Fallback Book",
-		Author:   "Fallback Author",
-		Format:   ".m4b",
-	}
-
-	err := saveBookToDatabase(context.Background(), book)
-	if err != nil {
-		t.Errorf("saveBookToDatabase fallback error: %v", err)
-	}
 }
 
 // TestSaveBookToDatabaseNoDatabase tests error when no database is available
 func TestSaveBookToDatabaseNoDatabase(t *testing.T) {
-	// Save originals
 	origStore := database.GetGlobalStore()
-	origDB := database.DB
-
-	// Clear both
 	database.SetGlobalStore(nil)
-	database.DB = nil
-
 	t.Cleanup(func() {
 		database.SetGlobalStore(origStore)
-		database.DB = origDB
 	})
 
 	book := &Book{

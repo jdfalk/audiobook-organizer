@@ -1440,11 +1440,8 @@ func (m *mockScannerImpl) ComputeFileHash(filePath string) (string, error) {
 func TestSaveBookToDatabaseNilStore(t *testing.T) {
 	origStore := database.GetGlobalStore()
 	database.SetGlobalStore(nil)
-	origDB := database.DB
-	database.DB = nil
 	t.Cleanup(func() {
 		database.SetGlobalStore(origStore)
-		database.DB = origDB
 	})
 
 	book := &Book{Title: "Test", Author: "Author", FilePath: "/tmp/test.m4b"}

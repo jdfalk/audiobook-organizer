@@ -1,6 +1,9 @@
 // file: internal/server/server_test.go
-// version: 1.15.0
+// version: 2.0.0
 // guid: b2c3d4e5-f6a7-8901-bcde-234567890abc
+// last-edited: 2026-06-10
+
+// NOTE(fable5 T022): setupTestServer ported from NewSQLiteStore to NewPebbleStore.
 
 package server
 
@@ -40,14 +43,13 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 
 	// Initialize test configuration
 	config.AppConfig = config.Config{
-		DatabaseType: "sqlite",
-		DatabasePath: filepath.Join(tempDir, "test.db"),
+		DatabaseType: "pebble",
+		DatabasePath: filepath.Join(tempDir, "test.pebble"),
 		RootDir:      tempDir,
-		EnableSQLite: true,
 	}
 
 	// Initialize database
-	store, err := database.NewSQLiteStore(config.AppConfig.DatabasePath)
+	store, err := database.NewPebbleStore(config.AppConfig.DatabasePath)
 	require.NoError(t, err)
 	database.SetGlobalStore(store)
 

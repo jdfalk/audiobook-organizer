@@ -1,7 +1,7 @@
 // file: internal/server/server.go
-// version: 2.26.0
+// version: 2.27.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-06-09
+// last-edited: 2026-06-10
 
 package server
 
@@ -12,7 +12,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -494,19 +493,10 @@ func NewServer(store database.Store) *Server {
 
 	// One-shot migration from the legacy embeddings.db SQLite sidecar.
 	// Safe to call every startup: a flag key in PebbleDB prevents re-runs.
-	// Stays inline (not a service) because it's a one-time migration step,
-	// not a runtime dependency.
-	if dbPath := config.AppConfig.DatabasePath; dbPath != "" {
-		dbDir := filepath.Dir(dbPath)
-		// resolvedStore captured above from NewServer's caller (or the
-		// global as fallback in test paths) — avoids a second
-		// GetGlobalStore() lookup here (SERVER-GLOBAL-STORE-AUDIT).
-		if ps, ok := resolvedStore.(*database.PebbleStore); ok {
-			if migrateErr := database.MigrateEmbeddingsFromSQLite(ps.DB(), filepath.Join(dbDir, "embeddings.db")); migrateErr != nil {
-				slog.Warn("embeddings.db migration error (continuing)", "migrateErr", migrateErr)
-			}
-		}
-	}
+	// NOTE(fable5 T022): MigrateEmbeddingsFromSQLite was removed from server
+	// startup. The embeddings.db file on prod has been stale since 2026-05-11
+	// and the migration already ran. Use the 'migrate-embeddings-from-sqlite'
+	// admin subcommand if a manual one-off migration is needed.
 
 	// AI cluster (embeddingstore / embedclient / llmparser / chromemstore /
 	// aijobsstore / dedup / metadatascorer / metadatallmscorer) is now

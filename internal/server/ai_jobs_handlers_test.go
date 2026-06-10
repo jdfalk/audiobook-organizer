@@ -1,6 +1,9 @@
 // file: internal/server/ai_jobs_handlers_test.go
-// version: 1.0.1
+// version: 2.0.0
 // guid: 136d5ad0-d226-471a-8c2c-64992ba3882d
+// last-edited: 2026-06-10
+
+// NOTE(fable5 T022): Ported from SQLiteStore to PebbleStore.
 
 package server
 
@@ -17,13 +20,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// setupAIJobsTestServer creates a SQLiteStore with migrations applied and sets it
+// setupAIJobsTestServer creates a PebbleStore with migrations applied and sets it
 // as the global store for the Server to use. Returns the Server and a cleanup function.
-func setupAIJobsTestServer(t *testing.T) (*Server, *database.SQLiteStore) {
+func setupAIJobsTestServer(t *testing.T) (*Server, *database.PebbleStore) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	store, err := database.NewSQLiteStore(":memory:")
+	store, err := database.NewPebbleStore(t.TempDir())
 	require.NoError(t, err)
 	require.NoError(t, database.RunMigrations(store))
 
@@ -41,7 +44,7 @@ func setupAIJobsTestServer(t *testing.T) (*Server, *database.SQLiteStore) {
 func TestListAIJobsHandler_ReturnsRowsFiltered(t *testing.T) {
 	srv, store := setupAIJobsTestServer(t)
 
-	// Verify the global store is our SQLiteStore
+	// Verify the global store implements AIJobsStore
 	globalStore := database.GetGlobalStore()
 	_, ok := globalStore.(database.AIJobsStore)
 	require.True(t, ok, "global store does not implement AIJobsStore")

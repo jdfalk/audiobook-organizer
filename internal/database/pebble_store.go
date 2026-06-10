@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.85.0
+// version: 1.85.1
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-06-10
 
@@ -1116,8 +1116,6 @@ func (p *PebbleStore) GetAllSeriesFileCounts() (map[int]int, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer iter.Close()
-
 	for iter.First(); iter.Valid(); iter.Next() {
 		key := string(iter.Key())
 		if !strings.HasPrefix(key, "book:") {
@@ -1135,8 +1133,10 @@ func (p *PebbleStore) GetAllSeriesFileCounts() (map[int]int, error) {
 			bookIDToSeriesID[b.ID] = *b.SeriesID
 		}
 	}
+	iter.Close()
 
-	counts := make(map[int]int)
+	// Count actual BookFile records per book.
+	bookFileCounts := make(map[string]int) // bookID → actual file count
 	fileIter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("book_file:0"),
 		UpperBound: []byte("book_file:;"),
@@ -1144,8 +1144,6 @@ func (p *PebbleStore) GetAllSeriesFileCounts() (map[int]int, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer fileIter.Close()
-
 	for fileIter.First(); fileIter.Valid(); fileIter.Next() {
 		key := string(fileIter.Key())
 		if !strings.HasPrefix(key, "book_file:") {
@@ -1156,15 +1154,27 @@ func (p *PebbleStore) GetAllSeriesFileCounts() (map[int]int, error) {
 			continue
 		}
 		bookID := parts[1]
-		if seriesID, ok := bookIDToSeriesID[bookID]; ok {
+		if _, inSeries := bookIDToSeriesID[bookID]; inSeries {
 			var f BookFile
 			if err := json.Unmarshal(fileIter.Value(), &f); err != nil {
 				continue
 			}
 			if !f.Missing {
-				counts[seriesID]++
+				bookFileCounts[bookID]++
 			}
 		}
+	}
+	fileIter.Close()
+
+	// Aggregate into series counts.
+	// Books with no files count as 1 (matches SQLite behaviour).
+	counts := make(map[int]int)
+	for bookID, seriesID := range bookIDToSeriesID {
+		n := bookFileCounts[bookID]
+		if n == 0 {
+			n = 1
+		}
+		counts[seriesID] += n
 	}
 	return counts, nil
 }
@@ -1950,17 +1960,113 @@ func (p *PebbleStore) SetBookAuthors(bookID string, authors []BookAuthor) error 
 	return nil
 }
 
+// GetBooksByAuthorIDWithRole returns all books where the author appears in
+// the book_authors junction table (any role). It also falls back to the
+// legacy AuthorID field for books not yet migrated to the junction table.
 func (p *PebbleStore) GetBooksByAuthorIDWithRole(authorID int) ([]Book, error) {
-	// For Pebble, fall back to the same logic as GetBooksByAuthorID
-	return p.GetBooksByAuthorID(authorID)
+	if p.UseMemDB && p.mem() != nil {
+		return p.mem().GetBooksByAuthorID(authorID, 0, 0)
+	}
+	// Collect book IDs from the book_authors junction table.
+	bookIDSet := make(map[string]struct{})
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book_authors:"),
+		UpperBound: []byte("book_authors:~"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	for iter.First(); iter.Valid(); iter.Next() {
+		var authors []BookAuthor
+		if err := json.Unmarshal(iter.Value(), &authors); err != nil {
+			continue
+		}
+		for _, a := range authors {
+			if a.AuthorID == authorID {
+				// Extract bookID from key "book_authors:<bookID>"
+				key := string(iter.Key())
+				bookID := strings.TrimPrefix(key, "book_authors:")
+				bookIDSet[bookID] = struct{}{}
+			}
+		}
+	}
+	iter.Close()
+
+	// Also include books matched via legacy AuthorID field.
+	var books []Book
+	bookIter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer bookIter.Close()
+	for bookIter.First(); bookIter.Valid(); bookIter.Next() {
+		key := string(bookIter.Key())
+		if strings.Contains(key, ":path:") {
+			continue
+		}
+		var book Book
+		if err := json.Unmarshal(bookIter.Value(), &book); err != nil {
+			continue
+		}
+		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
+			continue
+		}
+		if _, inJunction := bookIDSet[book.ID]; inJunction {
+			books = append(books, book)
+			delete(bookIDSet, book.ID) // avoid duplicates
+		} else if book.AuthorID != nil && *book.AuthorID == authorID {
+			books = append(books, book)
+		}
+	}
+	return books, nil
 }
 
 func (p *PebbleStore) GetAllAuthorBookCounts() (map[int]int, error) {
 	if p.UseMemDB && p.mem() != nil {
 		return p.mem().GetAllAuthorBookCounts()
 	}
-	// Full Pebble book scan (book:author index removed in Task 3.4).
+	// Full Pebble book scan combined with junction table scan.
 	counts := make(map[int]int)
+
+	// Pass 1: scan book_authors junction table (multi-author associations).
+	// Track which books have junction entries so we don't double-count.
+	bookHasJunction := make(map[string]bool)
+	jIter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book_authors:"),
+		UpperBound: []byte("book_authors:~"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	for jIter.First(); jIter.Valid(); jIter.Next() {
+		var authors []BookAuthor
+		if json.Unmarshal(jIter.Value(), &authors) != nil {
+			continue
+		}
+		key := string(jIter.Key())
+		bookID := strings.TrimPrefix(key, "book_authors:")
+		// Look up the book to check primary/deletion flags.
+		book, _ := p.GetBookByID(bookID)
+		if book == nil {
+			continue
+		}
+		if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
+			continue
+		}
+		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
+			continue
+		}
+		bookHasJunction[bookID] = true
+		for _, a := range authors {
+			counts[a.AuthorID]++
+		}
+	}
+	jIter.Close()
+
+	// Pass 2: scan books for the legacy AuthorID field (for books without junction entries).
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("book:0"),
 		UpperBound: []byte("book:;"),
@@ -1972,7 +2078,6 @@ func (p *PebbleStore) GetAllAuthorBookCounts() (map[int]int, error) {
 
 	for iter.First(); iter.Valid(); iter.Next() {
 		key := string(iter.Key())
-		// Skip path index and other sub-keys
 		if strings.Contains(key, ":path:") {
 			continue
 		}
@@ -1980,10 +2085,12 @@ func (p *PebbleStore) GetAllAuthorBookCounts() (map[int]int, error) {
 		if len(parts) != 2 {
 			continue
 		}
-
 		var b Book
 		if err := json.Unmarshal(iter.Value(), &b); err != nil {
 			continue
+		}
+		if bookHasJunction[b.ID] {
+			continue // already counted via junction
 		}
 		if b.AuthorID == nil {
 			continue
@@ -2239,6 +2346,10 @@ func (p *PebbleStore) ListNarrators() ([]Narrator, error) {
 			narrators = append(narrators, n)
 		}
 	}
+	// Sort alphabetically by name to match SQLiteStore ordering behaviour.
+	sort.Slice(narrators, func(i, j int) bool {
+		return narrators[i].Name < narrators[j].Name
+	})
 	return narrators, nil
 }
 
@@ -3210,20 +3321,43 @@ func (p *PebbleStore) CountSeries() (int, error) {
 	return count, nil
 }
 
+// GetBookCountsByLocation counts primary, non-deleted books whose file path
+// starts with rootDir (organized) vs. those that don't (import/unorganized).
+// When rootDir is empty, all books are counted as unorganized.
 func (p *PebbleStore) GetBookCountsByLocation(rootDir string) (library, import_ int, err error) {
-	stats, err := p.GetDashboardStats()
+	books, err := p.GetAllBooks(0, 0)
 	if err != nil {
 		return 0, 0, err
 	}
-	return stats.OrganizedBooks, stats.UnorganizedBooks, nil
+	for _, b := range books {
+		if rootDir != "" && strings.HasPrefix(b.FilePath, rootDir) {
+			library++
+		} else {
+			import_++
+		}
+	}
+	return library, import_, nil
 }
 
+// GetBookSizesByLocation sums file sizes for books in the library root vs. outside.
+// When rootDir is empty, all sizes go to the import (unorganized) bucket.
 func (p *PebbleStore) GetBookSizesByLocation(rootDir string) (librarySize, importSize int64, err error) {
-	stats, err := p.GetDashboardStats()
+	books, err := p.GetAllBooks(0, 0)
 	if err != nil {
 		return 0, 0, err
 	}
-	return stats.OrganizedSize, stats.UnorganizedSize, nil
+	for _, b := range books {
+		var sz int64
+		if b.FileSize != nil {
+			sz = *b.FileSize
+		}
+		if rootDir != "" && strings.HasPrefix(b.FilePath, rootDir) {
+			librarySize += sz
+		} else {
+			importSize += sz
+		}
+	}
+	return librarySize, importSize, nil
 }
 
 // GetDashboardStats returns LibraryStats, serving from the PebbleDB cache when fresh.
@@ -4291,6 +4425,14 @@ func (p *PebbleStore) DeleteMetadataFieldState(bookID, field string) error {
 // Metadata change history operations
 
 func (p *PebbleStore) RecordMetadataChange(record *MetadataChangeRecord) error {
+	if record.ChangedAt.IsZero() {
+		record.ChangedAt = time.Now().UTC()
+	}
+	// Use UnixNano as the synthetic integer ID so callers can distinguish
+	// records (ID == 0 is treated as "not stored").
+	if record.ID == 0 {
+		record.ID = int(record.ChangedAt.UnixNano())
+	}
 	key := fmt.Sprintf("metadata_change:%s:%s:%d", record.BookID, record.Field, record.ChangedAt.UnixNano())
 	data, err := json.Marshal(record)
 	if err != nil {
@@ -6954,17 +7096,85 @@ func (p *PebbleStore) BulkCreateExternalIDMappings(mappings []ExternalIDMapping)
 	return batch.Commit(pebble.Sync)
 }
 
-// MarkExternalIDRemoved is a stub — PID lifecycle tracking is SQLite-only.
-func (p *PebbleStore) MarkExternalIDRemoved(source, externalID string) error { return nil }
+// MarkExternalIDRemoved marks an external ID mapping as tombstoned and records
+// the removal timestamp. The primary ext_id:<source>:<externalID> record is
+// updated in-place so provenance and other fields are preserved.
+func (p *PebbleStore) MarkExternalIDRemoved(source, externalID string) error {
+	key := []byte(fmt.Sprintf("ext_id:%s:%s", source, externalID))
+	data, closer, err := p.db.Get(key)
+	if err == pebble.ErrNotFound {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("pebble Get ext_id for removal: %w", err)
+	}
+	var mapping ExternalIDMapping
+	if err := json.Unmarshal(data, &mapping); err != nil {
+		closer.Close()
+		return fmt.Errorf("unmarshal ext_id for removal: %w", err)
+	}
+	closer.Close()
 
-// SetExternalIDProvenance is a stub — PID lifecycle tracking is SQLite-only.
-func (p *PebbleStore) SetExternalIDProvenance(source, externalID, provenance string) error {
-	return nil
+	now := time.Now()
+	mapping.Tombstoned = true
+	mapping.RemovedAt = &now
+	updated, err := json.Marshal(mapping)
+	if err != nil {
+		return fmt.Errorf("marshal ext_id after removal: %w", err)
+	}
+	return p.db.Set(key, updated, pebble.Sync)
 }
 
-// GetRemovedExternalIDs is a stub — PID lifecycle tracking is SQLite-only.
+// SetExternalIDProvenance updates the provenance field on an existing external
+// ID mapping record. No-ops silently if the record does not exist.
+func (p *PebbleStore) SetExternalIDProvenance(source, externalID, provenance string) error {
+	key := []byte(fmt.Sprintf("ext_id:%s:%s", source, externalID))
+	data, closer, err := p.db.Get(key)
+	if err == pebble.ErrNotFound {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("pebble Get ext_id for provenance: %w", err)
+	}
+	var mapping ExternalIDMapping
+	if err := json.Unmarshal(data, &mapping); err != nil {
+		closer.Close()
+		return fmt.Errorf("unmarshal ext_id for provenance: %w", err)
+	}
+	closer.Close()
+
+	mapping.Provenance = provenance
+	updated, err := json.Marshal(mapping)
+	if err != nil {
+		return fmt.Errorf("marshal ext_id after provenance: %w", err)
+	}
+	return p.db.Set(key, updated, pebble.Sync)
+}
+
+// GetRemovedExternalIDs returns all tombstoned external ID mappings for the
+// given source (i.e. records where MarkExternalIDRemoved was called).
 func (p *PebbleStore) GetRemovedExternalIDs(source string) ([]ExternalIDMapping, error) {
-	return nil, nil
+	prefix := []byte(fmt.Sprintf("ext_id:%s:", source))
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(append([]byte{}, prefix...), 0xff),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var results []ExternalIDMapping
+	for iter.First(); iter.Valid(); iter.Next() {
+		var mapping ExternalIDMapping
+		if err := json.Unmarshal(iter.Value(), &mapping); err != nil {
+			continue
+		}
+		if mapping.Tombstoned {
+			results = append(results, mapping)
+		}
+	}
+	return results, nil
 }
 
 func (p *PebbleStore) SetRaw(key string, value []byte) error {
@@ -7626,28 +7836,52 @@ func (p *PebbleStore) GetSystemActivityLogs(source string, limit int) ([]SystemA
 }
 
 // PruneOperationLogs deletes operation log entries older than the given time.
+// Key format: operationlog:<operation_id>:<timestamp_nanos>:<seq>
 func (p *PebbleStore) PruneOperationLogs(olderThan time.Time) (int, error) {
-	return p.pruneByTimestampPrefix("oplog:", olderThan)
+	prefix := "operationlog:"
+	prefixBytes := []byte(prefix)
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefixBytes,
+		UpperBound: append(append([]byte{}, prefixBytes...), 0xFF),
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	deleted := 0
+	batch := p.db.NewBatch()
+	defer batch.Close()
+
+	olderThanNanos := olderThan.UnixNano()
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Key: operationlog:<opID>:<nanos>:<seq>
+		// Parse the JSON value to get CreatedAt.
+		var logEntry OperationLog
+		if jsonErr := json.Unmarshal(iter.Value(), &logEntry); jsonErr != nil {
+			continue
+		}
+		if logEntry.CreatedAt.UnixNano() < olderThanNanos {
+			if bErr := batch.Delete(iter.Key(), nil); bErr != nil {
+				return 0, fmt.Errorf("pebble batch delete operationlog: %w", bErr)
+			}
+			deleted++
+		}
+	}
+	if deleted > 0 {
+		return deleted, batch.Commit(pebble.Sync)
+	}
+	return 0, nil
 }
 
 // PruneOperationChanges deletes operation change entries older than the given time.
+// Key format: opchange:<operation_id>:<ulid>
 func (p *PebbleStore) PruneOperationChanges(olderThan time.Time) (int, error) {
-	return p.pruneByTimestampPrefix("opchange:", olderThan)
-}
-
-// PruneSystemActivityLogs deletes system activity log entries older than the given time.
-func (p *PebbleStore) PruneSystemActivityLogs(olderThan time.Time) (int, error) {
-	return p.pruneByTimestampPrefix("syslog:", olderThan)
-}
-
-// pruneByTimestampPrefix deletes all keys with the given prefix whose
-// embedded RFC3339 timestamp is before olderThan.
-func (p *PebbleStore) pruneByTimestampPrefix(prefix string, olderThan time.Time) (int, error) {
+	prefix := "opchange:"
 	prefixBytes := []byte(prefix)
-	upperBound := append(append([]byte{}, prefixBytes...), 0xFF)
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefixBytes,
-		UpperBound: upperBound,
+		UpperBound: append(append([]byte{}, prefixBytes...), 0xFF),
 	})
 	if err != nil {
 		return 0, err
@@ -7659,18 +7893,54 @@ func (p *PebbleStore) pruneByTimestampPrefix(prefix string, olderThan time.Time)
 	defer batch.Close()
 
 	for iter.First(); iter.Valid(); iter.Next() {
-		key := string(iter.Key())
-		parts := strings.SplitN(strings.TrimPrefix(key, prefix), ":", 2)
-		if len(parts) == 0 {
+		var change OperationChange
+		if jsonErr := json.Unmarshal(iter.Value(), &change); jsonErr != nil {
 			continue
 		}
-		ts, err := time.Parse(time.RFC3339Nano, parts[0])
-		if err != nil {
+		if change.CreatedAt.Before(olderThan) {
+			if bErr := batch.Delete(iter.Key(), nil); bErr != nil {
+				return 0, fmt.Errorf("pebble batch delete opchange: %w", bErr)
+			}
+			deleted++
+		}
+	}
+	if deleted > 0 {
+		return deleted, batch.Commit(pebble.Sync)
+	}
+	return 0, nil
+}
+
+// PruneSystemActivityLogs deletes system activity log entries older than the given time.
+// Key format: syslog:<RFC3339Nano>:<source>
+func (p *PebbleStore) PruneSystemActivityLogs(olderThan time.Time) (int, error) {
+	prefix := "syslog:"
+	prefixBytes := []byte(prefix)
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefixBytes,
+		UpperBound: append(append([]byte{}, prefixBytes...), 0xFF),
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	deleted := 0
+	batch := p.db.NewBatch()
+	defer batch.Close()
+
+	// Key format: syslog:<RFC3339Nano>:<source>
+	// RFC3339Nano contains colons (e.g. "2006-01-02T15:04:05.999999999Z07:00"),
+	// so we parse the JSON value to get CreatedAt rather than parsing the key.
+	for iter.First(); iter.Valid(); iter.Next() {
+		var entry struct {
+			CreatedAt time.Time `json:"created_at"`
+		}
+		if jsonErr := json.Unmarshal(iter.Value(), &entry); jsonErr != nil {
 			continue
 		}
-		if ts.Before(olderThan) {
-			if err := batch.Delete(iter.Key(), nil); err != nil {
-				return 0, fmt.Errorf("pebble batch delete %s: %w", key, err)
+		if entry.CreatedAt.Before(olderThan) {
+			if bErr := batch.Delete(iter.Key(), nil); bErr != nil {
+				return 0, fmt.Errorf("pebble batch delete syslog: %w", bErr)
 			}
 			deleted++
 		}
@@ -8467,6 +8737,12 @@ func (s *PebbleStore) getBookFileByID(bookID, fileID string) (*BookFile, error) 
 func writeBookFileSecondaryIndexes(batch *pebble.Batch, f *BookFile) error {
 	ref := []byte(fmt.Sprintf("%s:%s", f.BookID, f.ID))
 
+	// book_file_id:<fileID> → "<bookID>:<fileID>" — allows ID-only lookups.
+	idxKey := []byte(fmt.Sprintf("book_file_id:%s", f.ID))
+	if err := batch.Set(idxKey, []byte(fmt.Sprintf("book_file:%s:%s", f.BookID, f.ID)), nil); err != nil {
+		return err
+	}
+
 	if f.ITunesPersistentID != "" {
 		pidKey := []byte(fmt.Sprintf("book_file_pid:%s", f.ITunesPersistentID))
 		if err := batch.Set(pidKey, ref, nil); err != nil {
@@ -8518,6 +8794,13 @@ func writeBookFileSecondaryIndexes(batch *pebble.Batch, f *BookFile) error {
 // is used to read the LSH meta-row from the committed DB state — Pebble's
 // non-indexed batch can't satisfy that lookup itself.
 func (s *PebbleStore) deleteBookFileSecondaryIndexes(batch *pebble.Batch, f *BookFile) error {
+	// Delete book_file_id secondary index.
+	if f.ID != "" {
+		if err := batch.Delete([]byte(fmt.Sprintf("book_file_id:%s", f.ID)), nil); err != nil {
+			return err
+		}
+	}
+
 	if f.ITunesPersistentID != "" {
 		pidKey := []byte(fmt.Sprintf("book_file_pid:%s", f.ITunesPersistentID))
 		if err := batch.Delete(pidKey, nil); err != nil {
@@ -8913,6 +9196,16 @@ func (s *PebbleStore) GetBookFiles(bookID string) ([]BookFile, error) {
 		}
 		files = append(files, f)
 	}
+	// Sort: disc ASC, track ASC, file_path ASC — matches SQLite ORDER BY.
+	sort.Slice(files, func(i, j int) bool {
+		if files[i].DiscNumber != files[j].DiscNumber {
+			return files[i].DiscNumber < files[j].DiscNumber
+		}
+		if files[i].TrackNumber != files[j].TrackNumber {
+			return files[i].TrackNumber < files[j].TrackNumber
+		}
+		return files[i].FilePath < files[j].FilePath
+	})
 	return files, nil
 }
 
@@ -9555,52 +9848,229 @@ func (p *PebbleStore) ResetScanFailCount(pathHash string) error {
 	return p.db.Delete(key, pebble.Sync)
 }
 
-// MergeChapterBooks is not supported on PebbleStore (schema-free, no SQL transactions).
-func (p *PebbleStore) MergeChapterBooks(_ string, _ []string, _ string, _ float64) error {
+// MergeChapterBooks moves all BookFiles from srcIDs onto primaryID, then
+// updates the primary book's title and duration. Source books are marked
+// with merged_into_book_id set to primaryID.
+func (p *PebbleStore) MergeChapterBooks(primaryID string, srcIDs []string, newTitle string, duration float64) error {
+	if len(srcIDs) == 0 {
+		return nil
+	}
+	for _, srcID := range srcIDs {
+		files, err := p.GetBookFiles(srcID)
+		if err != nil {
+			return fmt.Errorf("MergeChapterBooks: get files for %s: %w", srcID, err)
+		}
+		for i := range files {
+			old := files[i]
+			// Delete old primary + secondary indexes.
+			batch := p.db.NewBatch()
+			oldKey := []byte(fmt.Sprintf("book_file:%s:%s", old.BookID, old.ID))
+			if err := batch.Delete(oldKey, nil); err != nil {
+				batch.Close()
+				return err
+			}
+			if err := p.deleteBookFileSecondaryIndexes(batch, &old); err != nil {
+				batch.Close()
+				return err
+			}
+			if err := batch.Commit(pebble.Sync); err != nil {
+				return fmt.Errorf("MergeChapterBooks: delete src file: %w", err)
+			}
+			// Re-parent the file to the primary book.
+			old.BookID = primaryID
+			if err := p.CreateBookFile(&old); err != nil {
+				return fmt.Errorf("MergeChapterBooks: create merged file: %w", err)
+			}
+		}
+		// Mark source book as merged.
+		if err := p.FlagMetadataHashDuplicate(primaryID, srcID); err != nil {
+			return fmt.Errorf("MergeChapterBooks: flag duplicate: %w", err)
+		}
+	}
+	// Update primary book's title and duration.
+	primary, err := p.GetBookByID(primaryID)
+	if err != nil || primary == nil {
+		return err
+	}
+	if newTitle != "" {
+		primary.Title = newTitle
+	}
+	if duration > 0 {
+		d := int(duration)
+		primary.Duration = &d
+	}
+	_, err = p.UpdateBook(primaryID, primary)
+	return err
+}
+
+// --- AIJobsStore (PebbleDB key-value implementation) ---
+//
+// Key scheme:
+//   aijob:<id>           → JSON-encoded AIJob
+//   aijob_payload:<id>   → raw payload bytes
+//   aijob_batch:<bid>    → job ID (secondary index; batch_id → job_id)
+
+// CreateAIJob stores a new AIJob row and its payload blob.
+func (p *PebbleStore) CreateAIJob(job AIJob, payloadJSON []byte) error {
+	data, err := json.Marshal(job)
+	if err != nil {
+		return fmt.Errorf("CreateAIJob marshal: %w", err)
+	}
+	jobKey := []byte(fmt.Sprintf("aijob:%s", job.ID))
+	if err := p.db.Set(jobKey, data, pebble.Sync); err != nil {
+		return fmt.Errorf("CreateAIJob set job: %w", err)
+	}
+	payloadKey := []byte(fmt.Sprintf("aijob_payload:%s", job.ID))
+	if err := p.db.Set(payloadKey, payloadJSON, pebble.Sync); err != nil {
+		return fmt.Errorf("CreateAIJob set payload: %w", err)
+	}
 	return nil
 }
 
-// --- AIJobsStore stubs (not supported on PebbleStore; SQLite only) ---
-
-// CreateAIJob is not supported on PebbleStore.
-func (p *PebbleStore) CreateAIJob(_ AIJob, _ []byte) error {
-	return fmt.Errorf("AIJobsStore.CreateAIJob: not supported by PebbleStore")
+// GetAIJob retrieves a job by its ID.
+func (p *PebbleStore) GetAIJob(id string) (AIJob, error) {
+	jobKey := []byte(fmt.Sprintf("aijob:%s", id))
+	value, closer, err := p.db.Get(jobKey)
+	if err == pebble.ErrNotFound {
+		return AIJob{}, fmt.Errorf("ai job not found: %s", id)
+	}
+	if err != nil {
+		return AIJob{}, err
+	}
+	defer closer.Close()
+	var job AIJob
+	if err := json.Unmarshal(value, &job); err != nil {
+		return AIJob{}, err
+	}
+	return job, nil
 }
 
-// GetAIJob is not supported on PebbleStore.
-func (p *PebbleStore) GetAIJob(_ string) (AIJob, error) {
-	return AIJob{}, fmt.Errorf("AIJobsStore.GetAIJob: not supported by PebbleStore")
+// GetAIJobByBatchID retrieves a job using the OpenAI batch ID secondary index.
+func (p *PebbleStore) GetAIJobByBatchID(batchID string) (AIJob, error) {
+	idxKey := []byte(fmt.Sprintf("aijob_batch:%s", batchID))
+	val, closer, err := p.db.Get(idxKey)
+	if err == pebble.ErrNotFound {
+		return AIJob{}, fmt.Errorf("ai job not found for batch: %s", batchID)
+	}
+	if err != nil {
+		return AIJob{}, err
+	}
+	jobID := string(val)
+	closer.Close()
+	return p.GetAIJob(jobID)
 }
 
-// GetAIJobByBatchID is not supported on PebbleStore.
-func (p *PebbleStore) GetAIJobByBatchID(_ string) (AIJob, error) {
-	return AIJob{}, fmt.Errorf("AIJobsStore.GetAIJobByBatchID: not supported by PebbleStore")
+// GetAIJobPayload returns the raw payload JSON stored alongside the job.
+func (p *PebbleStore) GetAIJobPayload(id string) ([]byte, error) {
+	payloadKey := []byte(fmt.Sprintf("aijob_payload:%s", id))
+	value, closer, err := p.db.Get(payloadKey)
+	if err == pebble.ErrNotFound {
+		return nil, fmt.Errorf("ai job payload not found: %s", id)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	return append([]byte(nil), value...), nil
 }
 
-// GetAIJobPayload is not supported on PebbleStore.
-func (p *PebbleStore) GetAIJobPayload(_ string) ([]byte, error) {
-	return nil, fmt.Errorf("AIJobsStore.GetAIJobPayload: not supported by PebbleStore")
+// MarkAIJobSubmitted sets the job status to "submitted" and records the batch ID.
+func (p *PebbleStore) MarkAIJobSubmitted(id, batchID string) error {
+	job, err := p.GetAIJob(id)
+	if err != nil {
+		return err
+	}
+	job.Status = "submitted"
+	job.BatchID = batchID
+	job.SubmittedAt = time.Now().UTC()
+	data, err := json.Marshal(job)
+	if err != nil {
+		return err
+	}
+	if err := p.db.Set([]byte(fmt.Sprintf("aijob:%s", id)), data, pebble.Sync); err != nil {
+		return err
+	}
+	// Write secondary index: batch_id → job_id
+	return p.db.Set([]byte(fmt.Sprintf("aijob_batch:%s", batchID)), []byte(id), pebble.Sync)
 }
 
-// MarkAIJobSubmitted is not supported on PebbleStore.
-func (p *PebbleStore) MarkAIJobSubmitted(_, _ string) error {
-	return fmt.Errorf("AIJobsStore.MarkAIJobSubmitted: not supported by PebbleStore")
+// MarkAIJobCompleted sets the job status to completed/completed_with_errors and
+// records success/error counts and per-row error details.
+func (p *PebbleStore) MarkAIJobCompleted(id, status string, successCount, errorCount int, rowErrors []AIJobRowError) error {
+	job, err := p.GetAIJob(id)
+	if err != nil {
+		return err
+	}
+	job.Status = status
+	job.SuccessCount = successCount
+	job.ErrorCount = errorCount
+	job.CompletedAt = time.Now().UTC()
+	if len(rowErrors) > 0 {
+		b, _ := json.Marshal(rowErrors)
+		job.RowErrors = string(b)
+	}
+	data, err := json.Marshal(job)
+	if err != nil {
+		return err
+	}
+	return p.db.Set([]byte(fmt.Sprintf("aijob:%s", id)), data, pebble.Sync)
 }
 
-// MarkAIJobCompleted is not supported on PebbleStore.
-func (p *PebbleStore) MarkAIJobCompleted(_ string, _ string, _, _ int, _ []AIJobRowError) error {
-	return fmt.Errorf("AIJobsStore.MarkAIJobCompleted: not supported by PebbleStore")
+// MarkAIJobFailed sets the job status to "failed" with an error message.
+func (p *PebbleStore) MarkAIJobFailed(id, errMsg string) error {
+	job, err := p.GetAIJob(id)
+	if err != nil {
+		return err
+	}
+	job.Status = "failed"
+	job.ErrorMsg = errMsg
+	job.CompletedAt = time.Now().UTC()
+	data, err := json.Marshal(job)
+	if err != nil {
+		return err
+	}
+	return p.db.Set([]byte(fmt.Sprintf("aijob:%s", id)), data, pebble.Sync)
 }
 
-// MarkAIJobFailed is not supported on PebbleStore.
-func (p *PebbleStore) MarkAIJobFailed(_, _ string) error {
-	return fmt.Errorf("AIJobsStore.MarkAIJobFailed: not supported by PebbleStore")
-}
+// ListAIJobs returns jobs matching optional type/status filters, with
+// limit/offset pagination. Results are ordered by CreatedAt descending.
+func (p *PebbleStore) ListAIJobs(typeFilter, statusFilter string, limit, offset int) ([]AIJob, error) {
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("aijob:"),
+		UpperBound: []byte("aijob:~"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
 
-// ListAIJobs is not supported on PebbleStore; returns an empty list so diagnostics
-// pages degrade gracefully instead of showing an error.
-func (p *PebbleStore) ListAIJobs(_, _ string, _, _ int) ([]AIJob, error) {
-	return []AIJob{}, nil
+	var all []AIJob
+	for iter.First(); iter.Valid(); iter.Next() {
+		var job AIJob
+		if err := json.Unmarshal(iter.Value(), &job); err != nil {
+			continue
+		}
+		if typeFilter != "" && job.Type != typeFilter {
+			continue
+		}
+		if statusFilter != "" && job.Status != statusFilter {
+			continue
+		}
+		all = append(all, job)
+	}
+
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].CreatedAt.After(all[j].CreatedAt)
+	})
+
+	if offset >= len(all) {
+		return []AIJob{}, nil
+	}
+	all = all[offset:]
+	if limit > 0 && len(all) > limit {
+		all = all[:limit]
+	}
+	return all, nil
 }
 
 // KeyCount returns the total number of keys stored in the PebbleDB instance
@@ -9691,19 +10161,147 @@ func (s *PebbleStore) SetBookFileHash(id, hash string) error {
 
 // AddMetadataRejection is not supported on PebbleStore.
 // AddMetadataRejection is a no-op on PebbleStore (rejections not persisted).
-func (p *PebbleStore) AddMetadataRejection(_ MetadataRejection) error { return nil }
-
-// GetMetadataRejections returns empty on PebbleStore (rejections not persisted).
-func (p *PebbleStore) GetMetadataRejections(_ string) ([]MetadataRejection, error) {
-	return []MetadataRejection{}, nil
+// AddMetadataRejection persists a rejected metadata candidate under
+// key metadata_rejection:<bookID>:<ULID>.
+func (p *PebbleStore) AddMetadataRejection(r MetadataRejection) error {
+	if r.ID == "" {
+		id, err := newULID()
+		if err != nil {
+			return err
+		}
+		r.ID = id
+	}
+	if r.RejectedAt.IsZero() {
+		r.RejectedAt = time.Now().UTC()
+	}
+	data, err := json.Marshal(r)
+	if err != nil {
+		return err
+	}
+	key := []byte(fmt.Sprintf("metadata_rejection:%s:%s", r.BookID, r.ID))
+	return p.db.Set(key, data, pebble.Sync)
 }
 
-// DeleteMetadataRejections is a no-op on PebbleStore (rejections not persisted).
-func (p *PebbleStore) DeleteMetadataRejections(_ string) error { return nil }
+// GetMetadataRejections returns all rejection records for a book.
+func (p *PebbleStore) GetMetadataRejections(bookID string) ([]MetadataRejection, error) {
+	prefix := []byte(fmt.Sprintf("metadata_rejection:%s:", bookID))
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(append([]byte(nil), prefix...), 0xFF),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+	var out []MetadataRejection
+	for iter.First(); iter.Valid(); iter.Next() {
+		var r MetadataRejection
+		if err := json.Unmarshal(iter.Value(), &r); err != nil {
+			continue
+		}
+		out = append(out, r)
+	}
+	if out == nil {
+		out = []MetadataRejection{}
+	}
+	return out, nil
+}
 
-// GetDuplicateFilesByHash is not supported on PebbleStore.
-func (p *PebbleStore) GetDuplicateFilesByHash(_ int) ([]DuplicateFileGroup, error) {
-	return nil, nil
+// DeleteMetadataRejections removes all rejection records for a book.
+func (p *PebbleStore) DeleteMetadataRejections(bookID string) error {
+	prefix := []byte(fmt.Sprintf("metadata_rejection:%s:", bookID))
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(append([]byte(nil), prefix...), 0xFF),
+	})
+	if err != nil {
+		return err
+	}
+	var keys [][]byte
+	for iter.First(); iter.Valid(); iter.Next() {
+		keys = append(keys, append([]byte(nil), iter.Key()...))
+	}
+	iter.Close()
+	for _, k := range keys {
+		if err := p.db.Delete(k, pebble.Sync); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetDuplicateFilesByHash returns groups of BookFiles sharing the same
+// OriginalFileHash. Groups are ordered by file count descending. limit=0
+// defaults to 50.
+func (p *PebbleStore) GetDuplicateFilesByHash(limit int) ([]DuplicateFileGroup, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	files, err := p.GetAllBookFiles()
+	if err != nil {
+		return nil, fmt.Errorf("GetDuplicateFilesByHash: %w", err)
+	}
+
+	// Build book title map for annotating results.
+	books, _ := p.GetAllBooks(0, 0)
+	bookTitles := make(map[string]string, len(books))
+	bookPaths := make(map[string]string, len(books))
+	for _, b := range books {
+		bookTitles[b.ID] = b.Title
+		bookPaths[b.ID] = b.FilePath
+	}
+
+	type group struct {
+		files []BookFile
+	}
+	byHash := make(map[string]*group)
+	for i := range files {
+		h := files[i].OriginalFileHash
+		if h == "" {
+			continue
+		}
+		if byHash[h] == nil {
+			byHash[h] = &group{}
+		}
+		byHash[h].files = append(byHash[h].files, files[i])
+	}
+
+	var result []DuplicateFileGroup
+	for hash, g := range byHash {
+		if len(g.files) < 2 {
+			continue
+		}
+		bookIDs := make(map[string]struct{})
+		var infos []DuplicateFileInfo
+		var totalSize int64
+		for _, f := range g.files {
+			bookIDs[f.BookID] = struct{}{}
+			totalSize += f.FileSize
+			infos = append(infos, DuplicateFileInfo{
+				BookFileID: f.ID,
+				BookID:     f.BookID,
+				BookTitle:  bookTitles[f.BookID],
+				FilePath:   f.FilePath,
+				BookPath:   bookPaths[f.BookID],
+				FileSize:   f.FileSize,
+			})
+		}
+		result = append(result, DuplicateFileGroup{
+			Hash:      hash,
+			FileCount: len(g.files),
+			BookCount: len(bookIDs),
+			TotalSize: totalSize,
+			Files:     infos,
+		})
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].FileCount > result[j].FileCount
+	})
+	if len(result) > limit {
+		result = result[:limit]
+	}
+	return result, nil
 }
 
 // GetBookFileHashStats scans all book_file primary records in memory and

@@ -1,60 +1,22 @@
 // file: internal/tagger/tagger.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 3b4c5d6e-7f8a-9b0c-1d2e-3f4a5b6c7d8e
 
 package tagger
 
 import (
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"path/filepath"
 	"strings"
-
-	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
-// UpdateSeriesTags updates the audio files with series metadata tags
+// UpdateSeriesTags updates the audio files with series metadata tags.
+// NOTE: This function used the legacy global database.DB (SQLite) which was
+// removed in fable5 TASK-022. Use the tag-writing pipeline via the Store API
+// (server/handlers/tags.go) for production workflows.
 func UpdateSeriesTags() error {
-	// Get all books with series information
-	rows, err := database.DB.Query(`
-        SELECT books.file_path, books.title, series.name, books.series_sequence
-        FROM books
-        JOIN series ON books.series_id = series.id
-    `)
-	if err != nil {
-		return fmt.Errorf("failed to query books with series: %w", err)
-	}
-	defer rows.Close()
-
-	slog.Info("tagger updating audio file tags with series information")
-	count := 0
-
-	for rows.Next() {
-		var filePath, title, seriesName string
-		var seriesSequence sql.NullInt64
-
-		if err := rows.Scan(&filePath, &title, &seriesName, &seriesSequence); err != nil {
-			return fmt.Errorf("failed to scan book row: %w", err)
-		}
-
-		// Create series tag value
-		seriesTag := seriesName
-		if seriesSequence.Valid && seriesSequence.Int64 > 0 {
-			seriesTag = fmt.Sprintf("%s, Book %d", seriesName, seriesSequence.Int64)
-		}
-
-		// Update the file tags
-		if err := updateFileTags(filePath, title, seriesTag); err != nil {
-			slog.Warn("tagger could not update tags", "path", filePath, "error", err)
-			continue
-		}
-
-		count++
-	}
-
-	slog.Info("tagger updated tags", "count", count)
-	return nil
+	return fmt.Errorf("UpdateSeriesTags: the legacy SQLite path was removed in fable5 T022; use the Store-backed tag-write pipeline instead")
 }
 
 // updateFileTags updates the tags of an audio file

@@ -1,9 +1,11 @@
 // file: internal/server/activity_handlers_test.go
-// version: 3.0.0
+// version: 5.0.0
 // guid: d4e5f6a7-b8c9-0123-defa-234567890123
+// last-edited: 2026-06-10
 
 // Updated for Phase 2 handler extraction: tests now use handlers.ActivityHandler
 // directly instead of *Server methods.
+// NOTE(fable5 T022): Ported NewSQLiteActivityStore → NewNutsActivityStore.
 
 package server
 
@@ -24,16 +26,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// setupActivityTestRouter creates a temporary ActivityStore, wraps it in an
+// setupActivityTestRouter creates a temporary NutsActivityStore, wraps it in an
 // ActivityService, mounts the ListActivity handler on a minimal gin router,
 // and returns the router plus a cleanup function.
 func setupActivityTestRouter(t *testing.T) (*gin.Engine, func()) {
 	t.Helper()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "activity_handler_test.db")
 
-	store, err := database.NewActivityStore(dbPath)
+	store, err := database.NewNutsActivityStore(dir)
 	require.NoError(t, err)
 
 	svc := activity.NewService(store)
@@ -81,8 +82,7 @@ func TestListActivity_Empty(t *testing.T) {
 func TestListActivity_WithFilters(t *testing.T) {
 	// Use a fresh store so we can seed specific data.
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "filter_test.db")
-	store, err := database.NewActivityStore(dbPath)
+	store, err := database.NewNutsActivityStore(dir)
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -139,8 +139,7 @@ func TestListActivity_WithFilters(t *testing.T) {
 // entries by substring match on summary.
 func TestListActivity_SearchParam(t *testing.T) {
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "search_test.db")
-	store, err := database.NewActivityStore(dbPath)
+	store, err := database.NewNutsActivityStore(dir)
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -153,7 +152,7 @@ func TestListActivity_SearchParam(t *testing.T) {
 	now := time.Now().UTC()
 
 	require.NoError(t, svc.Record(database.ActivityEntry{
-		Tier:      "realtime",
+		Tier:      "info",
 		Type:      "scanner",
 		Level:     "info",
 		Source:    "scanner",
@@ -161,7 +160,7 @@ func TestListActivity_SearchParam(t *testing.T) {
 		Timestamp: now,
 	}))
 	require.NoError(t, svc.Record(database.ActivityEntry{
-		Tier:      "realtime",
+		Tier:      "info",
 		Type:      "scanner",
 		Level:     "info",
 		Source:    "scanner",
@@ -191,8 +190,7 @@ func TestListActivity_SearchParam(t *testing.T) {
 // source names with counts, ordered by count descending.
 func TestListActivitySources(t *testing.T) {
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "sources_test.db")
-	store, err := database.NewActivityStore(dbPath)
+	store, err := database.NewNutsActivityStore(dir)
 	require.NoError(t, err)
 	defer store.Close()
 
@@ -207,7 +205,7 @@ func TestListActivitySources(t *testing.T) {
 	// Record 2 gin entries and 1 scanner entry.
 	for i := 0; i < 2; i++ {
 		require.NoError(t, svc.Record(database.ActivityEntry{
-			Tier:      "realtime",
+			Tier:      "info",
 			Type:      "request",
 			Level:     "info",
 			Source:    "gin",
@@ -216,7 +214,7 @@ func TestListActivitySources(t *testing.T) {
 		}))
 	}
 	require.NoError(t, svc.Record(database.ActivityEntry{
-		Tier:      "background",
+		Tier:      "change",
 		Type:      "scan",
 		Level:     "info",
 		Source:    "scanner",
@@ -253,14 +251,15 @@ type operationActivityEntry = handlers.OperationActivityEntry
 func TestListOperationActivity_FallbackToOpLogs(t *testing.T) {
 	dir := t.TempDir()
 
-	// Main store: SQLiteStore implements OpsV2Store (has op_logs_v2 table).
-	sqlStore, err := database.NewSQLiteStore(filepath.Join(dir, "main.db"))
+	// Main store: PebbleStore implements OpsV2Store (has op_logs_v2 in Pebble).
+	sqlStore, err := database.NewPebbleStore(filepath.Join(dir, "main.pebble"))
 	require.NoError(t, err)
 	require.NoError(t, database.RunMigrations(sqlStore))
 	defer sqlStore.Close()
 
 	// Activity service backed by a fresh empty store — no entries for the op.
-	actStore, err := database.NewActivityStore(filepath.Join(dir, "activity.db"))
+	actDir := t.TempDir()
+	actStore, err := database.NewNutsActivityStore(actDir)
 	require.NoError(t, err)
 	defer actStore.Close()
 	actSvc := activity.NewService(actStore)
