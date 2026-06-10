@@ -1,5 +1,5 @@
 // file: web/src/components/dedup/UnifiedDedupTab.tsx
-// version: 1.0.0
+// version: 1.0.1
 // guid: c8b9d0e1-f2a3-4567-bcde-cb8901234567
 // last-edited: 2026-06-10
 
@@ -66,13 +66,6 @@ function deriveBandCounts(stats: DedupStats[]): BandCounts {
   // the table results will reflect the filter accurately.
   const total = pending.reduce((sum, s) => sum + s.count, 0);
   return { CERTAIN: 0, HIGH: 0, MEDIUM: 0, REVIEW: 0, total };
-}
-
-function truncatePath(path: string | undefined | null): string {
-  if (!path) return '';
-  const marker = 'audiobook-organizer/';
-  const idx = path.indexOf(marker);
-  return idx >= 0 ? path.slice(idx + marker.length) : path;
 }
 
 // ---------- component ----------

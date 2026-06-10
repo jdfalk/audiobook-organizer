@@ -1,5 +1,5 @@
 // file: web/src/components/dedup/BulkActionBar.tsx
-// version: 1.0.0
+// version: 1.0.1
 // guid: b7a8c9d0-e1f2-3456-abcd-ba7890123456
 // last-edited: 2026-06-10
 
@@ -17,7 +17,6 @@ import {
   DialogContentText,
   DialogTitle,
   Paper,
-  Stack,
   Typography,
 } from '@mui/material';
 import MergeIcon from '@mui/icons-material/MergeType';
