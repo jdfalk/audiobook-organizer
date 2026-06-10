@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.71.0 -->
+<!-- version: 8.72.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-06-09 -->
 
@@ -25,6 +25,52 @@ future agent) can scan the entire workspace in one page.
 **Production:** PebbleDB primary; Linux, HTTPS at `172.16.2.30:8484`
 **Latest activity:** Burndown bot: `rebase-stale` job (auto-fix CONFLICTING PRs) + dual schedule (08:00/20:00 UTC) + `full` mode for scheduled runs (PRs #1342, #1353). 31 narrow test-coverage issues queued in burndown-tasks (#79–#109).
 **In flight:** Burndown bot dispatching test coverage tasks (#79–#109), FE-10 (Vitest coverage thresholds), fingerprint identification pipeline
+
+---
+
+## 🔭 Fable 5 Full-System Review — June 9, 2026 (specs + 27-task plan)
+
+Review deliverables (see files for full detail):
+- [`docs/specs/fable5-review-findings.md`](docs/specs/fable5-review-findings.md) — 3 CRITICAL / 6 HIGH / 8 MEDIUM / 2 LOW, iTunes findings grounded in binary forensics of 4 damaged libraries
+- [`docs/specs/fable5-spec-itunes-writeback-hardening.md`](docs/specs/fable5-spec-itunes-writeback-hardening.md) — ITLSafetyContract, SafeWriteITL, regression suite
+- [`docs/specs/fable5-spec-unified-dedup-pipeline.md`](docs/specs/fable5-spec-unified-dedup-pipeline.md) — composite scoring (noisy-OR, 0–100 capped), LSH fpidx index, unified UI tab
+- [`docs/specs/fable5-spec-memory-db-optimization.md`](docs/specs/fable5-spec-memory-db-optimization.md) — corrected premises (embeddings already in Pebble); prioritized list
+- [`docs/plans/fable5-implementation-plan.md`](docs/plans/fable5-implementation-plan.md) — TASK-001..027, dependency graph, 5 waves
+
+### P2 — iTunes writeback hardening (highest stakes; wave 1–4)
+- [ ] **F5-T001** Fix LE parser mhoh descent — track string fields currently never parsed (HIGH-2)
+- [ ] **F5-T002** Golden-corpus mhoh encoding audit tool + constants table
+- [ ] **F5-T003** ⚠ `ITLSafetyContract` — 8 named guards + 13-test regression suite
+- [ ] **F5-T004** ⚠ `SafeWriteITL` atomic write + header count regeneration (CRIT-3)
+- [ ] **F5-T005** ⚠ iTunes-conformant string encoders — stop writing +27∈{1,3} (CRIT-1)
+- [ ] **F5-T006** ⚠ `LocationPair` — 0x0D Windows path / 0x0B URL normalization (CRIT-2)
+- [ ] **F5-T007** itl-diff/itl-check honesty: msdh inventory, playlist membership, AuditITL
+- [ ] **F5-T008** Diff-before-write in writeback batcher (HIGH-3) + library-not-in-use gate
+- [ ] **F5-T010** Fail-closed inflate cap (MED-7)
+
+### P1 — Unified dedup pipeline (waves 1–4)
+- [ ] **F5-T011** `internal/dedup/unified` — Signal/UnifiedDedupScore/ComposeScore (noisy-OR v1)
+- [ ] **F5-T012** ⚠ LSH `fpidx:` Pebble index — build op + write/delete hooks (`lsh_index_v1_done`)
+- [ ] **F5-T013** LSH probe collector; retire `ACOUSTID_FUZZY_ENABLED` O(N) path
+- [ ] **F5-T014** Collector refactor + `PairEligibility` + NEW metadata-fuzzy collector
+- [ ] **F5-T015** ⚠ Candidate schema additions + legacy-fingerprint purge (~14K stale 100% rows, HIGH-5)
+- [ ] **F5-T016** API: band/score/breakdown fields, `/breakdown`, `/rescore`
+- [ ] **F5-T017** Unified Dedup UI tab (feature-flagged until backfill complete)
+- [ ] **F5-T018** Scan op rationalization (merge embed-scan/async; phase ordering)
+
+### P3 — Memory & DB optimization (waves 1–5)
+- [ ] **F5-T019** ⚠ Strip AcoustIDSeg0–6 from memdb (~550–900MB RSS) — after T013
+- [ ] **F5-T020** ⚠ Drop seg fields from `book_file:` Pebble values (sweep + `bookfile_seg_drop_v1_done`)
+- [ ] **F5-T021** Embedding float16+zstd (`emb_f16_v1_done`, dual-read)
+- [ ] **F5-T022** Remove legacy SQLite store (~7.9K lines + CGO dep) (MED-4)
+- [ ] **F5-T023** memdb size telemetry + operation-log retention + dead-prefix sweep
+- [ ] **F5-T024** NutsDB → Pebble activity/metrics migration (dual-write window)
+
+### P4 — Fixes (wave 1–2)
+- [ ] **F5-T009** accept-invite HTTP/2 EOF fix + 413 clarity (HIGH-4 pen-test, MED-1)
+- [ ] **F5-T025** `FilterUnchangedTags` covers custom `AUDIOBOOK_ORGANIZER_*` tags (MED-3)
+- [ ] **F5-T026** Duration/filesize aggregation from BookFiles + backfill (MED-2)
+- [ ] **F5-T027** Chromem hydration shutdown join (MED-8)
 
 ---
 

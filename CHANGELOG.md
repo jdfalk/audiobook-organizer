@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.12.0 -->
+<!-- version: 3.13.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-06-09 -->
 
@@ -8,6 +8,36 @@
 ## [Unreleased]
 
 ### Changed
+
+#### June 9, 2026 — Fable 5 full-system review: findings, 3 specs, 27-task implementation plan (docs only)
+
+Architecture review across 4 priorities (unified dedup, iTunes writeback hardening,
+memory/DB optimization, general security review). No code changed — deliverables are
+documentation:
+
+- `docs/specs/fable5-review-findings.md` — 3 CRITICAL / 6 HIGH / 8 MEDIUM / 2 LOW.
+  Headline: binary forensics of the 4 "(Damaged)" iTunes libraries vs the golden copy
+  showed the current dangling-ref verifier passes 3 of the 4 libraries iTunes rejected;
+  the live corruption vectors are our writer's invented mhoh encoding-flag bytes
+  (+27 ∈ {1,3}; iTunes writes 0x00 — 0 of 281,790 golden blocks), `file://` URLs written
+  into the 0x0D Windows-path field (83,783 blocks in damaged-1/3), and `hdfm` header
+  track counts never updated on removal (90,900 vs 90,898 desync in damaged-1/2). Also:
+  the LE parser never reads track string metadata at all (diagnostic diffs were vacuous),
+  and the accept-invite HTTP/2 `{"error":"EOF"}` pen-test root cause.
+- `docs/specs/fable5-spec-itunes-writeback-hardening.md` — `ITLSafetyContract` (8 named
+  guards), `SafeWriteITL` atomic write protocol with header regeneration + backup
+  retention, Apple-Devices compatibility checklist, 13-test regression suite design.
+- `docs/specs/fable5-spec-unified-dedup-pipeline.md` — composite scoring (noisy-OR,
+  normalized 0–100 with stored per-signal breakdown), LSH `fpidx:` PebbleDB index design,
+  unified dedup UI tab, provenance purge for ~14K stale 100% candidates. Corrects stale
+  assumptions: folder/metadata-fuzzy "signals" are stubs; embeddings already in PebbleDB.
+- `docs/specs/fable5-spec-memory-db-optimization.md` — corrected premises (embeddings.db
+  and ai_scans.db already migrated to Pebble; memdb warm-up enabled + stripped);
+  prioritized list topped by stripping deprecated AcoustID segments from memdb
+  (~550–900MB RSS) and removing the legacy 7.9K-line SQLite store.
+- `docs/plans/fable5-implementation-plan.md` — TASK-001..027 with dependencies, 5
+  parallel waves, per-task acceptance criteria/idempotency/rollback, Sonnet-executable.
+- `TODO.md` — new "Fable 5 Full-System Review" section with all 27 task stubs.
 
 #### June 9, 2026 — Burndown bot: automatic conflict resolution + schedule reliability
 
