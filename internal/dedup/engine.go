@@ -1,5 +1,5 @@
 // file: internal/dedup/engine.go
-// version: 1.24.0
+// version: 1.25.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 // last-edited: 2026-06-10
 
@@ -20,6 +20,7 @@ import (
 	"github.com/falkcorp/audiobook-organizer/internal/ai/aijobs"
 	"github.com/falkcorp/audiobook-organizer/internal/config"
 	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/dedup/unified"
 	"github.com/falkcorp/audiobook-organizer/internal/fingerprint"
 	"github.com/falkcorp/audiobook-organizer/internal/merge"
 	"go.opentelemetry.io/otel"
@@ -76,6 +77,22 @@ type Engine struct {
 	// stopTimeout overrides the default join timeout in Stop.  Zero means use
 	// defaultHydrationStopTimeout.  Only set in tests.
 	stopTimeout_ time.Duration
+
+	// Unified scoring fields (T014).
+	//
+	// scoreConfig holds per-signal calibration and band thresholds for
+	// unified.ComposeScore.  Loaded once at startup by LoadScoreConfig or
+	// set directly in tests.  Zero value falls back to
+	// unified.DefaultScoreConfig() on first use.
+	scoreConfig *unified.ScoreConfig
+
+	// acoustidBookFileStore is the narrow interface used by T013's
+	// CollectExactAcoustID; set via SetAcoustIDBookFileStore.
+	acoustidBookFileStore ExactAcoustIDStore
+
+	// lshAcoustIDStore is the narrow interface used by T013's
+	// CollectLSHAcoustID; set via SetLSHStore.
+	lshAcoustIDStore LSHAcoustIDStore
 }
 
 // NewEngine creates a Engine with sensible defaults.
@@ -133,6 +150,37 @@ func (de *Engine) LookupCandidate(id int64) (database.DedupCandidate, bool) {
 // the SQLite linear scan.
 func (de *Engine) SetChromemStore(cs *database.ChromemEmbeddingStore) {
 	de.chromemStore = cs
+}
+
+// SetAcoustIDBookFileStore wires the ExactAcoustIDStore used by
+// CollectExactAcoustID (T013).  In production the caller passes the same
+// *database.PebbleStore as bookStore.
+func (de *Engine) SetAcoustIDBookFileStore(s ExactAcoustIDStore) {
+	de.acoustidBookFileStore = s
+}
+
+// SetLSHStore wires the LSHAcoustIDStore used by CollectLSHAcoustID (T013).
+// In production the caller passes the same *database.PebbleStore as bookStore.
+func (de *Engine) SetLSHStore(s LSHAcoustIDStore) {
+	de.lshAcoustIDStore = s
+}
+
+// SetScoreConfig overrides the unified scoring calibration.  Call this before
+// any CheckBook/FullScan if you need non-default thresholds (tests, A/B).
+// Pass a nil pointer to revert to DefaultScoreConfig.
+func (de *Engine) SetScoreConfig(cfg *unified.ScoreConfig) {
+	de.scoreConfig = cfg
+}
+
+// getScoreConfig returns the active ScoreConfig, initialising from
+// unified.DefaultScoreConfig if none has been set.  WHY a pointer: we want
+// the zero value of the Engine (before any setter call) to still work; lazy
+// init here avoids a required setup step at NewEngine call sites.
+func (de *Engine) getScoreConfig() unified.ScoreConfig {
+	if de.scoreConfig != nil {
+		return *de.scoreConfig
+	}
+	return unified.DefaultScoreConfig()
 }
 
 // HydrateChromem walks the SQLite embedding rows and copies any that are
@@ -270,8 +318,321 @@ func (de *Engine) CheckBook(ctx context.Context, bookID string) (bool, error) {
 		}
 	}
 
+	// --- Unified composite scoring (T014) ---
+	// Run the full collector suite for all candidate pairs that the above
+	// layers produced, compose a single score via ComposeScore, and persist
+	// ScoreBreakdown/Band/FormulaVersion alongside the existing
+	// Layer/Similarity fields for backward compat.
+	//
+	// WHY after layers 1+2: embedding top-K results are required as the
+	// candidate source for CollectMetaFuzzy (TASK-014 constraint: never O(N²)
+	// title scan).  Running the unified pass here guarantees the embedding is
+	// available.
+	if err := de.runUnifiedScoringForBook(ctx, book, authorName); err != nil {
+		slog.Error("dedup unified scoring error for", "bookID", bookID, "err", err)
+	}
+
 	return false, nil
 }
+
+// ─── unified scoring orchestration (T014) ────────────────────────────────────
+
+// runUnifiedScoringForBook retrieves the embedding candidates for book (those
+// written by findSimilarBooks in the same CheckBook/FullScan pass), then for
+// each candidate pair:
+//
+//  1. Calls PairEligibility — drops suppressed pairs immediately.
+//  2. Runs all collectors: exact-file, ISBN/ASIN, metadata-source-hash,
+//     embedding (from stored similarity result), duration, metadata-fuzzy
+//     (over embedding+LSH candidate IDs only — no O(N²) title scan), and the
+//     T013 acoustid collectors (exact + LSH).
+//  3. Calls unified.ComposeScore over the collected signals.
+//  4. Persists the result by upserting via embedStore.UpsertCandidate, filling
+//     ScoreBreakdown, Band, and FormulaVersion (T015 fields).  The existing
+//     Layer and Similarity fields are also populated for backward compat:
+//     Similarity = Score/100, Layer derived from the strongest primary signal.
+//
+// This method is best-effort: errors are logged at Debug level and do not abort
+// the scan — the existing per-layer candidates written by the earlier checks
+// remain valid.
+func (de *Engine) runUnifiedScoringForBook(ctx context.Context, book *database.Book, authorName string) error {
+	if de.embedStore == nil {
+		return nil
+	}
+
+	// Load the embedding candidates that findSimilarBooks just wrote for this
+	// book.  We iterate only these (embedding top-K) rather than all pending
+	// candidates to avoid O(N²) cost and to satisfy the MetaFuzzy constraint.
+	candidates, _, err := de.embedStore.ListCandidates(database.CandidateFilter{
+		EntityType: "book",
+		Status:     "pending",
+	})
+	if err != nil {
+		return fmt.Errorf("runUnifiedScoringForBook: list candidates: %w", err)
+	}
+
+	// Build the set of other-book IDs this book is paired with in the current
+	// embedding + LSH candidate set.  This is the candidate pool for MetaFuzzy.
+	var embeddingCandIDs []string
+	for _, c := range candidates {
+		if c.EntityAID != book.ID && c.EntityBID != book.ID {
+			continue
+		}
+		otherID := c.EntityBID
+		if c.EntityBID == book.ID {
+			otherID = c.EntityAID
+		}
+		embeddingCandIDs = append(embeddingCandIDs, otherID)
+	}
+
+	if len(embeddingCandIDs) == 0 {
+		return nil
+	}
+
+	cfg := de.getScoreConfig()
+	embCfg := DefaultEmbeddingCollectorConfig()
+	embCfg.HighThreshold = de.BookHighThreshold
+	embCfg.LowThreshold = de.BookLowThreshold
+	durCfg := DefaultDurationCollectorConfig()
+	fuzCfg := DefaultMetaFuzzyConfig()
+	lshCfg := DefaultLSHAcoustIDConfig()
+
+	// Get the book's files once for acoustid collectors.
+	bookFiles, _ := de.bookStore.GetBookFiles(book.ID)
+
+	for _, candID := range embeddingCandIDs {
+		otherBook, err := de.bookStore.GetBookByID(candID)
+		if err != nil || otherBook == nil {
+			continue
+		}
+
+		// 1. Eligibility pre-filter.
+		ok, suppressors := PairEligibility(book, otherBook)
+		if !ok {
+			slog.Debug("dedup unified: suppressed pair",
+				"book", book.ID, "other", candID,
+				"suppressors", suppressors)
+			continue
+		}
+
+		// 2. Collect signals from all available collectors.
+		var signals []unified.Signal
+
+		// Exact-file hash signals.
+		if sigs, err := CollectExactFileHash(de.bookStore, book); err == nil {
+			for _, s := range sigs {
+				// Only keep signals that match this specific candidate.
+				if isSigForPair(s, book.ID, candID) {
+					signals = append(signals, s)
+				}
+			}
+		}
+
+		// ISBN/ASIN — only emit if candidate matches.
+		if sigs, err := CollectISBNASIN(de.bookStore, book); err == nil {
+			for _, s := range sigs {
+				if isSigForPair(s, book.ID, candID) {
+					signals = append(signals, s)
+				}
+			}
+		}
+
+		// Metadata source hash.
+		if sigs, err := CollectMetaSrcHash(de.bookStore, book); err == nil {
+			for _, s := range sigs {
+				if isSigForPair(s, book.ID, candID) {
+					signals = append(signals, s)
+				}
+			}
+		}
+
+		// Embedding signal from existing candidate row (avoid re-scanning).
+		for _, c := range candidates {
+			if (c.EntityAID == book.ID && c.EntityBID == candID) ||
+				(c.EntityBID == book.ID && c.EntityAID == candID) {
+				if c.Similarity != nil && c.Layer == "embedding" {
+					cos := float32(*c.Similarity)
+					if float64(cos) >= embCfg.HighThreshold {
+						signals = append(signals, unified.Signal{
+							Kind:       unified.SigEmbedHigh,
+							Raw:        float64(cos),
+							Confidence: embedHighConfidence(cos),
+							Evidence: fmt.Sprintf(
+								"embedding cosine %.4f (high tier): book %s ↔ %s",
+								cos, book.ID, candID),
+						})
+					} else if float64(cos) >= embCfg.LowThreshold {
+						signals = append(signals, unified.Signal{
+							Kind:       unified.SigEmbedMedium,
+							Raw:        float64(cos),
+							Confidence: embedMediumConfidence(cos),
+							Evidence: fmt.Sprintf(
+								"embedding cosine %.4f (medium tier): book %s ↔ %s",
+								cos, book.ID, candID),
+						})
+					}
+				}
+				break
+			}
+		}
+
+		// Duration signal.
+		if sigs, err := CollectDuration(de.bookStore, de.bookStore, book, durCfg); err == nil {
+			for _, s := range sigs {
+				if isDurationSigFor(s.Evidence, book.ID, candID) {
+					signals = append(signals, s)
+				}
+			}
+		}
+
+		// Metadata-fuzzy (uses embedding top-K candidates only per spec).
+		if sigs, err := CollectMetaFuzzy(de.bookStore, book, authorName, []string{candID}, fuzCfg); err == nil {
+			signals = append(signals, sigs...)
+		}
+
+		// AcoustID collectors (T013) — run per BookFile of the query book.
+		if de.acoustidBookFileStore != nil {
+			for _, bf := range bookFiles {
+				exactSigs, _ := CollectExactAcoustID(de.acoustidBookFileStore, &bf, book.ID)
+				for _, s := range exactSigs {
+					if isSigForBookID(s.Evidence, candID) {
+						signals = append(signals, s)
+					}
+				}
+			}
+		}
+		if de.lshAcoustIDStore != nil {
+			for _, bf := range bookFiles {
+				lshSigs, _ := CollectLSHAcoustID(de.lshAcoustIDStore, &bf, book.ID, lshCfg)
+				for _, s := range lshSigs {
+					if isSigForBookID(s.Evidence, candID) {
+						signals = append(signals, s)
+					}
+				}
+			}
+		}
+
+		if len(signals) == 0 {
+			continue
+		}
+
+		// 3. Compose score.
+		canonicalPair := canonicalPairIDs(book.ID, candID)
+		composed := unified.ComposeScore(signals, nil, cfg, canonicalPair)
+
+		// Skip pairs below the review threshold — not worth persisting.
+		if composed.Band == "" {
+			continue
+		}
+
+		// 4. Persist: upsert with unified fields + back-compat Layer/Similarity.
+		sim := composed.Score / 100.0
+		layer := bestLayerFromSignals(signals)
+		if err := de.embedStore.UpsertCandidate(database.DedupCandidate{
+			EntityType:     "book",
+			EntityAID:      canonicalPair[0],
+			EntityBID:      canonicalPair[1],
+			Layer:          layer,
+			Similarity:     &sim,
+			Status:         "pending",
+			ScoreBreakdown: &composed,
+			Band:           composed.Band,
+			FormulaVersion: composed.Formula,
+		}); err != nil {
+			slog.Debug("dedup unified: upsert error",
+				"book", book.ID, "other", candID, "err", err)
+		}
+	}
+
+	return nil
+}
+
+// canonicalPairIDs returns [aID, bID] in lexicographically sorted order so
+// that UpsertCandidate's pair dedup key is stable regardless of call order.
+func canonicalPairIDs(a, b string) [2]string {
+	if a < b {
+		return [2]string{a, b}
+	}
+	return [2]string{b, a}
+}
+
+// isSigForPair reports whether sig.Evidence contains both bookID and candID.
+// Used as a simple filter to match a signal emitted by a book-level collector
+// (which scans all books) to a specific candidate pair.
+func isSigForPair(sig unified.Signal, bookID, candID string) bool {
+	return containsStr(sig.Evidence, bookID) && containsStr(sig.Evidence, candID)
+}
+
+// isSigForBookID reports whether sig.Evidence contains candBookID.
+// Used to filter acoustid signals to a specific candidate book.
+func isSigForBookID(evidence, candBookID string) bool {
+	return containsStr(evidence, candBookID)
+}
+
+// isDurationSigFor checks whether the duration signal evidence mentions
+// both bookIDs.
+func isDurationSigFor(evidence, bookID, candID string) bool {
+	return containsStr(evidence, bookID) && containsStr(evidence, candID)
+}
+
+// containsStr reports whether haystack contains needle (substring).
+func containsStr(haystack, needle string) bool {
+	return strings.Contains(haystack, needle)
+}
+
+// bestLayerFromSignals returns the most informative layer string for
+// DedupCandidate.Layer field, for backward compat with old readers that
+// sort/filter by layer name.
+//
+// Priority: exact_file > exact_acoustid > isbn_asin > metadata_hash >
+// lsh_acoustid > embedding_high > metadata_fuzzy > embedding_med > duration
+func bestLayerFromSignals(signals []unified.Signal) string {
+	priority := map[unified.SignalKind]int{
+		unified.SigExactFile:     9,
+		unified.SigExactAcoustID: 8,
+		unified.SigISBNASIN:      7,
+		unified.SigMetaSrcHash:   6,
+		unified.SigLSHAcoustID:   5,
+		unified.SigEmbedHigh:     4,
+		unified.SigMetaFuzzy:     3,
+		unified.SigEmbedMedium:   2,
+		unified.SigDuration:      1,
+	}
+	best := ""
+	bestP := -1
+	for _, s := range signals {
+		p, ok := priority[s.Kind]
+		if !ok {
+			continue
+		}
+		if p > bestP {
+			bestP = p
+			best = layerNameForKind(s.Kind)
+		}
+	}
+	if best == "" {
+		return "embedding" // safe fallback
+	}
+	return best
+}
+
+// layerNameForKind maps a SignalKind to the legacy DedupCandidate.Layer string
+// value.  The layer strings are the values already in use in the candidate
+// store; new consumers should use ScoreBreakdown instead.
+func layerNameForKind(k unified.SignalKind) string {
+	switch k {
+	case unified.SigExactFile, unified.SigISBNASIN, unified.SigMetaSrcHash:
+		return "exact"
+	case unified.SigExactAcoustID, unified.SigLSHAcoustID:
+		return "acoustid"
+	case unified.SigEmbedHigh, unified.SigEmbedMedium, unified.SigMetaFuzzy:
+		return "embedding"
+	default:
+		return "embedding"
+	}
+}
+
+// ─── end unified scoring orchestration ──────────────────────────────────────
 
 // checkExactFileHash checks if any other book shares a file hash.
 // Auto-merges if hashes match AND same normalized author AND same normalized title.
@@ -1459,6 +1820,33 @@ func (de *Engine) FullScan(ctx context.Context, progress func(done, total int)) 
 
 	// Final partial chunk.
 	_ = flushChunk(total)
+
+	// --- Unified composite scoring (T014) ---
+	// Second pass over all books: for each book, compose a unified score from
+	// all signals emitted by the Layer 1 + Layer 2 passes above and persist
+	// ScoreBreakdown/Band/FormulaVersion alongside the existing
+	// Layer/Similarity fields for backward compat.
+	//
+	// WHY a second pass: the embedding batching in flushChunk means that
+	// findSimilarBooks (which writes the embedding candidate rows consumed by
+	// runUnifiedScoringForBook) may not have run yet for a given book when we
+	// are still iterating the book loop above.  Running the scoring pass after
+	// flushChunk(total) guarantees all embedding candidates are written.
+	for _, book := range books {
+		if ctx.Err() != nil {
+			break
+		}
+		authorName := ""
+		if book.AuthorID != nil {
+			if author, err := de.bookStore.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
+				authorName = author.Name
+			}
+		}
+		if err := de.runUnifiedScoringForBook(ctx, &book, authorName); err != nil {
+			slog.Error("dedup full scan unified scoring error for", "book", book.ID, "err", err)
+		}
+	}
+
 	return nil
 }
 
