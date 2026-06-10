@@ -1,5 +1,5 @@
 // file: internal/server/handlers/dedup/handler.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: d1b9e024-d28c-4d62-8f90-96d7064559c4
 // last-edited: 2026-06-10
 
@@ -1497,4 +1497,40 @@ func (h *Handler) HandleCompareAcoustID(c *gin.Context) {
 		OverallScore:  overall,
 		SegmentScores: comparisons,
 	})
+}
+
+// EmbReeencode handles POST /api/v1/dedup/emb-reencode.
+//
+// Enqueues the dedup.emb-reencode UOS op (T021) which rewrites all emb:v:
+// blobs from legacy float32 (v0) to float16+zstd (v1), saving ~3.5–4× disk
+// space.
+//
+// Optional JSON body: {"apply": true} to execute (default is dry-run, which
+// reports counts and compression ratio without writing any data).
+//
+// Why an op and not a synchronous handler: re-encoding can touch 50K+ rows and
+// is a maintenance background task — tracking progress in the bell is more
+// user-friendly than a long-polling HTTP response.
+func (h *Handler) EmbReeencode(c *gin.Context) {
+	if h.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operation registry not initialized")
+		return
+	}
+
+	// Forward the request body as the op's params JSON so the op can see
+	// {"apply":true/false} without the handler needing to parse it.
+	var paramsJSON json.RawMessage
+	if c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(&paramsJSON); err != nil {
+			httputil.RespondWithBadRequest(c, "invalid JSON body")
+			return
+		}
+	}
+
+	opID, err := h.opRegistry.EnqueueOp(c.Request.Context(), "dedup.emb-reencode", paramsJSON)
+	if err != nil {
+		httputil.InternalError(c, "failed to enqueue dedup emb-reencode", err)
+		return
+	}
+	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
 }

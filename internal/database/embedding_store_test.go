@@ -1,5 +1,5 @@
 // file: internal/database/embedding_store_test.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package database
@@ -43,22 +43,37 @@ func TestEmbeddingStore_ContentHashCache(t *testing.T) {
 	assert.Nil(t, got, "miss should return nil, nil")
 
 	// Round-trip a vector.
+	// T021: vectors are stored as float16+zstd; exact equality is not expected.
+	// Use InDelta(1e-2) to allow for float16 quantisation error.
 	want := []float32{0.1, 0.2, 0.3, 0.4}
 	require.NoError(t, store.PutCachedEmbedding(hash, model, want))
 	got, err = store.GetCachedEmbedding(hash, model)
 	require.NoError(t, err)
-	assert.Equal(t, want, got)
+	require.NotNil(t, got)
+	require.Len(t, got, len(want))
+	for i, w := range want {
+		assert.InDelta(t, w, got[i], 1e-2, "cache round-trip element %d", i)
+	}
 
 	// Same hash, different model → separate row.
+	// Values 1.0 and 2.0 are exactly representable in float16, so InDelta works.
 	smaller := []float32{1, 2}
 	require.NoError(t, store.PutCachedEmbedding(hash, "text-embedding-3-small", smaller))
 	got, err = store.GetCachedEmbedding(hash, "text-embedding-3-small")
 	require.NoError(t, err)
-	assert.Equal(t, smaller, got)
+	require.NotNil(t, got)
+	require.Len(t, got, len(smaller))
+	for i, w := range smaller {
+		assert.InDelta(t, w, got[i], 1e-2, "smaller cache element %d", i)
+	}
 	// The original entry at the original model is still intact.
 	got, err = store.GetCachedEmbedding(hash, model)
 	require.NoError(t, err)
-	assert.Equal(t, want, got)
+	require.NotNil(t, got)
+	require.Len(t, got, len(want))
+	for i, w := range want {
+		assert.InDelta(t, w, got[i], 1e-2, "original cache element %d after second put", i)
+	}
 
 	// Empty arguments short-circuit cleanly.
 	got, err = store.GetCachedEmbedding("", model)
@@ -89,9 +104,13 @@ func TestEmbeddingStore_UpsertAndGet(t *testing.T) {
 	assert.Equal(t, "abc123", got.TextHash)
 	assert.Equal(t, "text-embedding-3-small", got.Model)
 	require.Len(t, got.Vector, 3)
-	assert.InDelta(t, 0.1, got.Vector[0], 1e-6)
-	assert.InDelta(t, 0.2, got.Vector[1], 1e-6)
-	assert.InDelta(t, 0.3, got.Vector[2], 1e-6)
+	// T021: vectors are stored as float16+zstd (v1 encoding). Float16 has ~10-bit
+	// mantissa precision (~1e-3 relative error per element) — not float32's 1e-6.
+	// The tolerance here is relaxed to 1e-2 to account for float16 quantisation.
+	// See the WHY comment in embedding_store.go for why this is acceptable.
+	assert.InDelta(t, 0.1, got.Vector[0], 1e-2)
+	assert.InDelta(t, 0.2, got.Vector[1], 1e-2)
+	assert.InDelta(t, 0.3, got.Vector[2], 1e-2)
 	assert.False(t, got.CreatedAt.IsZero())
 	assert.False(t, got.UpdatedAt.IsZero())
 }
@@ -124,8 +143,9 @@ func TestEmbeddingStore_UpsertOverwrites(t *testing.T) {
 	// Second upsert must win.
 	assert.Equal(t, "hash-v2", got.TextHash)
 	assert.Equal(t, "model-v2", got.Model)
-	assert.InDelta(t, 0.0, got.Vector[0], 1e-6)
-	assert.InDelta(t, 1.0, got.Vector[1], 1e-6)
+	// T021: float16 tolerance (1e-2) for stored vectors.
+	assert.InDelta(t, 0.0, got.Vector[0], 1e-2)
+	assert.InDelta(t, 1.0, got.Vector[1], 1e-2)
 
 	// Only one row should exist.
 	n, err := store.CountByType("book")
