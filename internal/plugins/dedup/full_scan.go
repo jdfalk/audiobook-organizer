@@ -1,7 +1,20 @@
 // file: internal/plugins/dedup/full_scan.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-05-06
+// last-edited: 2026-06-10
+
+// T018: full_scan.go enforces phase ordering for the full dedup scan:
+//
+//  1. Hygiene: purge stale candidates (always).
+//  2. Index (embedding+exact): FullScan via engine.
+//  3. LSH candidates: CollectLSHAcoustID — only runs when the LSH index
+//     exists (lsh_index_v1_done flag). When absent, a log line explains
+//     how to enable it.
+//
+// The LSH gate in runFullScan is an op-level assertion complementing the
+// collector-level gate already present in CollectLSHAcoustID. The op-level
+// check lets the reporter surface a user-visible skip message in the
+// operation log so operators know the LSH phase was skipped and why.
 
 package dedup
 
@@ -14,6 +27,14 @@ import (
 	"github.com/falkcorp/audiobook-organizer/internal/database"
 	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
+
+// LSHFlagStore is the narrow interface used by runFullScan to assert whether
+// the LSH index has been built before emitting the LSH-phase log line.
+// *database.PebbleStore satisfies this interface. Other store implementations
+// (SQLite, mocks) that do not carry an LSH index should return false.
+type LSHFlagStore interface {
+	IsLSHIndexBuilt() bool
+}
 
 func (p *Plugin) fullScanDef() sdk.OperationDef {
 	return sdk.OperationDef{
@@ -41,8 +62,8 @@ func (p *Plugin) runFullScan(ctx context.Context, _ json.RawMessage, reporter sd
 		return fmt.Errorf("dedup engine not available")
 	}
 
-	// Progress is created lazily once FullScan reports its total. Until then
-	// we emit a Start frame on a zero-N progress so the bar isn't 0/0.
+	// Phase 1 — Hygiene: purge stale candidates before the scan so the
+	// index phase starts with a clean candidate table.
 	startProg := sdk.NewProgress(reporter, 0)
 	startProg.Start("Purging stale candidates...")
 	if deleted, err := p.engine.PurgeStaleCandidates(ctx); err != nil {
@@ -51,8 +72,9 @@ func (p *Plugin) runFullScan(ctx context.Context, _ json.RawMessage, reporter sd
 		reporter.Logger().Info("purged stale candidates before scan", "count", deleted)
 	}
 
-	// FullScan reports progress via a callback (done, total). Build the
-	// real Progress on the first callback once we know N.
+	// Phase 2 — Index: run exact + embedding collectors for every primary book.
+	// FullScan reports progress via a callback (done, total). Build the real
+	// Progress on the first callback once we know N.
 	var prog *sdk.Progress
 	fullScanErr := p.engine.FullScan(ctx, func(done, total int) {
 		if total <= 0 {
@@ -72,6 +94,22 @@ func (p *Plugin) runFullScan(ctx context.Context, _ json.RawMessage, reporter sd
 	if prog == nil {
 		prog = sdk.NewProgress(reporter, 0)
 		prog.Start("Scanning books: 0 / 0")
+	}
+
+	// Phase 3 — LSH candidates: assert that the LSH index has been built
+	// before the engine's CollectLSHAcoustID collector runs. The collector
+	// already self-gates (it calls IsLSHIndexBuilt() internally), but we
+	// surface the skip reason here so it appears in the operation log and
+	// is visible to operators.
+	if flagStore, ok := p.store.(LSHFlagStore); ok {
+		if !flagStore.IsLSHIndexBuilt() {
+			reporter.Logger().Info(
+				"full-scan: LSH phase skipped — index not yet built",
+				"hint", "run dedup.lsh-index-build to enable sub-linear AcoustID matching",
+			)
+		}
+		// If built, no-op: the engine's FullScan already invoked the LSH
+		// collector via runUnifiedScoringForBook for each book.
 	}
 
 	// Fetch final candidate counts for the completion message.

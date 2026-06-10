@@ -1,5 +1,5 @@
 // file: internal/server/itunes_error_test.go
-// version: 1.1.1
+// version: 1.1.2
 // guid: b2c3d4e5-f6a7-8901-2345-678901abcdef
 
 package server
@@ -25,7 +25,7 @@ import (
 
 func TestITunesImport_CorruptXML(t *testing.T) {
 	env, cleanup := testutil.SetupIntegration(t)
-	defer cleanup()
+	defer cleanup() // registered first → runs second (LIFO)
 
 	xmlPath := filepath.Join(env.TempDir, "corrupt.xml")
 	require.NoError(t, os.WriteFile(xmlPath, []byte("this is not valid XML at all <broken"), 0644))
@@ -33,7 +33,9 @@ func TestITunesImport_CorruptXML(t *testing.T) {
 	server := NewServer(env.Store)
 	if server.opRegistry != nil {
 		server.opRegistry.Start(context.Background())
-		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+		// registered after defer cleanup() → runs first (LIFO), ensuring registry
+		// shuts down before store.Close() to avoid pebble: closed panics.
+		defer func() { _ = server.opRegistry.Shutdown(context.Background()) }()
 	}
 	body := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":false}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
@@ -71,7 +73,7 @@ func TestITunesImport_NonexistentFile(t *testing.T) {
 
 func TestITunesImport_EmptyXML(t *testing.T) {
 	env, cleanup := testutil.SetupIntegration(t)
-	defer cleanup()
+	defer cleanup() // registered first → runs second (LIFO)
 
 	// Valid plist but no tracks
 	xmlPath := filepath.Join(env.TempDir, "empty.xml")
@@ -80,7 +82,9 @@ func TestITunesImport_EmptyXML(t *testing.T) {
 	server := NewServer(env.Store)
 	if server.opRegistry != nil {
 		server.opRegistry.Start(context.Background())
-		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+		// registered after defer cleanup() → runs first (LIFO), ensuring registry
+		// shuts down before store.Close() to avoid pebble: closed panics.
+		defer func() { _ = server.opRegistry.Shutdown(context.Background()) }()
 	}
 	body := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":false}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
@@ -125,7 +129,9 @@ func TestITunesImport_MissingFilesPartial(t *testing.T) {
 	server := NewServer(env.Store)
 	if server.opRegistry != nil {
 		server.opRegistry.Start(context.Background())
-		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+		// registered after defer cleanup() → runs first (LIFO), ensuring registry
+		// shuts down before store.Close() to avoid pebble: closed panics.
+		defer func() { _ = server.opRegistry.Shutdown(context.Background()) }()
 	}
 	body := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":false}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
@@ -276,7 +282,9 @@ func TestITunesImport_RealTestLibrary(t *testing.T) {
 	server := NewServer(env.Store)
 	if server.opRegistry != nil {
 		server.opRegistry.Start(context.Background())
-		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+		// registered after defer cleanup() → runs first (LIFO), ensuring registry
+		// shuts down before store.Close() to avoid pebble: closed panics.
+		defer func() { _ = server.opRegistry.Shutdown(context.Background()) }()
 	}
 	body := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":false}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
