@@ -1,6 +1,7 @@
 // file: internal/database/memdb_strip.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-mema-aaaa-aaaa-stripbook0001
+// last-edited: 2026-06-10
 
 package database
 
@@ -51,30 +52,33 @@ func stripBookForMemdb(src *Book) *Book {
 // iteration and predicate filtering; callers needing the full payload fetch
 // it from Pebble via GetBookFiles(bookID).
 //
-// Memory math (~308K book_files in production):
+// Memory math (~308K book_files in production, fable5 T019 sizing):
 //
-//	AcoustIDSeg1..6 (6 strings × ~300-500B each)  → ~60-90 MB total
-//	FingerprintDiagnosticJSON (*string, KB-class) → can dominate when populated
-//	FingerprintFailureReason / Detail (*string)   → small but per-row
-//	FingerprintFailedAt (*time.Time)              → 24B + heap overhead
+//	AcoustIDSeg0      (1 string × ~300-500B)        → ~90-150 MB at full coverage
+//	AcoustIDSeg1..6   (6 strings × ~300-500B each)  → ~550-900 MB at full coverage
+//	Total Seg0..6 strip win                          → ~550-900 MB RSS (~25-35%)
+//	AcoustIDFingerprint (~230 KB per 2hr file)       → ~3+ GB (already stripped)
+//	FingerprintDiagnosticJSON (*string, KB-class)    → can dominate when populated
+//	FingerprintFailureReason / Detail (*string)      → small but per-row
+//	FingerprintFailedAt (*time.Time)                 → 24B + heap overhead
 //
-// Combined expected drop: ~70 MB.
+// Combined drop from Seg0..6 + diagnostic fields: ~550-900 MB + diagnostic overhead.
 //
-// Critical: AcoustIDSeg0..6 are intentionally PRESERVED. seg0 is read on
-// every /api/v1/audiobooks list by fingerprint.ComputeFingerprintFields
-// (via the memdb-routed GetBookFilesForIDs path) to compute the per-book
-// fingerprint_status badge. seg1..6 are read by the memdb-routed
-// MemStore.GetBookFileByAcoustIDFuzzy used by the dedup engine — without
-// them in memdb, the fuzzy lookup has to full-scan Pebble (308K book_file
-// keys per call), which wedged AcoustIDScan at book 1 in prod.
+// AcoustIDSeg0..6 strip rationale (fable5 T019):
 //
-// Heap cost of preserving seg1..6 at steady-state full coverage:
-// 308K × 6 × ~400B ≈ 700 MB worst case; ~70 MB at current fp-coverage.
-// Trivially affordable vs the 30 GB headroom from the May 29 I-batch.
+// Before T013: Seg0 was the last live memdb reader — fingerprint.ComputeFingerprintFields
+// called GetAcoustIDSeg0() on memdb-sourced BookFile rows (via GetBookFilesForIDs)
+// to compute the per-book fingerprint_status badge on every /api/v1/audiobooks list.
+// Seg1..6 were read by MemStore.GetBookFileByAcoustIDFuzzy (the O(N) dedup path).
 //
-// Diagnostic fields remain stripped — they're only needed by the
-// fingerprint_diagnosis_handler, which calls GetBookFiles(bookID)
-// Pebble-direct.
+// After T013: the O(N) fuzzy scan (GetBookFileByAcoustIDFuzzy) is retired — the
+// LSH secondary index (fpidx:) + CollectLSHAcoustID replaced it. GetAcoustIDSeg0()
+// was migrated to fall back to AcoustIDFingerprintDurationSec > 0 (preserved in
+// memdb) for the fingerprint_status badge. Seg0..6 now have zero memdb readers.
+//
+// Pebble-direct callers (dedup engine via GetBookFiles, handler_files.go, dedup
+// comparison handler, AcoustIDScan's seg-based tier-1 exact match, backfill ops)
+// are unaffected — they read via Pebble, which retains the full fields.
 func stripBookFileForMemdb(src *BookFile) *BookFile {
 	if src == nil {
 		return nil
@@ -85,11 +89,22 @@ func stripBookFileForMemdb(src *BookFile) *BookFile {
 	cp.FingerprintFailureDetail = nil
 	cp.FingerprintDiagnosticJSON = nil
 	// AcoustIDFingerprint is the whole-file raw chromaprint stream
-	// (~230 KB per 2hr file). At ~15K reachable files that's 3+ GB of
-	// memdb RSS for data nothing currently reads from memdb — the LSH
-	// index (Step 3) will live in Pebble secondary keys, not memdb rows.
-	// Pebble-direct callers that need the whole-file fp can still fetch
-	// it via GetBookFile / GetBookFiles bypass paths.
+	// (~230 KB per 2hr file). Pebble-direct callers that need the whole-file
+	// fp fetch it via GetBookFile / GetBookFiles bypass paths.
 	cp.AcoustIDFingerprint = nil
+	// AcoustIDSeg0..6: deprecated 7-segment fields (store.go:685-694).
+	// Stripped as of fable5 T019 — all memdb readers retired by T013:
+	//   - O(N) fuzzy scan (GetBookFileByAcoustIDFuzzy): deleted by T013.
+	//   - fingerprint_status badge (GetAcoustIDSeg0 via GetBookFilesForIDs):
+	//     migrated to AcoustIDFingerprintDurationSec proxy in T019.
+	// Pebble-direct paths (dedup engine, handler_files, dedup comparison
+	// handler) remain unaffected — they read via GetBookFiles / GetBookFile.
+	cp.AcoustIDSeg0 = ""
+	cp.AcoustIDSeg1 = ""
+	cp.AcoustIDSeg2 = ""
+	cp.AcoustIDSeg3 = ""
+	cp.AcoustIDSeg4 = ""
+	cp.AcoustIDSeg5 = ""
+	cp.AcoustIDSeg6 = ""
 	return &cp
 }
