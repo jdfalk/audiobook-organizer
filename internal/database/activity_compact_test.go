@@ -1,5 +1,5 @@
 // file: internal/database/activity_compact_test.go
-// version: 1.3.1
+// version: 2.0.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package database
@@ -14,12 +14,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// newTestNutsActivityStore creates a temp NutsActivityStore and registers cleanup.
+func newTestNutsActivityStore(t *testing.T) *NutsActivityStore {
+	t.Helper()
+	dir := t.TempDir()
+	store, err := NewNutsActivityStore(dir)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+	return store
+}
+
 // TestCompactByDay_BasicCompaction inserts 5 change-tier entries across 2
 // days plus 1 audit entry on day 1, compacts, and verifies 2 digests
 // created, 6 entries deleted (audit folds into day 1's digest), and the
 // audit entry is reflected in that digest.
 func TestCompactByDay_BasicCompaction(t *testing.T) {
-	s := newTestActivityStore(t)
+	s := newTestNutsActivityStore(t)
 
 	day1 := time.Date(2025, 6, 10, 12, 0, 0, 0, time.UTC)
 	day2 := time.Date(2025, 6, 11, 14, 0, 0, 0, time.UTC)
@@ -124,7 +134,7 @@ func TestCompactByDay_BasicCompaction(t *testing.T) {
 // TestCompactByDay_Idempotent verifies that compacting twice is a no-op the
 // second time.
 func TestCompactByDay_Idempotent(t *testing.T) {
-	s := newTestActivityStore(t)
+	s := newTestNutsActivityStore(t)
 
 	ts := time.Date(2025, 5, 1, 10, 0, 0, 0, time.UTC)
 	olderThan := time.Date(2025, 5, 2, 0, 0, 0, 0, time.UTC)
@@ -158,7 +168,7 @@ func TestCompactByDay_Idempotent(t *testing.T) {
 // left as raw rows. This is the regression test for the "Compact →
 // Everything (now)" button leaving pages of audit entries behind.
 func TestCompactByDay_FoldsAuditTier(t *testing.T) {
-	s := newTestActivityStore(t)
+	s := newTestNutsActivityStore(t)
 
 	ts := time.Date(2025, 4, 15, 8, 0, 0, 0, time.UTC)
 	olderThan := time.Date(2025, 4, 16, 0, 0, 0, 0, time.UTC)
@@ -202,7 +212,7 @@ func TestCompactByDay_FoldsAuditTier(t *testing.T) {
 // TestCompactByDay_TruncatesLargeDays inserts 600 entries on one day and
 // verifies items are capped at 500 with truncation metadata.
 func TestCompactByDay_TruncatesLargeDays(t *testing.T) {
-	s := newTestActivityStore(t)
+	s := newTestNutsActivityStore(t)
 
 	day := time.Date(2025, 3, 20, 6, 0, 0, 0, time.UTC)
 	olderThan := time.Date(2025, 3, 21, 0, 0, 0, 0, time.UTC)
@@ -251,17 +261,15 @@ func TestCompactByDay_TruncatesLargeDays(t *testing.T) {
 // "compact Everything (now) returns 0" bug. When a daily digest already
 // exists for a date AND more uncompacted change/debug entries have been
 // written for that same date (late imports, background tasks, etc.), a
-// second compact run used to `continue` past the day and leave the new
-// entries permanently uncompacted. This test proves that's fixed: the
-// second run merges new entries into the existing digest and deletes the
-// originals.
+// second compact run used to skip past the day and leave the new entries
+// permanently uncompacted. This test proves that's fixed: the second run
+// merges new entries into the existing digest and deletes the originals.
 func TestCompactByDay_MergesIntoExistingDigest(t *testing.T) {
-	s := newTestActivityStore(t)
+	s := newTestNutsActivityStore(t)
 
 	// Day 1: three initial entries at 08:00 on 2025-05-15.
 	day := time.Date(2025, 5, 15, 8, 0, 0, 0, time.UTC)
-	// olderThan is set to "1 hour after the latest entry we'll add",
-	// so every run compacts everything written so far.
+	// olderThan is set so every run compacts everything written so far.
 	initialCutoff := time.Date(2025, 5, 15, 12, 0, 0, 0, time.UTC)
 
 	for i := 0; i < 3; i++ {
@@ -284,8 +292,7 @@ func TestCompactByDay_MergesIntoExistingDigest(t *testing.T) {
 	assert.Equal(t, 3, r1.EntriesDeleted)
 
 	// Late-arriving entries: 5 more entries for the SAME day, written
-	// AFTER the first compact ran. This is the real-world scenario —
-	// background imports, deferred tasks, crash recovery.
+	// AFTER the first compact ran (e.g. background imports, crash recovery).
 	lateDay := time.Date(2025, 5, 15, 11, 0, 0, 0, time.UTC)
 	for i := 0; i < 5; i++ {
 		_, err := s.Record(ActivityEntry{
@@ -307,31 +314,15 @@ func TestCompactByDay_MergesIntoExistingDigest(t *testing.T) {
 	assert.Equal(t, 1, r2.DaysCompacted, "second run should merge into existing digest (counted as 1 day compacted)")
 	assert.Equal(t, 5, r2.EntriesDeleted, "all 5 late entries must be deleted")
 
-	// Exactly one digest row for 2025-05-15 (old one deleted, new one
-	// inserted with combined data).
-	var digestCount int
-	err = s.db.QueryRow(`
-		SELECT COUNT(*) FROM activity_log
-		WHERE tier = 'digest' AND type = 'daily_digest'
-		  AND date(timestamp) = '2025-05-15'`).Scan(&digestCount)
+	// Verify via public API: query digest entries for 2025-05-15.
+	all, total, err := s.Query(ActivityFilter{Limit: 50})
 	require.NoError(t, err)
-	assert.Equal(t, 1, digestCount, "must be exactly one digest per day")
-
-	// Zero uncompacted change/debug rows remaining for 2025-05-15.
-	var remaining int
-	err = s.db.QueryRow(`
-		SELECT COUNT(*) FROM activity_log
-		WHERE tier IN ('change','debug') AND compacted = 0
-		  AND date(timestamp) = '2025-05-15'`).Scan(&remaining)
-	require.NoError(t, err)
-	assert.Equal(t, 0, remaining, "no stragglers should remain")
+	assert.Equal(t, 1, total, "must be exactly one digest row after merge")
+	require.Len(t, all, 1)
+	assert.Equal(t, "digest", all[0].Tier)
 
 	// Unmarshal the merged digest and verify it contains both old and new counts.
-	var detailsJSON []byte
-	err = s.db.QueryRow(`
-		SELECT details FROM activity_log
-		WHERE tier = 'digest' AND type = 'daily_digest'
-		  AND date(timestamp) = '2025-05-15'`).Scan(&detailsJSON)
+	detailsJSON, err := json.Marshal(all[0].Details)
 	require.NoError(t, err)
 	var dd DigestDetails
 	err = json.Unmarshal(detailsJSON, &dd)
@@ -347,7 +338,7 @@ func TestCompactByDay_MergesIntoExistingDigest(t *testing.T) {
 // carries the source row's timestamp (non-zero) and any tags from that row.
 // This regression test covers the 2026-05-20 addition of these fields.
 func TestCompactByDay_DigestItemTimestampAndTags(t *testing.T) {
-	s := newTestActivityStore(t)
+	s := newTestNutsActivityStore(t)
 
 	base := time.Date(2026, 5, 1, 9, 0, 0, 0, time.UTC)
 	olderThan := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
@@ -395,16 +386,6 @@ func TestCompactByDay_DigestItemTimestampAndTags(t *testing.T) {
 		assert.True(t, !dd.Items[i].Timestamp.Before(dd.Items[i-1].Timestamp),
 			"items should be in non-decreasing timestamp order")
 	}
-}
-
-// newTestNutsActivityStore creates a temp NutsActivityStore and registers cleanup.
-func newTestNutsActivityStore(t *testing.T) *NutsActivityStore {
-	t.Helper()
-	dir := t.TempDir()
-	store, err := NewNutsActivityStore(dir)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = store.Close() })
-	return store
 }
 
 // TestNutsActivityStore_RecompactDigests verifies that RecompactDigests:

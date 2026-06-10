@@ -1,7 +1,7 @@
 // file: internal/database/store.go
-// version: 2.77.0
+// version: 2.78.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
-// last-edited: 2026-05-30
+// last-edited: 2026-06-10
 
 package database
 
@@ -1054,35 +1054,28 @@ func SetGlobalStore(s Store) {
 // with code paths that still use GetGlobalStore(); new code should prefer
 // the returned Store and pass it explicitly down the call chain
 // (SERVER-GLOBAL-STORE-AUDIT, in flight).
-func InitializeStore(dbType, path string, enableSQLite bool) (Store, error) {
+//
+// The enableSQLite parameter is retained for API compatibility but is
+// ignored — the SQLite backend was removed in fable5 TASK-022. Any
+// dbType value other than "pebble" (or empty) returns an error.
+func InitializeStore(dbType, path string, _ bool) (Store, error) {
 	var s Store
 	var err error
 
 	switch dbType {
 	case "sqlite", "sqlite3":
-		if !enableSQLite {
-			return nil, fmt.Errorf("SQLite3 is not enabled. To use SQLite3, you must explicitly enable it with --enable-sqlite3-i-know-the-risks or set 'enable_sqlite3_i_know_the_risks: true' in your config file. PebbleDB is the recommended database for production use")
-		}
-		s, err = NewSQLiteStore(path)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize SQLite store: %w", err)
-		}
+		return nil, fmt.Errorf("SQLite3 support has been removed. PebbleDB is the only supported database backend. Migrate data with 'audiobook-organizer migrate-from-sqlite' if needed")
 	case "pebble", "":
-		// PebbleDB is the default
+		// PebbleDB is the default and only supported backend.
 		s, err = NewPebbleStore(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize PebbleDB store: %w", err)
 		}
 	default:
-		return nil, fmt.Errorf("unsupported database type: %s (supported: pebble, sqlite)", dbType)
+		return nil, fmt.Errorf("unsupported database type: %s (only 'pebble' is supported)", dbType)
 	}
 
 	globalStore = s
-
-	// Maintain backwards compatibility with the global DB variable for SQLite
-	if sqliteStore, ok := s.(*SQLiteStore); ok {
-		DB = sqliteStore.db
-	}
 
 	// Run migrations to ensure schema is up to date
 	if err := RunMigrations(s); err != nil {
@@ -1103,10 +1096,6 @@ func CloseStore() error {
 		// Brief pause to let in-flight goroutines notice the nil
 		time.Sleep(100 * time.Millisecond)
 		return store.Close()
-	}
-	// Backwards compatibility
-	if DB != nil {
-		return DB.Close()
 	}
 	return nil
 }

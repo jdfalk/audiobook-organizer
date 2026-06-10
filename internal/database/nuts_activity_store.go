@@ -1,5 +1,5 @@
 // file: internal/database/nuts_activity_store.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: c3d4e5f6-a7b8-0003-cdef-000000000003
 
 package database
@@ -479,6 +479,8 @@ func (s *NutsActivityStore) CompactByDay(ctx context.Context, olderThan time.Tim
 				BookID:      e.BookID,
 				OperationID: e.OperationID,
 				Summary:     extractItemSummary(e),
+				Timestamp:   e.Timestamp,
+				Tags:        e.Tags,
 			}
 			switch {
 			case e.Tier == "audit":

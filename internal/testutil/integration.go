@@ -32,7 +32,7 @@ type IntegrationEnv struct {
 	T         *testing.T
 }
 
-// SetupIntegration creates a real SQLite database, temp directories,
+// SetupIntegration creates a real PebbleDB store, temp directories,
 // and configures globals for integration testing.
 func SetupIntegration(t *testing.T) (*IntegrationEnv, func()) {
 	t.Helper()
@@ -40,14 +40,14 @@ func SetupIntegration(t *testing.T) (*IntegrationEnv, func()) {
 	gin.SetMode(gin.TestMode)
 
 	tmpBase := t.TempDir()
-	dbPath := filepath.Join(tmpBase, "test.db")
+	dbPath := filepath.Join(tmpBase, "test.pebble")
 	rootDir := filepath.Join(tmpBase, "library")
 	importDir := filepath.Join(tmpBase, "import")
 
 	require.NoError(t, os.MkdirAll(rootDir, 0755))
 	require.NoError(t, os.MkdirAll(importDir, 0755))
 
-	store, err := database.NewSQLiteStore(dbPath)
+	store, err := database.NewPebbleStore(dbPath)
 	require.NoError(t, err)
 
 	err = database.RunMigrations(store)
@@ -68,10 +68,9 @@ func SetupIntegration(t *testing.T) (*IntegrationEnv, func()) {
 	// concurrent cleanup from a prior test cannot observe a torn config.
 	config.Mutate(func(c *config.Config) {
 		*c = config.Config{
-			DatabaseType:         "sqlite",
+			DatabaseType:         "pebble",
 			DatabasePath:         dbPath,
 			RootDir:              rootDir,
-			EnableSQLite:         true,
 			OrganizationStrategy: "copy",
 			FolderNamingPattern:  "{author}/{title}",
 			FileNamingPattern:    "{title}",

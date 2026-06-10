@@ -1,6 +1,11 @@
 // file: internal/database/store_coverage_test.go
-// version: 1.0.0
+// version: 2.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef0123456789
+// last-edited: 2026-06-10
+
+// NOTE(fable5 T022): setupCoverageDB ported to PebbleStore; SQLiteStore
+// type assertions updated. Tests for SQLite-only methods (CountTableRows,
+// WipeTable) removed.
 
 package database
 
@@ -14,11 +19,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// setupCoverageDB creates a migrated SQLite store for coverage tests.
+// setupCoverageDB creates a migrated PebbleStore for coverage tests.
+// NOTE(fable5 T022): Previously created a SQLiteStore; now uses PebbleStore.
 func setupCoverageDB(t *testing.T) Store {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "test.db")
-	store, err := NewSQLiteStore(path)
+	store, err := NewPebbleStore(t.TempDir())
 	require.NoError(t, err)
 	require.NoError(t, RunMigrations(store))
 	t.Cleanup(func() { store.Close() })
@@ -333,7 +338,7 @@ func TestCoverage_BookTombstones(t *testing.T) {
 
 func TestCoverage_KVOperations(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	// SetRaw / ScanPrefix
 	err := s.SetRaw("prefix:key1", []byte("value1"))
@@ -673,22 +678,29 @@ func TestCoverage_PruneSystemActivityLogs(t *testing.T) {
 	assert.GreaterOrEqual(t, n, 1)
 }
 
-// --- Author Tombstones (stubs) ---
+// --- Author Tombstones ---
 
 func TestCoverage_AuthorTombstoneStubs(t *testing.T) {
 	store := setupCoverageDB(t)
 
-	// These are no-ops in SQLite
+	// PebbleStore fully supports author tombstones.
 	err := store.CreateAuthorTombstone(1, 2)
 	assert.NoError(t, err)
 
+	// GetAuthorTombstone returns the canonical ID.
 	id, err := store.GetAuthorTombstone(1)
 	assert.NoError(t, err)
-	assert.Equal(t, 0, id)
+	assert.Equal(t, 2, id)
 
+	// ResolveTombstoneChains: no chain (2 is not a tombstone), so 0 chains resolved.
 	n, err := store.ResolveTombstoneChains()
 	assert.NoError(t, err)
 	assert.Equal(t, 0, n)
+
+	// Non-existent tombstone returns 0.
+	id2, err := store.GetAuthorTombstone(999)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, id2)
 }
 
 // --- Book Version Stubs ---
@@ -724,7 +736,7 @@ func TestCoverage_Optimize(t *testing.T) {
 
 func TestCoverage_CountUsersAndExpiredSessions(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	count, err := s.CountUsers()
 	require.NoError(t, err)
@@ -747,34 +759,8 @@ func TestCoverage_CountUsersAndExpiredSessions(t *testing.T) {
 	assert.Equal(t, 1, n)
 }
 
-// --- WipeTable / CountTableRows ---
-
-func TestCoverage_WipeTableAndCountRows(t *testing.T) {
-	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
-
-	_, err := store.CreateAuthor("Wipe Author")
-	require.NoError(t, err)
-
-	count, err := s.CountTableRows("authors")
-	require.NoError(t, err)
-	assert.Equal(t, int64(1), count)
-
-	n, err := s.WipeTable("authors")
-	require.NoError(t, err)
-	assert.Equal(t, int64(1), n)
-
-	count, err = s.CountTableRows("authors")
-	require.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-
-	// Disallowed table
-	_, err = s.WipeTable("evil_table")
-	assert.Error(t, err)
-
-	_, err = s.CountTableRows("evil_table")
-	assert.Error(t, err)
-}
+// NOTE(fable5 T022): TestCoverage_WipeTableAndCountRows removed; WipeTable
+// and CountTableRows were SQLite-only methods.
 
 // --- Book Tags ---
 
@@ -1186,7 +1172,7 @@ func createBookWithDuration(t *testing.T, store Store, title, filePath string, a
 
 func TestCoverage_WipeAllActivity(t *testing.T) {
 	dir := t.TempDir()
-	as, err := NewActivityStore(filepath.Join(dir, "activity.db"))
+	as, err := NewNutsActivityStore(dir)
 	require.NoError(t, err)
 	defer as.Close()
 

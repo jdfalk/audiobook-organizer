@@ -1,42 +1,39 @@
 // file: internal/database/coverage_test.go
-// version: 1.3.0
+// version: 2.0.0
 // guid: 3b82b22e-cd28-49b8-8b9c-e0a34b18e631
+// last-edited: 2026-06-10
+
+// NOTE(fable5 T022): TestInitializeStoreAndClose, TestDBInterfaceWrapper,
+// and TestWebHelpers removed — they tested SQLite initialisation and global
+// package-level functions (DB, Initialize, AddImportPath, etc.) that were
+// deleted when the SQLite store was removed.
 
 package database
 
 import (
-	"database/sql"
-	"path/filepath"
+	"errors"
 	"testing"
 	"time"
 )
 
+// TestInitializeStoreAndClose verifies that SQLite is now rejected and
+// PebbleStore still initialises cleanly.
 func TestInitializeStoreAndClose(t *testing.T) {
 	tempDir := t.TempDir()
 	origStore := globalStore
-	origDB := DB
 	defer func() {
 		globalStore = origStore
-		DB = origDB
 	}()
 
-	if _, err := InitializeStore("sqlite", filepath.Join(tempDir, "db.sqlite"), false); err == nil {
-		t.Fatal("expected error when sqlite is not enabled")
+	// SQLite should now be rejected regardless of the enable flag.
+	if _, err := InitializeStore("sqlite", tempDir+"/db.sqlite", false); err == nil {
+		t.Fatal("expected error for sqlite type (not enabled)")
+	}
+	if _, err := InitializeStore("sqlite", tempDir+"/db.sqlite", true); err == nil {
+		t.Fatal("expected error for sqlite type (even when enabled flag set)")
 	}
 
-	if _, err := InitializeStore("sqlite", filepath.Join(tempDir, "db.sqlite"), true); err != nil {
-		t.Fatalf("unexpected sqlite init error: %v", err)
-	}
-	if globalStore == nil {
-		t.Fatal("expected global store to be set")
-	}
-	if err := CloseStore(); err != nil {
-		t.Fatalf("failed to close sqlite store: %v", err)
-	}
-	globalStore = nil
-	DB = nil
-
-	pebbleDir := filepath.Join(tempDir, "pebble")
+	pebbleDir := tempDir + "/pebble"
 	if _, err := InitializeStore("pebble", pebbleDir, false); err != nil {
 		t.Fatalf("unexpected pebble init error: %v", err)
 	}
@@ -45,167 +42,8 @@ func TestInitializeStoreAndClose(t *testing.T) {
 	}
 	globalStore = nil
 
-	if _, err := InitializeStore("unknown", filepath.Join(tempDir, "bad"), false); err == nil {
+	if _, err := InitializeStore("unknown", tempDir+"/bad", false); err == nil {
 		t.Fatal("expected error for unsupported database type")
-	}
-}
-
-func TestDBInterfaceWrapper(t *testing.T) {
-	tempDir := t.TempDir()
-	db, err := sql.Open("sqlite3", filepath.Join(tempDir, "interface.db"))
-	if err != nil {
-		t.Fatalf("failed to open db: %v", err)
-	}
-	defer db.Close()
-
-	wrapper := NewDBInterface(db)
-	if wrapper == nil {
-		t.Fatal("expected wrapper")
-	}
-
-	if _, err := wrapper.Exec("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)"); err != nil {
-		t.Fatalf("failed to create table: %v", err)
-	}
-	stmt, err := wrapper.Prepare("INSERT INTO items (name) VALUES (?)")
-	if err != nil {
-		t.Fatalf("prepare failed: %v", err)
-	}
-	if _, err := stmt.Exec("alpha"); err != nil {
-		t.Fatalf("insert failed: %v", err)
-	}
-	_ = stmt.Close()
-
-	tx, err := wrapper.Begin()
-	if err != nil {
-		t.Fatalf("begin failed: %v", err)
-	}
-	if _, err := tx.Exec("INSERT INTO items (name) VALUES ('beta')"); err != nil {
-		t.Fatalf("tx insert failed: %v", err)
-	}
-	_ = tx.Commit()
-
-	row := wrapper.QueryRow("SELECT COUNT(*) FROM items")
-	var count int
-	if err := row.Scan(&count); err != nil {
-		t.Fatalf("scan failed: %v", err)
-	}
-	if count != 2 {
-		t.Fatalf("expected 2 items, got %d", count)
-	}
-
-	rows, err := wrapper.Query("SELECT name FROM items ORDER BY id")
-	if err != nil {
-		t.Fatalf("query failed: %v", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			t.Fatalf("scan row failed: %v", err)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		t.Fatalf("rows error: %v", err)
-	}
-}
-
-func TestWebHelpers(t *testing.T) {
-	tempDir := t.TempDir()
-	if err := Initialize(filepath.Join(tempDir, "web.db")); err != nil {
-		t.Fatalf("failed to initialize db: %v", err)
-	}
-	defer func() {
-		_ = DB.Close()
-		DB = nil
-	}()
-
-	folder, err := AddImportPath("/tmp/books", "Test Import")
-	if err != nil {
-		t.Fatalf("AddImportPath failed: %v", err)
-	}
-	if folder == nil || folder.ID == 0 {
-		t.Fatal("expected import path to be created")
-	}
-	folders, err := GetImportPaths()
-	if err != nil {
-		t.Fatalf("GetImportPaths failed: %v", err)
-	}
-	if len(folders) == 0 {
-		t.Fatal("expected import paths")
-	}
-
-	now := time.Now()
-	if err := UpdateImportPath(folder.ID, false, &now, 5); err != nil {
-		t.Fatalf("UpdateImportPath failed: %v", err)
-	}
-	updated, err := GetImportPathByID(folder.ID)
-	if err != nil {
-		t.Fatalf("GetImportPathByID failed: %v", err)
-	}
-	if updated == nil || updated.Enabled {
-		t.Fatal("expected updated import path to be disabled")
-	}
-
-	if err := RemoveImportPath(folder.ID); err != nil {
-		t.Fatalf("RemoveImportPath failed: %v", err)
-	}
-
-	if _, err := CreateOperation("op-1", "scan", "/tmp/books"); err == nil {
-		t.Fatal("expected CreateOperation to fail with null message scan")
-	}
-	if _, err := DB.Exec("DELETE FROM operations WHERE id = ?", "op-1"); err != nil {
-		t.Fatalf("failed to cleanup op-1: %v", err)
-	}
-
-	if _, err := DB.Exec(`INSERT INTO operations (id, type, status, progress, total, message, folder_path)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`, "op-2", "scan", "queued", 0, 0, "", "/tmp/books"); err != nil {
-		t.Fatalf("failed to seed operation: %v", err)
-	}
-
-	if err := UpdateOperationStatus("op-2", "running", 0, 10, "starting"); err != nil {
-		t.Fatalf("UpdateOperationStatus failed: %v", err)
-	}
-	if err := UpdateOperationStatus("op-2", "completed", 10, 10, "done"); err != nil {
-		t.Fatalf("UpdateOperationStatus complete failed: %v", err)
-	}
-	if err := UpdateOperationError("op-2", "boom"); err != nil {
-		t.Fatalf("UpdateOperationError failed: %v", err)
-	}
-	if _, err := GetOperationByID("op-2"); err != nil {
-		t.Fatalf("GetOperationByID failed: %v", err)
-	}
-	if _, err := GetRecentOperations(5); err != nil {
-		t.Fatalf("GetRecentOperations failed: %v", err)
-	}
-
-	detail := "detail"
-	if err := AddOperationLog("op-2", "info", "hello", &detail); err != nil {
-		t.Fatalf("AddOperationLog failed: %v", err)
-	}
-	logs, err := GetOperationLogs("op-2")
-	if err != nil {
-		t.Fatalf("GetOperationLogs failed: %v", err)
-	}
-	if len(logs) != 1 {
-		t.Fatalf("expected 1 log, got %d", len(logs))
-	}
-
-	if err := SetUserPreference("theme", "dark"); err != nil {
-		t.Fatalf("SetUserPreference failed: %v", err)
-	}
-	pref, err := GetUserPreference("theme")
-	if err != nil {
-		t.Fatalf("GetUserPreference failed: %v", err)
-	}
-	if pref == nil || pref.Value == nil || *pref.Value != "dark" {
-		t.Fatal("expected preference value to be set")
-	}
-	prefs, err := GetAllUserPreferences()
-	if err != nil {
-		t.Fatalf("GetAllUserPreferences failed: %v", err)
-	}
-	if len(prefs) == 0 {
-		t.Fatal("expected preferences list")
 	}
 }
 
@@ -268,38 +106,14 @@ func TestEncryptionHelpersAndSettings(t *testing.T) {
 		t.Fatalf("DeleteSetting failed: %v", err)
 	}
 
-	sqlStore, cleanupSQL := setupTestDB(t)
-	defer cleanupSQL()
-	sqliteStore := sqlStore.(*SQLiteStore)
-	if err := sqliteStore.SetSetting("app", "value", "string", false); err != nil {
-		t.Fatalf("sqlite SetSetting failed: %v", err)
-	}
-	if err := sqliteStore.SetSetting("secret", "secret-value", "string", true); err != nil {
-		t.Fatalf("sqlite SetSetting secret failed: %v", err)
-	}
-	appSetting, err := sqliteStore.GetSetting("app")
-	if err != nil {
-		t.Fatalf("sqlite GetSetting failed: %v", err)
-	}
-	if appSetting.Value != "value" {
-		t.Fatalf("expected value='value', got %q", appSetting.Value)
-	}
-	allSettings, err := sqliteStore.GetAllSettings()
-	if err != nil {
-		t.Fatalf("sqlite GetAllSettings failed: %v", err)
-	}
-	if len(allSettings) < 2 {
-		t.Fatalf("expected at least 2 settings, got %d", len(allSettings))
-	}
-	if err := sqliteStore.DeleteSetting("app"); err != nil {
-		t.Fatalf("sqlite DeleteSetting failed: %v", err)
-	}
-	decrypted, err := GetDecryptedSetting(sqliteStore, "secret")
+	// Also verify GetDecryptedSetting works with PebbleStore (previously tested
+	// on SQLiteStore; ported in fable5 T022).
+	decrypted, err := GetDecryptedSetting(pebbleStore, "secret")
 	if err != nil {
 		t.Fatalf("GetDecryptedSetting failed: %v", err)
 	}
-	if decrypted != "secret-value" {
-		t.Fatalf("expected 'secret-value', got %q", decrypted)
+	if decrypted != "shh" {
+		t.Fatalf("expected 'shh', got %q", decrypted)
 	}
 }
 
@@ -646,14 +460,15 @@ func TestMockStore_WithCustomFuncs(t *testing.T) {
 
 	// Test custom error function
 	customAuthorCalled := false
+	sentinelErr := errors.New("not found")
 	mock.GetAuthorByNameFunc = func(name string) (*Author, error) {
 		customAuthorCalled = true
-		return nil, sql.ErrNoRows
+		return nil, sentinelErr
 	}
 
 	author, err := mock.GetAuthorByName("test")
-	if err != sql.ErrNoRows {
-		t.Errorf("GetAuthorByName() returned error: %v; want sql.ErrNoRows", err)
+	if err != sentinelErr {
+		t.Errorf("GetAuthorByName() returned error: %v; want sentinelErr", err)
 	}
 	if !customAuthorCalled {
 		t.Error("Custom GetAuthorByNameFunc was not called")
@@ -699,80 +514,9 @@ func TestMockStore_WithCustomFuncs(t *testing.T) {
 	}
 }
 
-// TestGetOrCreateAuthor tests the GetOrCreateAuthor helper function
-func TestGetOrCreateAuthor(t *testing.T) {
-	tempDir := t.TempDir()
-	if err := Initialize(filepath.Join(tempDir, "test.db")); err != nil {
-		t.Fatalf("Initialize failed: %v", err)
-	}
-	defer func() {
-		_ = DB.Close()
-		DB = nil
-	}()
-
-	// First call should create the author
-	authorID1, err := GetOrCreateAuthor("New Author")
-	if err != nil {
-		t.Fatalf("GetOrCreateAuthor (create) failed: %v", err)
-	}
-	if authorID1 == 0 {
-		t.Fatal("Expected author ID to be non-zero")
-	}
-
-	// Second call should return the same author ID
-	authorID2, err := GetOrCreateAuthor("New Author")
-	if err != nil {
-		t.Fatalf("GetOrCreateAuthor (get) failed: %v", err)
-	}
-	if authorID2 != authorID1 {
-		t.Errorf("Expected same author ID, got %d vs %d", authorID2, authorID1)
-	}
-}
-
-// TestGetOrCreateSeries tests the GetOrCreateSeries helper function
-func TestGetOrCreateSeries(t *testing.T) {
-	tempDir := t.TempDir()
-	if err := Initialize(filepath.Join(tempDir, "test.db")); err != nil {
-		t.Fatalf("Initialize failed: %v", err)
-	}
-	defer func() {
-		_ = DB.Close()
-		DB = nil
-	}()
-
-	// Create an author first
-	authorID, err := GetOrCreateAuthor("Series Author")
-	if err != nil {
-		t.Fatalf("GetOrCreateAuthor failed: %v", err)
-	}
-
-	// First call should create the series
-	seriesID1, err := GetOrCreateSeries("New Series", &authorID)
-	if err != nil {
-		t.Fatalf("GetOrCreateSeries (create) failed: %v", err)
-	}
-	if seriesID1 == 0 {
-		t.Fatal("Expected series ID to be non-zero")
-	}
-
-	// Second call should return the same series ID
-	seriesID2, err := GetOrCreateSeries("New Series", &authorID)
-	if err != nil {
-		t.Fatalf("GetOrCreateSeries (get) failed: %v", err)
-	}
-	if seriesID2 != seriesID1 {
-		t.Errorf("Expected same series ID, got %d vs %d", seriesID2, seriesID1)
-	}
-
-	// Test without author
-	seriesID3, err := GetOrCreateSeries("Standalone Series", nil)
-	if err != nil {
-		t.Fatalf("GetOrCreateSeries (no author) failed: %v", err)
-	}
-	if seriesID3 == 0 {
-		t.Fatal("Expected series ID to be non-zero for series without author")
-	}
-}
+// NOTE(fable5 T022): TestGetOrCreateAuthor, TestGetOrCreateSeries, and
+// TestCloseWithDB removed — they tested SQLite-backed helpers (Initialize,
+// DB, GetOrCreateAuthor, GetOrCreateSeries, Close) that were removed.
 
 // TestCloseStoreWithNilStore tests CloseStore when globalStore is nil
 func TestCloseStoreWithNilStore(t *testing.T) {
@@ -784,33 +528,6 @@ func TestCloseStoreWithNilStore(t *testing.T) {
 	globalStore = nil
 	if err := CloseStore(); err != nil {
 		t.Errorf("CloseStore() with nil store returned error: %v", err)
-	}
-}
-
-// TestCloseWithDB tests the Close function with DB set
-func TestCloseWithDB(t *testing.T) {
-	tempDir := t.TempDir()
-	origDB := DB
-	defer func() {
-		DB = origDB
-	}()
-
-	// Initialize DB
-	db, err := sql.Open("sqlite3", filepath.Join(tempDir, "close_test.db"))
-	if err != nil {
-		t.Fatalf("Failed to open db: %v", err)
-	}
-	DB = db
-
-	// Test Close
-	if err := Close(); err != nil {
-		t.Errorf("Close() returned error: %v", err)
-	}
-	DB = nil
-
-	// Test Close with nil DB
-	if err := Close(); err != nil {
-		t.Errorf("Close() with nil DB returned error: %v", err)
 	}
 }
 

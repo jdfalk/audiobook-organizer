@@ -1,33 +1,17 @@
 // file: internal/tagger/tagger_test.go
-// version: 1.0.1
+// version: 2.0.0
 // guid: 8c9d0e1f-2a3b-4c5d-6e7f-8a9b0c1d2e3f
+// last-edited: 2026-06-10
+
+// NOTE(fable5 T022): setupTaggerDB and TestUpdateSeriesTags were removed;
+// they tested the SQLite-backed UpdateSeriesTags path which was removed in
+// fable5 T022. The file-format tests below remain unchanged.
 
 package tagger
 
 import (
-	"path/filepath"
 	"testing"
-
-	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
-
-// setupTaggerDB prepares a temporary SQLite database for tagger tests.
-func setupTaggerDB(t *testing.T) func() {
-	t.Helper()
-
-	prevDB := database.DB
-	tempDir := t.TempDir()
-	dbPath := filepath.Join(tempDir, "tagger.db")
-
-	if err := database.Initialize(dbPath); err != nil {
-		t.Fatalf("initialize database: %v", err)
-	}
-
-	return func() {
-		_ = database.Close()
-		database.DB = prevDB
-	}
-}
 
 func TestUpdateM4BTags(t *testing.T) {
 	// Test the placeholder implementation
@@ -160,34 +144,11 @@ func TestUpdateFileTags_CaseInsensitive(t *testing.T) {
 	}
 }
 
-// TestUpdateSeriesTags exercises the series tag update flow with mixed inputs.
-func TestUpdateSeriesTags(t *testing.T) {
-	cleanup := setupTaggerDB(t)
-	defer cleanup()
-
-	result, err := database.DB.Exec("INSERT INTO authors (name) VALUES ('Test Author')")
-	if err != nil {
-		t.Fatalf("insert author: %v", err)
-	}
-	authorID, _ := result.LastInsertId()
-
-	result, err = database.DB.Exec("INSERT INTO series (name, author_id) VALUES ('Test Series', ?)", authorID)
-	if err != nil {
-		t.Fatalf("insert series: %v", err)
-	}
-	seriesID, _ := result.LastInsertId()
-
-	_, err = database.DB.Exec(`
-		INSERT INTO books (title, author_id, series_id, series_sequence, file_path)
-		VALUES
-			('Book One', ?, ?, 1, '/tmp/book-one.m4b'),
-			('Book Two', ?, ?, NULL, '/tmp/book-two.wav')
-	`, authorID, seriesID, authorID, seriesID)
-	if err != nil {
-		t.Fatalf("insert books: %v", err)
-	}
-
-	if err := UpdateSeriesTags(); err != nil {
-		t.Fatalf("UpdateSeriesTags failed: %v", err)
+// TestUpdateSeriesTagsReturnsError verifies that the legacy SQLite-backed
+// UpdateSeriesTags path (removed in fable5 T022) now returns an error
+// with a clear migration message.
+func TestUpdateSeriesTagsReturnsError(t *testing.T) {
+	if err := UpdateSeriesTags(); err == nil {
+		t.Error("expected UpdateSeriesTags to return an error after SQLite removal")
 	}
 }

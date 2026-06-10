@@ -1,11 +1,12 @@
 // file: internal/database/iface_misc.go
-// version: 1.14.0
+// version: 1.15.0
 // guid: 473781a7-1a31-4914-b7c7-8efc91f9f7e6
-// last-edited: 2026-05-16
+// last-edited: 2026-06-10
 
 package database
 
 import "context"
+import "errors"
 import "time"
 
 // BookFileHashUpdater is the narrow interface required by fileops.WriteTagsSafe
@@ -339,3 +340,12 @@ type RejectedMetadataStore interface {
 	GetMetadataRejections(bookID string) ([]MetadataRejection, error)
 	DeleteMetadataRejections(bookID string) error
 }
+
+// ErrSQLiteRBACUnsupported is a sentinel kept for source compatibility after
+// the SQLite backend was removed in fable5 TASK-022. PebbleDB always supports
+// RBAC; this error is never returned at runtime. Callers that check
+// errors.Is(err, ErrSQLiteRBACUnsupported) will always evaluate to false.
+//
+// Deprecated: The SQLite backend no longer exists; this sentinel will be
+// removed in a future cleanup once all callers have been updated.
+var ErrSQLiteRBACUnsupported = errors.New("SQLite backend no longer exists; RBAC is always available on PebbleDB")

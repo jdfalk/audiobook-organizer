@@ -1,11 +1,14 @@
 // file: internal/database/extra_coverage_test.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: e1f2a3b4-c5d6-7890-abcd-ef0102030405
-// last-edited: 2026-05-05
+// last-edited: 2026-06-10
 
 // Package database — extra tests to lift coverage of 0%-covered functions.
-// Covers: APIKeyToken helpers, SQLiteStore book/tag/user/activity/metadata
+// Covers: APIKeyToken helpers, PebbleStore book/tag/user/activity/metadata
 // functions, EmbeddingStore helpers, MetadataFetchCache, and misc utils.
+// NOTE(fable5 T022): Ported from SQLiteStore to PebbleStore; tests for
+// SQLite-only methods (GetAllBookFiles, GetBookFilesNeedingDelugeImport,
+// GetBookFileByAcoustID) removed.
 package database
 
 import (
@@ -42,7 +45,7 @@ func TestHashAPIKeyToken(t *testing.T) {
 
 func TestSQLiteStore_SetRootDirAndInvalidate(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 	// Just exercises the code paths (SetRootDir is a simple field assign,
 	// InvalidateLibraryStats is a no-op on SQLite).
 	s.SetRootDir("/tmp/root")
@@ -71,7 +74,7 @@ func TestSQLiteStore_GetAllBookSummaries(t *testing.T) {
 
 func TestSQLiteStore_DistinctGenresAndLanguages(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	genre := "Fantasy"
 	lang := "English"
@@ -99,7 +102,7 @@ func TestSQLiteStore_DistinctGenresAndLanguages(t *testing.T) {
 
 func TestSQLiteStore_GetBookBySegmentFileHash(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	bookID := createTestBook(t, store, "Seg Hash Book", "/tmp/seghash.m4b", nil, nil)
 	hash := "seg-file-hash-abc"
@@ -133,7 +136,7 @@ func TestSQLiteStore_GetBookBySegmentFileHash(t *testing.T) {
 
 func TestSQLiteStore_GetBooksByMetadataSourceHash(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	// CreateBook does not persist MetadataSourceHash; use UpdateBook after create.
 	msh := "meta-source-hash-1"
@@ -159,7 +162,7 @@ func TestSQLiteStore_GetBooksByMetadataSourceHash(t *testing.T) {
 
 func TestSQLiteStore_UpdateBookRating(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	bookID := createTestBook(t, store, "Rated Book", "/tmp/rated.m4b", nil, nil)
 
@@ -198,7 +201,7 @@ func TestSQLiteStore_UpdateBookRating(t *testing.T) {
 
 func TestSQLiteStore_GetITunesPurgePendingBooks(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	pid := "PID_PURGE_1"
 	book, err := store.CreateBook(&Book{
@@ -223,7 +226,7 @@ func TestSQLiteStore_GetITunesPurgePendingBooks(t *testing.T) {
 
 func TestSQLiteStore_CountBooksByPathPrefix(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	_ = createTestBook(t, store, "Prefix Book 1", "/mnt/library/book1.m4b", nil, nil)
 	_ = createTestBook(t, store, "Prefix Book 2", "/mnt/library/book2.m4b", nil, nil)
@@ -238,97 +241,15 @@ func TestSQLiteStore_CountBooksByPathPrefix(t *testing.T) {
 	assert.GreaterOrEqual(t, count2, 1)
 }
 
-// ---- GetAllBookFiles + GetBookFilesNeedingDelugeImport ----
-
-func TestSQLiteStore_GetAllBookFiles(t *testing.T) {
-	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
-
-	bookID := createTestBook(t, store, "AllFiles Book", "/tmp/allfiles.m4b", nil, nil)
-	err := store.CreateBookFile(&BookFile{
-		BookID:   bookID,
-		FilePath: "/tmp/allfiles_p1.m4b",
-		Format:   "m4b",
-	})
-	require.NoError(t, err)
-
-	files, err := s.GetAllBookFiles()
-	require.NoError(t, err)
-	assert.GreaterOrEqual(t, len(files), 1)
-}
-
-func TestSQLiteStore_GetBookFilesNeedingDelugeImport(t *testing.T) {
-	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
-
-	bookID := createTestBook(t, store, "Deluge Import Book", "/tmp/deluge.m4b", nil, nil)
-	err := store.CreateBookFile(&BookFile{
-		BookID:     bookID,
-		FilePath:   "/tmp/deluge_p1.m4b",
-		Format:     "m4b",
-		DelugeHash: "deluge-hash-abc123",
-	})
-	require.NoError(t, err)
-
-	files, err := s.GetBookFilesNeedingDelugeImport()
-	require.NoError(t, err)
-	assert.GreaterOrEqual(t, len(files), 1)
-}
-
-// ---- GetBookFileByAcoustID + GetBookFileByAcoustIDFuzzy ----
-
-func TestSQLiteStore_GetBookFileByAcoustID(t *testing.T) {
-	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
-
-	bookID := createTestBook(t, store, "AcoustID Book", "/tmp/acoustid.m4b", nil, nil)
-	err := store.CreateBookFile(&BookFile{
-		BookID:       bookID,
-		FilePath:     "/tmp/acoustid_p1.m4b",
-		Format:       "m4b",
-		AcoustIDSeg0: "fingerprint-seg0-abc",
-	})
-	require.NoError(t, err)
-
-	found, err := s.GetBookFileByAcoustID("fingerprint-seg0-abc")
-	require.NoError(t, err)
-	require.NotNil(t, found)
-
-	// Not found
-	found, err = s.GetBookFileByAcoustID("no-such-fingerprint")
-	require.NoError(t, err)
-	assert.Nil(t, found)
-}
-
-func TestSQLiteStore_GetBookFileByAcoustIDFuzzy(t *testing.T) {
-	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
-
-	bookID := createTestBook(t, store, "Fuzzy AcoustID Book", "/tmp/fuzzy.m4b", nil, nil)
-	err := store.CreateBookFile(&BookFile{
-		BookID:       bookID,
-		FilePath:     "/tmp/fuzzy_p1.m4b",
-		Format:       "m4b",
-		AcoustIDSeg0: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-	})
-	require.NoError(t, err)
-
-	// Fuzzy match — no match expected but function must not error
-	found, err := s.GetBookFileByAcoustIDFuzzy("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB", 0.5)
-	require.NoError(t, err)
-	_ = found // may or may not match
-
-	// Empty table means no match
-	found, err = s.GetBookFileByAcoustIDFuzzy("CCCC", 0.9)
-	require.NoError(t, err)
-	_ = found
-}
+// NOTE(fable5 T022): GetAllBookFiles, GetBookFilesNeedingDelugeImport,
+// GetBookFileByAcoustID, GetBookFileByAcoustIDFuzzy tests removed;
+// those methods were SQLite-only and don't exist on PebbleStore.
 
 // ---- GetQuarantinedBooks + CountQuarantinedBooks ----
 
 func TestSQLiteStore_QuarantinedBooks(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	bookID := createTestBook(t, store, "Quarantine Book", "/tmp/quarantine.m4b", nil, nil)
 	book, err := store.GetBookByID(bookID)
@@ -355,7 +276,7 @@ func TestSQLiteStore_QuarantinedBooks(t *testing.T) {
 
 func TestSQLiteStore_MergeChapterBooks(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	primary := createTestBook(t, store, "Primary Chapter Book", "/tmp/primary.m4b", nil, nil)
 	src1 := createTestBook(t, store, "Chapter 1", "/tmp/ch1.m4b", nil, nil)
@@ -382,7 +303,7 @@ func TestSQLiteStore_MergeChapterBooks(t *testing.T) {
 
 func TestSQLiteStore_FlagMetadataHashDuplicate(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	primary := createTestBook(t, store, "Primary Meta", "/tmp/primary_meta.m4b", nil, nil)
 	dup := createTestBook(t, store, "Duplicate Meta", "/tmp/dup_meta.m4b", nil, nil)
@@ -400,7 +321,7 @@ func TestSQLiteStore_FlagMetadataHashDuplicate(t *testing.T) {
 
 func TestSQLiteStore_UpdateAndSetBookFileHashes(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	bookID := createTestBook(t, store, "Hash Book", "/tmp/hashbook.m4b", nil, nil)
 	require.NoError(t, store.CreateBookFile(&BookFile{
@@ -425,7 +346,7 @@ func TestSQLiteStore_UpdateAndSetBookFileHashes(t *testing.T) {
 
 func TestSQLiteStore_GetDuplicateFilesByHash(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	// Two book files with the same original hash in different books
 	book1 := createTestBook(t, store, "Dup File Book 1", "/tmp/dupfile1.m4b", nil, nil)
@@ -459,7 +380,7 @@ func TestSQLiteStore_GetDuplicateFilesByHash(t *testing.T) {
 
 func TestSQLiteStore_GetBookFileHashStats(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	bookID := createTestBook(t, store, "Hash Stats Book", "/tmp/hashstats.m4b", nil, nil)
 	require.NoError(t, store.CreateBookFile(&BookFile{
@@ -477,7 +398,7 @@ func TestSQLiteStore_GetBookFileHashStats(t *testing.T) {
 
 func TestSQLiteStore_GetBookMetadataHashStats(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	msh := "meta-hash-for-stats"
 	_, err := store.CreateBook(&Book{
@@ -498,7 +419,7 @@ func TestSQLiteStore_GetBookMetadataHashStats(t *testing.T) {
 
 func TestSQLiteStore_CountPrefix(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	// CountPrefix uses the kv_store table
 	require.NoError(t, s.SetRaw("test_prefix:a", []byte("1")))
@@ -512,7 +433,7 @@ func TestSQLiteStore_CountPrefix(t *testing.T) {
 
 func TestSQLiteStore_GetOperationResultsPage(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	op, err := store.CreateOperation("page-op-1", "scan", nil)
 	require.NoError(t, err)
@@ -545,7 +466,7 @@ func TestSQLiteStore_GetOperationResultsPage(t *testing.T) {
 
 func TestSQLiteStore_ScanFailCounters(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	pathHash := "scan-path-hash-abc"
 
@@ -576,64 +497,76 @@ func TestSQLiteStore_ScanFailCounters(t *testing.T) {
 	assert.Equal(t, 0, n4)
 }
 
-// ---- SQLiteStore user: ListUsers, role stubs, position/state stubs ----
+// ---- PebbleStore user: ListUsers, RBAC, position/state ----
+// NOTE(fable5 T022): Ported from SQLite stubs. PebbleStore fully supports
+// RBAC and user positions — assertions updated to verify working behaviour.
 
 func TestSQLiteStore_UserAndRoleStubs(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
-	// ListUsers — always nil, nil
+	// ListUsers — returns nil (not an error) when no users exist.
 	users, err := s.ListUsers()
 	require.NoError(t, err)
 	assert.Nil(t, users)
 
-	// Role methods fail loudly on SQLite (HIGH-4b): every one returns
-	// ErrSQLiteRBACUnsupported rather than silent success, so RBAC can no longer
-	// appear to work while granting no permissions.
-	_, err = s.GetRoleByID("id-1")
-	assert.ErrorIs(t, err, ErrSQLiteRBACUnsupported)
+	// PebbleStore RBAC is fully functional. GetRoleByID/GetRoleByName return
+	// nil (not found), not ErrSQLiteRBACUnsupported.
+	r, err := s.GetRoleByID("id-1")
+	require.NoError(t, err)
+	assert.Nil(t, r)
 
-	_, err = s.GetRoleByName("admin")
-	assert.ErrorIs(t, err, ErrSQLiteRBACUnsupported)
+	r2, err := s.GetRoleByName("admin")
+	require.NoError(t, err)
+	assert.Nil(t, r2)
 
-	_, err = s.ListRoles()
-	assert.ErrorIs(t, err, ErrSQLiteRBACUnsupported)
+	roles, err := s.ListRoles()
+	require.NoError(t, err)
+	// Empty or nil — no roles created yet.
+	_ = roles
 
+	// CreateRole / UpdateRole / DeleteRole succeed on PebbleStore.
 	role := &Role{ID: "r1", Name: "editor"}
-	_, err = s.CreateRole(role)
-	assert.ErrorIs(t, err, ErrSQLiteRBACUnsupported)
+	created, err := s.CreateRole(role)
+	require.NoError(t, err)
+	require.NotNil(t, created)
 
-	assert.ErrorIs(t, s.UpdateRole(role), ErrSQLiteRBACUnsupported)
-	assert.ErrorIs(t, s.DeleteRole("r1"), ErrSQLiteRBACUnsupported)
+	require.NoError(t, s.UpdateRole(role))
+	require.NoError(t, s.DeleteRole("r1"))
 }
 
 func TestSQLiteStore_UserPositionAndBookStateStubs(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	require.NoError(t, s.SetUserPosition("u1", "b1", "seg1", 120.5))
 
+	// PebbleStore stores and retrieves positions correctly.
 	pos, err := s.GetUserPosition("u1", "b1")
 	require.NoError(t, err)
-	assert.Nil(t, pos)
+	require.NotNil(t, pos)
+	assert.Equal(t, "u1", pos.UserID)
+	assert.Equal(t, "b1", pos.BookID)
+	assert.InDelta(t, 120.5, pos.PositionSeconds, 0.01)
 
 	positions, err := s.ListUserPositionsForBook("u1", "b1")
 	require.NoError(t, err)
-	assert.Nil(t, positions)
+	assert.NotEmpty(t, positions)
 
 	require.NoError(t, s.ClearUserPositions("u1", "b1"))
 	require.NoError(t, s.SetUserBookState(&UserBookState{UserID: "u1", BookID: "b1"}))
 
 	state, err := s.GetUserBookState("u1", "b1")
 	require.NoError(t, err)
-	assert.Nil(t, state)
+	require.NotNil(t, state)
+	assert.Equal(t, "u1", state.UserID)
 }
 
 // ---- SQLiteStore metadata: AddMetadataRejection, GetMetadataRejections, DeleteMetadataRejections ----
 
 func TestSQLiteStore_MetadataRejections(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	bookID := createTestBook(t, store, "Rejection Book", "/tmp/rejection.m4b", nil, nil)
 
@@ -674,7 +607,7 @@ func TestSQLiteStore_MetadataRejections(t *testing.T) {
 
 func TestSQLiteStore_GetBookTagsDetailed(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	bookID := createTestBook(t, store, "Detailed Tag Book", "/tmp/dtag.m4b", nil, nil)
 	require.NoError(t, store.AddBookTag(bookID, "sci-fi"))
@@ -694,7 +627,7 @@ func TestSQLiteStore_GetBookTagsDetailed(t *testing.T) {
 
 func TestSQLiteStore_RemoveBookTagsByPrefix(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	bookID := createTestBook(t, store, "Prefix Tag Book", "/tmp/ptag.m4b", nil, nil)
 	require.NoError(t, s.AddBookTagWithSource(bookID, "metadata:source:audible", "system"))
@@ -734,7 +667,7 @@ func TestSQLiteStore_RemoveBookTagsByPrefix(t *testing.T) {
 
 func TestSQLiteStore_AuthorTags(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	author, err := store.CreateAuthor("Tagged Author")
 	require.NoError(t, err)
@@ -788,7 +721,7 @@ func TestSQLiteStore_AuthorTags(t *testing.T) {
 
 func TestSQLiteStore_SeriesTags(t *testing.T) {
 	store := setupCoverageDB(t)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	series, err := store.CreateSeries("Tagged Series", nil)
 	require.NoError(t, err)
@@ -882,7 +815,7 @@ func TestCountCachedMetadataFetches(t *testing.T) {
 	assert.Equal(t, int64(0), count)
 
 	// Store a cache entry via SetRaw (mimics what MetadataFetchCache does)
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 	require.NoError(t, s.SetRaw("metadata_fetch_cache:book-1:audible", []byte(`{"results":[]}`)))
 	require.NoError(t, s.SetRaw("metadata_fetch_cache:book-2:openlibrary", []byte(`{"results":[]}`)))
 	require.NoError(t, s.SetRaw("other_prefix:key", []byte(`irrelevant`)))

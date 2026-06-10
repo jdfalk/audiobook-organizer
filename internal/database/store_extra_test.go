@@ -1,6 +1,10 @@
 // file: internal/database/store_extra_test.go
-// version: 1.1.0
+// version: 2.0.0
 // guid: 68b2b2f9-2b8f-4f7f-9d8f-26e6306a3c8e
+// last-edited: 2026-06-10
+
+// NOTE(fable5 T022): SQLiteStore type assertions replaced with PebbleStore;
+// TestSQLiteExtendedFeatures renamed to TestPebbleExtendedFeatures.
 
 package database
 
@@ -29,10 +33,10 @@ func TestStoreAdditionalCoveragePebble(t *testing.T) {
 	exercisePebbleAdvanced(t, store.(*PebbleStore))
 }
 
-func TestSQLiteExtendedFeatures(t *testing.T) {
+func TestPebbleExtendedFeatures(t *testing.T) {
 	store, cleanup := setupTestDB(t)
 	defer cleanup()
-	sqliteStore := store.(*SQLiteStore)
+	sqliteStore := store.(*PebbleStore)
 
 	// ---- User Management ----
 	user, err := sqliteStore.CreateUser("testuser", "test@example.com", "bcrypt", "hashvalue", []string{"user", "admin"}, "active")
@@ -320,12 +324,8 @@ func exerciseStoreCommon(t *testing.T, store Store) {
 	}); err != nil {
 		t.Fatalf("CreateBook (dup) failed: %v", err)
 	}
-	if dups, err := store.GetDuplicateBooks(); err != nil {
+	if _, err := store.GetDuplicateBooks(); err != nil {
 		t.Fatalf("GetDuplicateBooks failed: %v", err)
-	} else if len(dups) == 0 {
-		if _, ok := store.(*PebbleStore); !ok {
-			t.Fatal("expected duplicates for sqlite store")
-		}
 	}
 
 	marked := true
@@ -461,13 +461,7 @@ func exerciseStoreCommon(t *testing.T, store Store) {
 	}
 
 	if err := store.DeleteBook("missing-book"); err != nil {
-		if _, ok := store.(*PebbleStore); ok {
-			t.Fatalf("expected Pebble DeleteBook to ignore missing book: %v", err)
-		}
-	} else {
-		if _, ok := store.(*PebbleStore); !ok {
-			t.Fatal("expected SQLite DeleteBook to error for missing book")
-		}
+		t.Fatalf("expected DeleteBook to ignore missing book: %v", err)
 	}
 
 	if err := store.DeleteWork(work.ID); err != nil {
@@ -477,13 +471,7 @@ func exerciseStoreCommon(t *testing.T, store Store) {
 		t.Fatal("expected UpdateWork to fail for missing work")
 	}
 	if err := store.DeleteWork("missing-work"); err != nil {
-		if _, ok := store.(*PebbleStore); ok {
-			t.Fatalf("expected Pebble DeleteWork to ignore missing work: %v", err)
-		}
-	} else {
-		if _, ok := store.(*PebbleStore); !ok {
-			t.Fatal("expected SQLite DeleteWork to error for missing work")
-		}
+		t.Fatalf("expected DeleteWork to ignore missing work: %v", err)
 	}
 }
 

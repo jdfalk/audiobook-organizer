@@ -8,7 +8,6 @@ package scanner
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -1978,45 +1977,7 @@ func saveBookToDatabase(ctx context.Context, book *Book) error {
 		return err
 	}
 
-	// Fallback legacy path using raw DB for backward compatibility
-	// Only use this path if GlobalStore is not available
-	if database.DB == nil {
-		return fmt.Errorf("database not initialized (neither GlobalStore nor DB available)")
-	}
-
-	var authorIDInt int64
-	err := database.DB.QueryRow("SELECT id FROM authors WHERE name = ?", book.Author).Scan(&authorIDInt)
-	if err != nil {
-		result, err2 := database.DB.Exec("INSERT INTO authors (name) VALUES (?)", book.Author)
-		if err2 != nil {
-			return fmt.Errorf("failed to insert author: %w", err2)
-		}
-		authorIDInt, _ = result.LastInsertId()
-	}
-	var seriesID sql.NullInt64
-	if book.Series != "" {
-		var id int64
-		serr := database.DB.QueryRow("SELECT id FROM series WHERE name = ?", book.Series).Scan(&id)
-		if serr != nil {
-			result, ierr := database.DB.Exec("INSERT INTO series (name, author_id) VALUES (?, ?)", book.Series, authorIDInt)
-			if ierr != nil {
-				return fmt.Errorf("failed to insert series: %w", ierr)
-			}
-			id, _ = result.LastInsertId()
-		}
-		seriesID.Int64 = id
-		seriesID.Valid = true
-	}
-	_, err = database.DB.Exec(`
-	        INSERT INTO books (title, author_id, series_id, series_sequence, file_path, format, duration)
-	        VALUES (?, ?, ?, ?, ?, ?, ?)
-	        ON CONFLICT(file_path)
-	        DO UPDATE SET title=?, author_id=?, series_id=?, series_sequence=?, format=?, duration=?
-	    `,
-		book.Title, authorIDInt, seriesID, book.Position, book.FilePath, book.Format, book.Duration,
-		book.Title, authorIDInt, seriesID, book.Position, book.Format, book.Duration,
-	)
-	return err
+	return fmt.Errorf("database store not initialized")
 }
 
 // ComputeSegmentFileHash computes SHA256 of the first 1MB of a file for use as

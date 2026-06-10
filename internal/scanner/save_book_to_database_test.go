@@ -1,7 +1,9 @@
 // file: internal/scanner/save_book_to_database_test.go
-// version: 1.4.0
+// version: 2.0.0
 // guid: 0f1e2d3c-4b5a-6978-8899-aabbccddeeff
-// last-edited: 2026-06-01
+// last-edited: 2026-06-10
+
+// NOTE(fable5 T022): Ported from SQLiteStore to PebbleStore.
 
 package scanner
 
@@ -15,15 +17,14 @@ import (
 	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
 
-// setupSQLiteStore provides a SQLite-backed store and cleanup hook.
-func setupSQLiteStore(t *testing.T) (*database.SQLiteStore, func()) {
+// setupPebbleStore provides a PebbleDB-backed store and cleanup hook.
+func setupPebbleStore(t *testing.T) (*database.PebbleStore, func()) {
 	t.Helper()
 
-	tempDir := t.TempDir()
-	dbPath := filepath.Join(tempDir, "scanner.db")
-	store, err := database.NewSQLiteStore(dbPath)
+	dbPath := t.TempDir()
+	store, err := database.NewPebbleStore(dbPath)
 	if err != nil {
-		t.Fatalf("create sqlite store: %v", err)
+		t.Fatalf("create pebble store: %v", err)
 	}
 
 	// Run migrations to ensure schema is up-to-date
@@ -37,7 +38,7 @@ func setupSQLiteStore(t *testing.T) (*database.SQLiteStore, func()) {
 }
 
 func TestSaveBookToDatabase_GlobalStoreCreateAndUpdate(t *testing.T) {
-	store, cleanup := setupSQLiteStore(t)
+	store, cleanup := setupPebbleStore(t)
 	defer cleanup()
 
 	prevStore := database.GetGlobalStore()
@@ -103,7 +104,7 @@ func TestSaveBookToDatabase_GlobalStoreCreateAndUpdate(t *testing.T) {
 }
 
 func TestSaveBookToDatabase_BlocklistSkips(t *testing.T) {
-	store, cleanup := setupSQLiteStore(t)
+	store, cleanup := setupPebbleStore(t)
 	defer cleanup()
 	prevStore := database.GetGlobalStore()
 	database.SetGlobalStore(store)
@@ -170,7 +171,7 @@ func (h *testDedupScanHooks) OnImportDedup(bookID string) {
 // you should embed + Layer1 check this now", not a general "saveBook ran"
 // notification.
 func TestSaveBookToDatabase_DedupOnImportHook(t *testing.T) {
-	store, cleanup := setupSQLiteStore(t)
+	store, cleanup := setupPebbleStore(t)
 	defer cleanup()
 
 	prevStore := database.GetGlobalStore()

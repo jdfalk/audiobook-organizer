@@ -1,5 +1,5 @@
 // file: internal/database/alt_titles_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e1f2a3b4-c5d6-7890-abcd-ef0123456789
 
 package database
@@ -11,12 +11,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestBookAlternativeTitles_SQLite verifies the round-trip behavior of
+// TestBookAlternativeTitles_Pebble verifies the round-trip behavior of
 // the book_alternative_titles table: add, get, remove, set, idempotency.
 // Uses the shared newTestActivityStore-style setup but for the main
 // SQLite store.
-func TestBookAlternativeTitles_SQLite(t *testing.T) {
-	s := setupTestSQLiteStore(t)
+func TestBookAlternativeTitles_Pebble(t *testing.T) {
+	s := setupTestPebbleStore(t)
 	bookID := "01HKEXAMPLE00000000000000"
 
 	// Empty to start
@@ -68,14 +68,11 @@ func TestBookAlternativeTitles_SQLite(t *testing.T) {
 	assert.Empty(t, alts)
 }
 
-// setupTestSQLiteStore is a minimal SQLite store factory for tests
-// that need the real table schema. Uses an in-memory DB so nothing
-// leaks to disk.
-func setupTestSQLiteStore(t *testing.T) *SQLiteStore {
+// setupTestPebbleStore is a minimal PebbleStore factory for tests.
+func setupTestPebbleStore(t *testing.T) *PebbleStore {
 	t.Helper()
-	s, err := NewSQLiteStore(":memory:")
+	s, err := NewPebbleStore(t.TempDir())
 	require.NoError(t, err)
-	require.NoError(t, RunMigrations(s))
 	t.Cleanup(func() { s.Close() })
 	return s
 }

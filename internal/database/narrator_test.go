@@ -1,6 +1,9 @@
 // file: internal/database/narrator_test.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+// last-edited: 2026-06-10
+
+// NOTE(fable5 T022): SQLiteStore type assertions replaced with PebbleStore.
 
 package database
 
@@ -11,7 +14,7 @@ import (
 func TestCreateNarrator(t *testing.T) {
 	store, cleanup := setupTestDB(t)
 	defer cleanup()
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	n, err := s.CreateNarrator("Jane Doe")
 	if err != nil {
@@ -31,7 +34,7 @@ func TestCreateNarrator(t *testing.T) {
 func TestCreateNarrator_CaseInsensitiveDuplicate(t *testing.T) {
 	store, cleanup := setupTestDB(t)
 	defer cleanup()
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	n1, err := s.CreateNarrator("John Smith")
 	if err != nil {
@@ -42,7 +45,7 @@ func TestCreateNarrator_CaseInsensitiveDuplicate(t *testing.T) {
 	// But GetNarratorByName should find the original via case-insensitive lookup.
 	_, err = s.CreateNarrator("john smith")
 	if err == nil {
-		t.Log("CreateNarrator allowed case-variant duplicate (UNIQUE is case-sensitive in SQLite)")
+		t.Log("CreateNarrator allowed case-variant duplicate (UNIQUE may be case-sensitive in this backend)")
 		// If it didn't error, at least verify GetNarratorByName returns one consistently.
 	}
 
@@ -62,7 +65,7 @@ func TestCreateNarrator_CaseInsensitiveDuplicate(t *testing.T) {
 func TestGetNarratorByID(t *testing.T) {
 	store, cleanup := setupTestDB(t)
 	defer cleanup()
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	created, err := s.CreateNarrator("Alice")
 	if err != nil {
@@ -93,7 +96,7 @@ func TestGetNarratorByID(t *testing.T) {
 func TestGetNarratorByName(t *testing.T) {
 	store, cleanup := setupTestDB(t)
 	defer cleanup()
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	_, err := s.CreateNarrator("Bob Jones")
 	if err != nil {
@@ -133,7 +136,7 @@ func TestGetNarratorByName(t *testing.T) {
 func TestListNarrators(t *testing.T) {
 	store, cleanup := setupTestDB(t)
 	defer cleanup()
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	names := []string{"Charlie", "Alice", "Bob"}
 	for _, name := range names {
@@ -159,7 +162,7 @@ func TestListNarrators(t *testing.T) {
 func TestSetBookNarrators(t *testing.T) {
 	store, cleanup := setupTestDB(t)
 	defer cleanup()
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	// Create a book to associate narrators with
 	book := &Book{Title: "Test Book", FilePath: "/tmp/test.m4b", Format: "m4b"}
@@ -198,7 +201,7 @@ func TestSetBookNarrators(t *testing.T) {
 func TestSetBookNarrators_Replace(t *testing.T) {
 	store, cleanup := setupTestDB(t)
 	defer cleanup()
-	s := store.(*SQLiteStore)
+	s := store.(*PebbleStore)
 
 	book := &Book{Title: "Replace Test", FilePath: "/tmp/replace.m4b", Format: "m4b"}
 	created, err := s.CreateBook(book)

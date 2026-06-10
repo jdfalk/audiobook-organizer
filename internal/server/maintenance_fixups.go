@@ -1,7 +1,7 @@
 // file: internal/server/maintenance_fixups.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
-// last-edited: 2026-05-24
+// last-edited: 2026-06-10
 
 package server
 
@@ -243,45 +243,35 @@ func wipeBookFiles(store maintenanceStore, dryRun bool) (int64, error) {
 		n, err := store.CountFiles()
 		return int64(n), err
 	}
-	switch s := store.(type) {
-	case *database.SQLiteStore:
-		return s.WipeTable("book_files")
-	case *database.PebbleStore:
+	if s, ok := store.(*database.PebbleStore); ok {
 		n, err := s.WipeByPrefixes([]string{"book_file:"})
 		return int64(n), err
-	default:
-		// Fallback: iterate all books and delete via interface.
-		var count int64
-		offset := 0
-		for {
-			books, err := store.GetAllBooks(500, offset)
-			if err != nil {
-				return count, err
-			}
-			for _, book := range books {
-				if err := store.DeleteBookFilesForBook(book.ID); err != nil {
-					slog.Warn("wipeBookFiles DeleteBookFilesForBook failed", "book_id", book.ID, "error", err)
-				}
-				count++ // approximate
-			}
-			if len(books) < 500 {
-				break
-			}
-			offset += 500
-		}
-		return count, nil
 	}
+	// Fallback: iterate all books and delete via interface.
+	var count int64
+	offset := 0
+	for {
+		books, err := store.GetAllBooks(500, offset)
+		if err != nil {
+			return count, err
+		}
+		for _, book := range books {
+			if err := store.DeleteBookFilesForBook(book.ID); err != nil {
+				slog.Warn("wipeBookFiles DeleteBookFilesForBook failed", "book_id", book.ID, "error", err)
+			}
+			count++ // approximate
+		}
+		if len(books) < 500 {
+			break
+		}
+		offset += 500
+	}
+	return count, nil
 }
 
 // wipeSegments deletes all book_segment rows using the appropriate store backend.
 func wipeSegments(store maintenanceStore, dryRun bool) (int64, error) {
-	switch s := store.(type) {
-	case *database.SQLiteStore:
-		if dryRun {
-			return s.CountTableRows("book_segments")
-		}
-		return s.WipeTable("book_segments")
-	case *database.PebbleStore:
+	if s, ok := store.(*database.PebbleStore); ok {
 		// Pebble segments use "bf:" (primary) and "bfs:" (secondary) prefixes.
 		if dryRun {
 			n, err := s.CountByPrefix("bf:")
@@ -289,9 +279,8 @@ func wipeSegments(store maintenanceStore, dryRun bool) (int64, error) {
 		}
 		n, err := s.WipeByPrefixes([]string{"bf:", "bfs:"})
 		return int64(n), err
-	default:
-		return 0, fmt.Errorf("wipeSegments: unsupported store type %T", store)
 	}
+	return 0, fmt.Errorf("wipeSegments: unsupported store type %T", store)
 }
 
 // wipeBooks deletes all book rows using the appropriate store backend.
@@ -300,16 +289,12 @@ func wipeBooks(store maintenanceStore, dryRun bool) (int64, error) {
 		n, err := store.CountBooks()
 		return int64(n), err
 	}
-	switch s := store.(type) {
-	case *database.SQLiteStore:
-		return s.WipeTable("books")
-	case *database.PebbleStore:
+	if s, ok := store.(*database.PebbleStore); ok {
 		// Book keys: "book:" prefix. Include secondary indexes.
 		n, err := s.WipeByPrefixes([]string{"book:"})
 		return int64(n), err
-	default:
-		return 0, fmt.Errorf("wipeBooks: unsupported store type %T", store)
 	}
+	return 0, fmt.Errorf("wipeBooks: unsupported store type %T", store)
 }
 
 // wipeAuthors deletes all author rows using the appropriate store backend.
@@ -318,15 +303,11 @@ func wipeAuthors(store maintenanceStore, dryRun bool) (int64, error) {
 		n, err := store.CountAuthors()
 		return int64(n), err
 	}
-	switch s := store.(type) {
-	case *database.SQLiteStore:
-		return s.WipeTable("authors")
-	case *database.PebbleStore:
+	if s, ok := store.(*database.PebbleStore); ok {
 		n, err := s.WipeByPrefixes([]string{"author:"})
 		return int64(n), err
-	default:
-		return 0, fmt.Errorf("wipeAuthors: unsupported store type %T", store)
 	}
+	return 0, fmt.Errorf("wipeAuthors: unsupported store type %T", store)
 }
 
 // wipeSeries deletes all series rows using the appropriate store backend.
@@ -335,26 +316,16 @@ func wipeSeries(store maintenanceStore, dryRun bool) (int64, error) {
 		n, err := store.CountSeries()
 		return int64(n), err
 	}
-	switch s := store.(type) {
-	case *database.SQLiteStore:
-		return s.WipeTable("series")
-	case *database.PebbleStore:
+	if s, ok := store.(*database.PebbleStore); ok {
 		n, err := s.WipeByPrefixes([]string{"series:"})
 		return int64(n), err
-	default:
-		return 0, fmt.Errorf("wipeSeries: unsupported store type %T", store)
 	}
+	return 0, fmt.Errorf("wipeSeries: unsupported store type %T", store)
 }
 
 // wipeExternalIDs deletes all external_id_map rows using the appropriate store backend.
 func wipeExternalIDs(store maintenanceStore, dryRun bool) (int64, error) {
-	switch s := store.(type) {
-	case *database.SQLiteStore:
-		if dryRun {
-			return s.CountTableRows("external_id_map")
-		}
-		return s.WipeTable("external_id_map")
-	case *database.PebbleStore:
+	if s, ok := store.(*database.PebbleStore); ok {
 		if dryRun {
 			n, err := s.CountByPrefix("ext_id:")
 			return int64(n), err
@@ -362,9 +333,8 @@ func wipeExternalIDs(store maintenanceStore, dryRun bool) (int64, error) {
 		// "ext_id:" covers both "ext_id:<source>:<id>" and "ext_id:book:<bookID>:<source>:<id>"
 		n, err := s.WipeByPrefixes([]string{"ext_id:"})
 		return int64(n), err
-	default:
-		return 0, fmt.Errorf("wipeExternalIDs: unsupported store type %T", store)
 	}
+	return 0, fmt.Errorf("wipeExternalIDs: unsupported store type %T", store)
 }
 
 // wipeActivity deletes all activity log entries.

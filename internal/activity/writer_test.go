@@ -1,5 +1,5 @@
 // file: internal/activity/writer_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f7e8d9c0-b1a2-4e3f-9c8d-7b6a5e4f3d2c
 
 package activity
@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -91,11 +90,10 @@ func TestParseLogLine(t *testing.T) {
 
 func TestWriter_CapturesLogs(t *testing.T) {
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "activity_test.db")
 
-	store, err := database.NewActivityStore(dbPath)
+	store, err := database.NewNutsActivityStore(dir)
 	if err != nil {
-		t.Fatalf("NewActivityStore: %v", err)
+		t.Fatalf("NewNutsActivityStore: %v", err)
 	}
 	defer store.Close()
 
@@ -224,11 +222,10 @@ func TestParseLogLine_MessageWithMultipleColons(t *testing.T) {
 // pending channel entries into the store.
 func TestWriter_Flush(t *testing.T) {
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "flush_test.db")
 
-	store, err := database.NewActivityStore(dbPath)
+	store, err := database.NewNutsActivityStore(dir)
 	if err != nil {
-		t.Fatalf("NewActivityStore: %v", err)
+		t.Fatalf("NewNutsActivityStore: %v", err)
 	}
 	defer store.Close()
 
@@ -277,11 +274,10 @@ func TestWriter_Flush(t *testing.T) {
 
 func TestWriter_DropsDebugOnBackpressure(t *testing.T) {
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "activity_bp_test.db")
 
-	store, err := database.NewActivityStore(dbPath)
+	store, err := database.NewNutsActivityStore(dir)
 	if err != nil {
-		t.Fatalf("NewActivityStore: %v", err)
+		t.Fatalf("NewNutsActivityStore: %v", err)
 	}
 	defer store.Close()
 
