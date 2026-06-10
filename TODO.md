@@ -60,7 +60,7 @@ Review deliverables (see files for full detail):
 
 ### P3 — Memory & DB optimization (waves 1–5)
 - [ ] **F5-T019** ⚠ Strip AcoustIDSeg0–6 from memdb (~550–900MB RSS) — after T013
-- [ ] **F5-T020** ⚠ Drop seg fields from `book_file:` Pebble values (sweep + `bookfile_seg_drop_v1_done`)
+- [x] **F5-T020** ✅ Drop seg fields from `book_file:` Pebble values (sweep + `bookfile_seg_drop_v1_done`)
 - [ ] **F5-T021** Embedding float16+zstd (`emb_f16_v1_done`, dual-read)
 - [ ] **F5-T022** Remove legacy SQLite store (~7.9K lines + CGO dep) (MED-4)
 - [ ] **F5-T023** memdb size telemetry + operation-log retention + dead-prefix sweep

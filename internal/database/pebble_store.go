@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.85.2
+// version: 1.86.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-06-10
 
@@ -8760,6 +8760,26 @@ func bookFilePathCRC(filePath string) string {
 	return fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(filePath)))
 }
 
+// marshalBookFileDropSegs serialises f to JSON with AcoustIDSeg0..6 removed.
+// It operates on a shallow copy so the caller's struct (used afterwards by
+// writeBookFileSecondaryIndexes and UpsertBookFileToMemDB) is never mutated.
+//
+// T020: segment fields are deprecated — they waste 200–400 MB of Pebble space
+// and are no longer needed after LSH replaced the last consumer. New rows are
+// written without them; a background sweep (dedup.bookfile-seg-drop) rewrites
+// old rows on-demand. The struct fields remain for decode of legacy rows.
+func marshalBookFileDropSegs(f *BookFile) ([]byte, error) {
+	c := *f // shallow copy — all fields copied, slice headers duplicated
+	c.AcoustIDSeg0 = ""
+	c.AcoustIDSeg1 = ""
+	c.AcoustIDSeg2 = ""
+	c.AcoustIDSeg3 = ""
+	c.AcoustIDSeg4 = ""
+	c.AcoustIDSeg5 = ""
+	c.AcoustIDSeg6 = ""
+	return json.Marshal(&c)
+}
+
 // getBookFileByID fetches a BookFile by its primary key (book_file:<bookID>:<fileID>).
 func (s *PebbleStore) getBookFileByID(bookID, fileID string) (*BookFile, error) {
 	key := []byte(fmt.Sprintf("book_file:%s:%s", bookID, fileID))
@@ -9140,7 +9160,10 @@ func (s *PebbleStore) CreateBookFile(file *BookFile) error {
 	}
 	file.UpdatedAt = now
 
-	data, err := json.Marshal(file)
+	// T020: drop AcoustIDSeg0..6 from the stored value via a copy; the
+	// original struct is preserved for writeBookFileSecondaryIndexes and
+	// UpsertBookFileToMemDB below.
+	data, err := marshalBookFileDropSegs(file)
 	if err != nil {
 		return err
 	}
@@ -9186,7 +9209,8 @@ func (s *PebbleStore) UpdateBookFile(id string, file *BookFile) error {
 	file.CreatedAt = old.CreatedAt
 	file.UpdatedAt = time.Now()
 
-	data, err := json.Marshal(file)
+	// T020: drop AcoustIDSeg0..6 from the stored value via a copy.
+	data, err := marshalBookFileDropSegs(file)
 	if err != nil {
 		return err
 	}
@@ -9720,7 +9744,8 @@ func (s *PebbleStore) BatchUpsertBookFiles(files []*BookFile) error {
 			file.UpdatedAt = now
 		}
 
-		data, err := json.Marshal(file)
+		// T020: drop AcoustIDSeg0..6 from the stored value via a copy.
+		data, err := marshalBookFileDropSegs(file)
 		if err != nil {
 			batch.Close()
 			return err
@@ -10499,7 +10524,10 @@ func (p *PebbleStore) GetAcoustIDStats() (*AcoustIDStats, error) {
 
 	for _, f := range files {
 		stats.TotalFiles++
-		hasFP := f.AcoustIDSeg0 != "" || f.AcoustIDSeg1 != "" || f.AcoustIDSeg2 != "" ||
+		// T020: segs are no longer stored; check whole-file fp first (preferred),
+		// then fall back to legacy seg fields for rows not yet swept by T020.
+		hasFP := len(f.AcoustIDFingerprint) > 0 ||
+			f.AcoustIDSeg0 != "" || f.AcoustIDSeg1 != "" || f.AcoustIDSeg2 != "" ||
 			f.AcoustIDSeg3 != "" || f.AcoustIDSeg4 != "" || f.AcoustIDSeg5 != "" || f.AcoustIDSeg6 != ""
 		if hasFP {
 			stats.WithFingerprint++
@@ -10833,4 +10861,192 @@ func (s *PebbleStore) ClearAllAcoustIDFingerprints(ctx context.Context, batchSiz
 	s.InvalidateLibraryStats()
 	s.MarkQuickQueryDirty("no_fingerprints", "clear_all_acoustid_fingerprints")
 	return cleared, total, nil
+}
+
+// SweepBookFileSegDropResult holds the outcome of a SweepBookFileSegDrop run.
+type SweepBookFileSegDropResult struct {
+	Total   int // total primary book_file: rows examined
+	Rewrite int // rows rewritten (had at least one non-empty seg)
+	Skipped int // rows skipped (already clean)
+	Errors  int // rows skipped due to unmarshal/marshal errors (logged)
+}
+
+// SweepBookFileSegDrop iterates all primary book_file: rows in Pebble and
+// rewrites any row that still carries AcoustIDSeg0..6 values, removing those
+// fields from the stored JSON and deleting the corresponding
+// book_file_acoustid: secondary index entries.
+//
+// T020 background sweep. Design notes:
+//   - Reads raw Pebble bytes to avoid the memdb route (which has already
+//     stripped segs in memory, T019).  This is the same pattern used by
+//     ClearAllAcoustIDFingerprints (line ~10616 in this file).
+//   - Uses byte-needle fast-skip to avoid json.Unmarshal on already-clean rows.
+//   - If dryRun is true the method scans and counts but writes nothing.
+//   - Resumable: re-running after a partial apply produces the same result —
+//     rows already rewritten have no seg needles and are fast-skipped.
+//   - batchSize controls how many rewrites are committed per Pebble sync
+//     (0 → default 1000).
+//   - progress is called roughly every batchSize rewrites with (rewrite, total).
+func (s *PebbleStore) SweepBookFileSegDrop(
+	ctx context.Context,
+	dryRun bool,
+	batchSize int,
+	progress func(rewrite, total int),
+) (SweepBookFileSegDropResult, error) {
+	if batchSize <= 0 {
+		batchSize = 1000
+	}
+	var result SweepBookFileSegDropResult
+
+	// Pass 1: collect primary keys + raw values so we don't hold an iterator
+	// open while mutating Pebble.
+	prefix := []byte("book_file:")
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: []byte("book_file;"),
+	})
+	if err != nil {
+		return result, err
+	}
+	type ref struct {
+		key  []byte
+		data []byte
+	}
+	var refs []ref
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := iter.Key()
+		if !strings.HasPrefix(string(key), "book_file:") {
+			continue
+		}
+		// Primary keys are book_file:<bookID>:<fileID> — exactly 2 colons.
+		if strings.Count(string(key), ":") != 2 {
+			continue
+		}
+		kc := make([]byte, len(key))
+		copy(kc, key)
+		vc := make([]byte, len(iter.Value()))
+		copy(vc, iter.Value())
+		refs = append(refs, ref{key: kc, data: vc})
+	}
+	if err := iter.Close(); err != nil {
+		return result, err
+	}
+	result.Total = len(refs)
+
+	// seg needles (omitempty — field is absent when empty, so any occurrence
+	// means the value is non-empty).
+	seg0N := []byte(`"acoustid_seg0":"`)
+	seg1N := []byte(`"acoustid_seg1":"`)
+	seg2N := []byte(`"acoustid_seg2":"`)
+	seg3N := []byte(`"acoustid_seg3":"`)
+	seg4N := []byte(`"acoustid_seg4":"`)
+	seg5N := []byte(`"acoustid_seg5":"`)
+	seg6N := []byte(`"acoustid_seg6":"`)
+
+	hasSegNeedle := func(data []byte) bool {
+		return bytes.Contains(data, seg0N) ||
+			bytes.Contains(data, seg1N) ||
+			bytes.Contains(data, seg2N) ||
+			bytes.Contains(data, seg3N) ||
+			bytes.Contains(data, seg4N) ||
+			bytes.Contains(data, seg5N) ||
+			bytes.Contains(data, seg6N)
+	}
+
+	if dryRun {
+		for _, r := range refs {
+			select {
+			case <-ctx.Done():
+				return result, ctx.Err()
+			default:
+			}
+			if !hasSegNeedle(r.data) {
+				result.Skipped++
+				continue
+			}
+			result.Rewrite++
+		}
+		return result, nil
+	}
+
+	// Pass 2: rewrite rows that carry seg needles.
+	batch := s.db.NewBatch()
+	rewrittenSinceFlush := 0
+	flush := func() error {
+		if err := batch.Commit(pebble.Sync); err != nil {
+			return err
+		}
+		batch = s.db.NewBatch()
+		rewrittenSinceFlush = 0
+		return nil
+	}
+
+	for _, r := range refs {
+		select {
+		case <-ctx.Done():
+			_ = batch.Close()
+			return result, ctx.Err()
+		default:
+		}
+
+		if !hasSegNeedle(r.data) {
+			result.Skipped++
+			continue
+		}
+
+		var f BookFile
+		if err := json.Unmarshal(r.data, &f); err != nil {
+			slog.Warn("SweepBookFileSegDrop: unmarshal error; skipping row",
+				"key", string(r.key), "error", err)
+			result.Errors++
+			continue
+		}
+
+		// Delete book_file_acoustid: secondary index entries for the segs
+		// that are present on this row (they'll be absent after the rewrite).
+		for _, seg := range [7]string{f.AcoustIDSeg0, f.AcoustIDSeg1, f.AcoustIDSeg2,
+			f.AcoustIDSeg3, f.AcoustIDSeg4, f.AcoustIDSeg5, f.AcoustIDSeg6} {
+			if seg == "" {
+				continue
+			}
+			if delErr := batch.Delete([]byte("book_file_acoustid:"+seg), nil); delErr != nil {
+				_ = batch.Close()
+				return result, delErr
+			}
+		}
+
+		// Rewrite the row without segs.
+		newData, marshalErr := marshalBookFileDropSegs(&f)
+		if marshalErr != nil {
+			slog.Warn("SweepBookFileSegDrop: marshal error; skipping row",
+				"key", string(r.key), "error", marshalErr)
+			result.Errors++
+			continue
+		}
+		if setErr := batch.Set(r.key, newData, nil); setErr != nil {
+			_ = batch.Close()
+			return result, setErr
+		}
+		result.Rewrite++
+		rewrittenSinceFlush++
+
+		if rewrittenSinceFlush >= batchSize {
+			if err := flush(); err != nil {
+				return result, err
+			}
+			if progress != nil {
+				progress(result.Rewrite, result.Total)
+			}
+		}
+	}
+
+	// Commit any remaining work.
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return result, err
+	}
+
+	if progress != nil {
+		progress(result.Rewrite, result.Total)
+	}
+	return result, nil
 }
