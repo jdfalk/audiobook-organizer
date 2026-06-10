@@ -253,11 +253,13 @@ type Server struct {
 	// backfill goroutine would still be holding Pebble iterators when
 	// database.CloseStore() ran, and Pebble would panic with "element has
 	// outstanding references" during FileCache.Unref. Every goroutine that
-	// touches the store must: (1) call bgWG.Add(1) before starting,
-	// (2) defer bgWG.Done(), (3) honor bgCtx.Done() for cancellation.
+	// touches the store must: (1) call bgWG.Add(name) before starting,
+	// (2) defer bgWG.Done(name), (3) honor bgCtx.Done() for cancellation.
+	// namedWaitGroup (see bg_wg.go) extends sync.WaitGroup with name
+	// tracking so the 30s-grace-period timeout log names the laggards.
 	bgCtx    context.Context
 	bgCancel context.CancelFunc
-	bgWG     sync.WaitGroup
+	bgWG     namedWaitGroup
 
 	// container is the SERVER-PLUGIN-REG service registry built during
 	// NewServer. Stashed so handlers/tests can pull services dynamically
@@ -533,9 +535,9 @@ func NewServer(store database.Store) *Server {
 	// dedup.Engine; deferred for now because the goroutine wants the
 	// server's bgWG for Shutdown coordination.
 	if server.dedupEngine != nil {
-		server.bgWG.Add(1)
+		server.bgWG.Add("embedding-backfill")
 		go func() {
-			defer server.bgWG.Done()
+			defer server.bgWG.Done("embedding-backfill")
 			server.runEmbeddingBackfill()
 		}()
 	}

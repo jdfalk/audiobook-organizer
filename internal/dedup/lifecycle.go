@@ -1,5 +1,5 @@
 // file: internal/dedup/lifecycle.go
-// version: 1.1.0
+// version: 1.2.0
 
 // Lifecycle methods on *dedup.Engine that the serviceregistry container
 // picks up via interface satisfaction. PostInit subscribes to lifecycle
@@ -25,6 +25,12 @@ import (
 	"github.com/falkcorp/audiobook-organizer/internal/serviceregistry"
 )
 
+// defaultHydrationStopTimeout is the default maximum time Stop waits for
+// the chromem hydration goroutine to finish after its context is canceled.
+// Five seconds is generous — the goroutine's inner iteration is bounded by
+// bgCtx, so it should drain within a Pebble-read round-trip.
+const defaultHydrationStopTimeout = 5 * time.Second
+
 // dedupChromemLazy reports whether the eager HydrateChromem at startup
 // should be skipped. Controlled by env var DEDUP_CHROMEM_LAZY (default
 // false / eager). When true, the chromem store stays empty and
@@ -46,6 +52,16 @@ func dedupChromemLazy() bool {
 		return false
 	}
 	return b
+}
+
+// stopTimeout returns the effective join-timeout for Stop().  Tests can
+// override Engine.stopTimeout_ to shrink this; production always gets
+// defaultHydrationStopTimeout.
+func (de *Engine) stopTimeout() time.Duration {
+	if de.stopTimeout_ > 0 {
+		return de.stopTimeout_
+	}
+	return defaultHydrationStopTimeout
 }
 
 // PostInit wires the dedup engine into the rest of the container. Called
@@ -100,7 +116,15 @@ func (de *Engine) PostInit(ctx context.Context, c *serviceregistry.Container) er
 			slog.Info("chromem hydrate skipped (DEDUP_CHROMEM_LAZY=true) — dedup FindSimilar will use SQLite linear-scan fallback")
 		} else {
 			// Hydrate asynchronously on the engine's bg-context.
+			// Add(1) under bgMu BEFORE launching so Stop can't race the
+			// bgWg.Wait() call: if Stop runs first, bgCancel fires, and
+			// the goroutine exits quickly; if the goroutine runs first,
+			// bgWg.Done() will already be wired before Stop's Wait.
+			de.bgMu.Lock()
+			de.bgWg.Add(1)
+			de.bgMu.Unlock()
 			go func() {
+				defer de.bgWg.Done()
 				hCtx, cancel := context.WithTimeout(bgCtx, 30*time.Minute)
 				defer cancel()
 				books, authors, err := de.HydrateChromem(hCtx)
@@ -146,16 +170,37 @@ func (de *Engine) onBookImported(_ context.Context, evt plugin.Event) error {
 
 // Stop releases the engine's background-context resources. Called by
 // Container.Stop. Safe to call multiple times.
+//
+// After canceling the context it waits up to hydrationStopTimeout for the
+// hydration goroutine to drain its current Pebble read, then warns and
+// returns so the overall server shutdown is never hung indefinitely.
 func (de *Engine) Stop(ctx context.Context) error {
 	if de == nil {
 		return nil
 	}
 	de.bgMu.Lock()
-	defer de.bgMu.Unlock()
 	if de.bgCancel != nil {
 		de.bgCancel()
 		de.bgCancel = nil
 		de.bgCtx = nil
+	}
+	de.bgMu.Unlock()
+
+	// Join the hydration goroutine with a bounded timeout so that the store
+	// can safely close after Stop returns.  We do this OUTSIDE bgMu to avoid
+	// holding the mutex across the entire wait duration.
+	timeout := de.stopTimeout()
+	done := make(chan struct{})
+	go func() {
+		de.bgWg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		// goroutine exited cleanly
+	case <-time.After(timeout):
+		slog.Warn("[dedup] hydration goroutine did not stop within timeout — proceeding with shutdown",
+			"timeout", timeout)
 	}
 	return nil
 }

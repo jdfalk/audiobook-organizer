@@ -73,7 +73,7 @@ func TestProcessBooksParallelInvokesProgress(t *testing.T) {
 
 	oldSaver := saveBook
 	t.Cleanup(func() { saveBook = oldSaver })
-	saveBook = func(book *Book) error { return nil }
+	saveBook = func(ctx context.Context, book *Book) error { return nil }
 
 	progressFn := func(processed int, total int, bookPath string) {
 		progressCalls = append(progressCalls, processed)
@@ -316,7 +316,7 @@ func TestProcessBooksParallelCancellation(t *testing.T) {
 
 	oldSaver := saveBook
 	t.Cleanup(func() { saveBook = oldSaver })
-	saveBook = func(book *Book) error { return nil }
+	saveBook = func(ctx context.Context, book *Book) error { return nil }
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
@@ -356,7 +356,7 @@ func TestProcessBooksParallelNegativeWorkers(t *testing.T) {
 
 	oldSaver := saveBook
 	t.Cleanup(func() { saveBook = oldSaver })
-	saveBook = func(book *Book) error { return nil }
+	saveBook = func(ctx context.Context, book *Book) error { return nil }
 
 	// Should handle negative workers gracefully (defaults to 1)
 	err := ProcessBooksParallel(context.Background(), books, -1, nil, nil)
@@ -439,7 +439,7 @@ func TestProcessBooks(t *testing.T) {
 
 	oldSaver := saveBook
 	t.Cleanup(func() { saveBook = oldSaver })
-	saveBook = func(book *Book) error { return nil }
+	saveBook = func(ctx context.Context, book *Book) error { return nil }
 
 	err := ProcessBooks(books, nil)
 	if err != nil {
@@ -483,7 +483,7 @@ func TestSuspiciousFileSkipped(t *testing.T) {
 	var savedBook *Book
 	oldSaver := saveBook
 	t.Cleanup(func() { saveBook = oldSaver })
-	saveBook = func(b *Book) error {
+	saveBook = func(ctx context.Context, b *Book) error {
 		saved := *b
 		savedBook = &saved
 		return nil
@@ -522,7 +522,7 @@ func TestSuspiciousFileSkipDisabledWhenNegativeOne(t *testing.T) {
 	var savedState string
 	oldSaver := saveBook
 	t.Cleanup(func() { saveBook = oldSaver })
-	saveBook = func(b *Book) error {
+	saveBook = func(ctx context.Context, b *Book) error {
 		savedState = b.LibraryState
 		return nil
 	}

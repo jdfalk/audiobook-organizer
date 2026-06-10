@@ -1,7 +1,7 @@
 // file: internal/scanner/scanner.go
-// version: 1.41.0
+// version: 1.42.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
-// last-edited: 2026-06-01
+// last-edited: 2026-06-10
 
 package scanner
 
@@ -34,7 +34,12 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-var saveBook = saveBookToDatabase
+// saveBook is the per-book persistence hook used by ProcessBooksParallel.
+// Its signature includes ctx so that callers can propagate cancellation into
+// the DB write path and saveBookToDatabase can snapshot config at entry to
+// avoid racing with test-teardown config restores (CI race: scanner.go:1700).
+// Tests may replace this variable with a no-op; the signature must match.
+var saveBook func(ctx context.Context, book *Book) error = saveBookToDatabase
 
 // defaultLog is a package-level logger for functions that cannot accept a logger parameter.
 var defaultLog = logger.New("scanner")
@@ -588,7 +593,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 				if fi, statErr := os.Stat(filePath); statErr == nil && !fi.IsDir() && fi.Size() < threshold {
 					extractInfoFromPath(&books[idx])
 					books[idx].LibraryState = "suspicious"
-					if saveErr := saveBook(&books[idx]); saveErr != nil {
+					if saveErr := saveBook(ctx, &books[idx]); saveErr != nil {
 						scanLog.Warn("failed to save suspicious book %s: %v", filePath, saveErr)
 					}
 					scanLog.Warn("suspicious file (%d bytes, threshold %d): %s", fi.Size(), threshold, filePath)
@@ -655,7 +660,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 					books[idx].Position = position
 				}
 				// Save the book and create segments
-				if err := saveBook(&books[idx]); err != nil {
+				if err := saveBook(ctx, &books[idx]); err != nil {
 					errChan <- fmt.Errorf("failed to save book %s: %w", books[idx].FilePath, err)
 				} else {
 					createBookFilesForBook(dirPath, nil, scanLog)
@@ -816,7 +821,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 			}
 
 			// Save to database (database operations are thread-safe)
-			if err := saveBook(&books[idx]); err != nil {
+			if err := saveBook(ctx, &books[idx]); err != nil {
 				errChan <- fmt.Errorf("failed to save book %s: %w", books[idx].FilePath, err)
 			} else {
 				// Create segments for multi-file books grouped by album
@@ -927,7 +932,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 				}
 
 				// Re-save with updated metadata
-				if saveErr := saveBook(&books[idx]); saveErr != nil {
+				if saveErr := saveBook(ctx, &books[idx]); saveErr != nil {
 					scanLog.Warn("failed to re-save AI-enriched book %s: %v", books[idx].FilePath, saveErr)
 				}
 			}
@@ -1615,8 +1620,20 @@ func groupFilesIntoBooks(files []string) []Book {
 	return books
 }
 
-// saveBookToDatabase saves the book information to the database
-func saveBookToDatabase(book *Book) error {
+// saveBookToDatabase saves the book information to the database.
+// ctx is used to abort early if the enclosing operation has been canceled —
+// in particular, we snapshot config.AppConfig.RootDir at entry so goroutine
+// workers never read the global config after it has been restored by test
+// teardown (the CI race detected at scanner.go:1700).
+func saveBookToDatabase(ctx context.Context, book *Book) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	// Snapshot the fields we need from the global config so that even if
+	// config.AppConfig is written by another goroutine (e.g. the next test's
+	// setupTestServer) after this point, we use a consistent local copy.
+	rootDir := config.AppConfig.RootDir
+
 	// Prefer using the unified Store API when available
 	if getStore() != nil {
 		// Resolve author/series with conflict-aware get-or-create semantics.
@@ -1697,7 +1714,7 @@ func saveBookToDatabase(book *Book) error {
 			if size, err := getFileSize(book.FilePath); err == nil {
 				fileSize = &size
 			}
-			if config.AppConfig.RootDir != "" && strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) {
+			if rootDir != "" && strings.HasPrefix(book.FilePath, rootDir) {
 				organizedFileHash = stringPtrValue(hash)
 			}
 		}
@@ -1786,9 +1803,9 @@ func saveBookToDatabase(book *Book) error {
 				// Check if these are already version-linked
 				alreadyLinked := existing.VersionGroupID != nil && *existing.VersionGroupID != ""
 
-				if config.AppConfig.RootDir != "" &&
-					strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) &&
-					!strings.HasPrefix(existing.FilePath, config.AppConfig.RootDir) {
+				if rootDir != "" &&
+					strings.HasPrefix(book.FilePath, rootDir) &&
+					!strings.HasPrefix(existing.FilePath, rootDir) {
 					defaultLog.Debug("Promoting organized path for %s", existing.Title)
 				} else if alreadyLinked {
 					defaultLog.Debug("Already version-linked (group %s), skipping: %s", *existing.VersionGroupID, existing.FilePath)
@@ -1798,8 +1815,8 @@ func saveBookToDatabase(book *Book) error {
 					h := sha256.Sum256([]byte(existing.ID + "|" + book.FilePath))
 					groupID := fmt.Sprintf("vg-%x", h[:8])
 
-					existingInRoot := config.AppConfig.RootDir != "" && strings.HasPrefix(existing.FilePath, config.AppConfig.RootDir)
-					newInRoot := config.AppConfig.RootDir != "" && strings.HasPrefix(book.FilePath, config.AppConfig.RootDir)
+					existingInRoot := rootDir != "" && strings.HasPrefix(existing.FilePath, rootDir)
+					newInRoot := rootDir != "" && strings.HasPrefix(book.FilePath, rootDir)
 
 					// Mark the one in RootDir as primary; if neither or both are in root, existing wins.
 					existingPrimary := existingInRoot || !newInRoot
@@ -1871,8 +1888,8 @@ func saveBookToDatabase(book *Book) error {
 					}
 					h2 := sha256.Sum256([]byte(matchedBook.ID + "|" + book.FilePath))
 					groupID := fmt.Sprintf("vg-%x", h2[:8])
-					existingInRoot := config.AppConfig.RootDir != "" && strings.HasPrefix(matchedBook.FilePath, config.AppConfig.RootDir)
-					newInRoot := config.AppConfig.RootDir != "" && strings.HasPrefix(book.FilePath, config.AppConfig.RootDir)
+					existingInRoot := rootDir != "" && strings.HasPrefix(matchedBook.FilePath, rootDir)
+					newInRoot := rootDir != "" && strings.HasPrefix(book.FilePath, rootDir)
 					matchedPrimary := existingInRoot || !newInRoot
 					newPrimary := newInRoot && !existingInRoot
 					matchedBook.VersionGroupID = &groupID
