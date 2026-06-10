@@ -1,5 +1,5 @@
 // file: internal/server/registry_wire.go
-// version: 1.8.0
+// version: 1.9.0
 
 package server
 
@@ -320,7 +320,9 @@ func wireServerFromContainer(s *Server, c *serviceregistry.Container) {
 	if scanStore, ok := serviceregistry.TryGet[*database.AIScanStore](c, "aiscanstore"); ok && scanStore != nil {
 		s.aiScanStore = scanStore
 	}
-	if ms, ok := serviceregistry.TryGet[*database.NutsMetricsStore](c, "metricsstore"); ok && ms != nil {
+	// WHY MetricsStorer interface: the metricsstore may be a NutsMetricsStore or
+	// a PebbleMetricsStore — both implement MetricsStorer.
+	if ms, ok := serviceregistry.TryGet[database.MetricsStorer](c, "metricsstore"); ok && ms != nil {
 		s.metricsStore = ms
 	}
 	if pm, ok := serviceregistry.TryGet[*aiscan.PipelineManager](c, "pipelinemanager"); ok && pm != nil {
