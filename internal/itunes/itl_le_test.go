@@ -1,5 +1,5 @@
 // file: internal/itunes/itl_le_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: c5f9e038-7d4a-4b92-af13-g8c4d9e5f67b
 
 package itunes
@@ -505,6 +505,158 @@ func TestDetectLE(t *testing.T) {
 				t.Errorf("detectLE(%q): expected %v, got %v", tc.data, tc.want, got)
 			}
 		})
+	}
+}
+
+// buildMithLEWithChildren builds an iTunes-style mith container where the mhoh string
+// blocks are embedded as children of the mith chunk (totalLen > headerLen). This is
+// the actual on-disk layout produced by iTunes 10+ that caused HIGH-2: the outer walker
+// advanced by totalLen after parseMithLE, making the mhoh case unreachable.
+func buildMithLEWithChildren(trackID int, pid [8]byte, size, totalTime int, mhohChildren [][]byte) []byte {
+	// Fixed mith header: same 156-byte layout as testBuildMithLE
+	headerLen := 156
+	header := make([]byte, headerLen)
+	copy(header[0:4], "mith")
+	// headerLen at +4 will be set after we know the children total
+	putUint32LE(header, 16, uint32(trackID))
+	putUint32LE(header, 36, uint32(size))
+	putUint32LE(header, 40, uint32(totalTime))
+	putUint16LE(header, 44, 3)     // TrackNumber
+	putUint16LE(header, 48, 12)    // TrackCount
+	putUint16LE(header, 54, 2024)  // Year
+	putUint16LE(header, 58, 320)   // BitRate
+	putUint16LE(header, 60, 44100) // SampleRate
+	putUint32LE(header, 76, 5)     // PlayCount
+	putUint16LE(header, 104, 1)    // DiscNumber
+	putUint16LE(header, 106, 2)    // DiscCount
+	header[108] = 80               // Rating
+	copy(header[128:136], pid[:])
+
+	// Concatenate header + children
+	var children []byte
+	for _, c := range mhohChildren {
+		children = append(children, c...)
+	}
+	totalLen := headerLen + len(children)
+
+	// Write headerLen and totalLen into the header
+	putUint32LE(header, 4, uint32(headerLen))
+	putUint32LE(header, 8, uint32(totalLen))
+
+	return append(header, children...)
+}
+
+// TestParseLE_TrackStrings is the acceptance test for HIGH-2 / TASK-001. It builds a
+// fixture where mhoh string blocks are embedded as children of mith (the real iTunes
+// on-disk layout) and asserts that all seven string fields round-trip correctly.
+// Pre-fix: walkMsdhTracksLE advanced by totalLen after parseMithLE, skipping every mhoh
+// child so all string fields were empty. Post-fix: the inner-walk descends into
+// [offset+headerLen, offset+totalLen) and calls parseMhohLE on each child.
+func TestParseLE_TrackStrings(t *testing.T) {
+	pid := [8]byte{0x22, 0x11, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA}
+
+	wantName     := "The Great Audiobook"
+	wantAlbum    := "Great Series Vol 1"
+	wantArtist   := "Jane Narrator"
+	wantGenre    := "Audiobooks"
+	wantKind     := "AAC audio file"
+	wantLocation := `W:\audiobooks\Great Series Vol 1\chapter.m4b`
+	wantLocalURL := "file://localhost/W:/audiobooks/Great+Series+Vol+1/chapter.m4b"
+
+	// Build mhoh children in the iTunes-native layout (children of mith, not siblings).
+	mhohChildren := [][]byte{
+		testBuildMhohLE(0x02, wantName),
+		testBuildMhohLE(0x03, wantAlbum),
+		testBuildMhohLE(0x04, wantArtist),
+		testBuildMhohLE(0x05, wantGenre),
+		testBuildMhohLE(0x06, wantKind),
+		testBuildMhohLE(0x0D, wantLocation),
+		testBuildMhohLE(0x0B, wantLocalURL),
+	}
+
+	// mith with children embedded (totalLen > headerLen) — the layout that
+	// broke walkMsdhTracksLE before this fix.
+	mith := buildMithLEWithChildren(42, pid, 1024000, 360000, mhohChildren)
+
+	// Wrap in a track-list msdh. No sibling mhoh blocks — the string data is only
+	// reachable via the inner-walk of the mith span.
+	data := buildMsdhLE(0x01, mith)
+
+	lib := &ITLLibrary{}
+	walkChunksLEImpl(data, lib)
+
+	if len(lib.Tracks) != 1 {
+		t.Fatalf("expected 1 track, got %d", len(lib.Tracks))
+	}
+	tr := lib.Tracks[0]
+
+	if tr.Name != wantName {
+		t.Errorf("Name: expected %q, got %q", wantName, tr.Name)
+	}
+	if tr.Album != wantAlbum {
+		t.Errorf("Album: expected %q, got %q", wantAlbum, tr.Album)
+	}
+	if tr.Artist != wantArtist {
+		t.Errorf("Artist: expected %q, got %q", wantArtist, tr.Artist)
+	}
+	if tr.Genre != wantGenre {
+		t.Errorf("Genre: expected %q, got %q", wantGenre, tr.Genre)
+	}
+	if tr.Kind != wantKind {
+		t.Errorf("Kind: expected %q, got %q", wantKind, tr.Kind)
+	}
+	if tr.Location != wantLocation {
+		t.Errorf("Location: expected %q, got %q", wantLocation, tr.Location)
+	}
+	if tr.LocalURL != wantLocalURL {
+		t.Errorf("LocalURL: expected %q, got %q", wantLocalURL, tr.LocalURL)
+	}
+	if tr.TrackID != 42 {
+		t.Errorf("TrackID: expected 42, got %d", tr.TrackID)
+	}
+	pidHex := hex.EncodeToString(tr.PersistentID[:])
+	if pidHex != "aabbccddeeff1122" {
+		t.Errorf("PersistentID: expected aabbccddeeff1122, got %s", pidHex)
+	}
+}
+
+// TestParseLE_TrackStrings_ViaMiah verifies the same mhoh-descent fix applies when
+// the mith+children are wrapped in a miah (track item array) container. Both
+// walkMsdhTracksLE and walkMiahContent must descend into the mith span.
+func TestParseLE_TrackStrings_ViaMiah(t *testing.T) {
+	pid := [8]byte{0x44, 0x33, 0x22, 0x11, 0x88, 0x77, 0x66, 0x55}
+
+	wantName     := "Miah-Nested Book"
+	wantArtist   := "Miah Author"
+	wantLocation := `W:\audiobooks\Miah Author\Miah-Nested Book\chapter.m4b`
+
+	mhohChildren := [][]byte{
+		testBuildMhohLE(0x02, wantName),
+		testBuildMhohLE(0x04, wantArtist),
+		testBuildMhohLE(0x0D, wantLocation),
+	}
+	mith := buildMithLEWithChildren(99, pid, 512000, 180000, mhohChildren)
+
+	// Wrap in miah → msdh hierarchy
+	miah := buildMiahLE(mith)
+	data := buildMsdhLE(0x01, miah)
+
+	lib := &ITLLibrary{}
+	walkChunksLEImpl(data, lib)
+
+	if len(lib.Tracks) != 1 {
+		t.Fatalf("expected 1 track via miah, got %d", len(lib.Tracks))
+	}
+	tr := lib.Tracks[0]
+
+	if tr.Name != wantName {
+		t.Errorf("Name: expected %q, got %q", wantName, tr.Name)
+	}
+	if tr.Artist != wantArtist {
+		t.Errorf("Artist: expected %q, got %q", wantArtist, tr.Artist)
+	}
+	if tr.Location != wantLocation {
+		t.Errorf("Location: expected %q, got %q", wantLocation, tr.Location)
 	}
 }
 
