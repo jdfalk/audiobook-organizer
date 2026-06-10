@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.85.1
+// version: 1.85.2
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-06-10
 
@@ -1311,7 +1311,7 @@ func (p *PebbleStore) DeleteWork(id string) error {
 		return err
 	}
 	if work == nil {
-		return nil
+		return fmt.Errorf("work not found")
 	}
 	batch := p.db.NewBatch()
 	key := []byte(fmt.Sprintf("work:%s", id))
@@ -1768,11 +1768,12 @@ func (p *PebbleStore) GetDuplicateBooks() ([][]Book, error) {
 
 	hashGroups := make(map[string][]Book)
 
-	// Iterate through all books to find duplicates
-	prefix := []byte("book:id:")
+	// Iterate through all books to find duplicates.
+	// Book data keys are "book:{ULID}" (2 colon-separated parts).
+	// Index keys ("book:path:", "book:hash:", etc.) have 3+ parts and are filtered out.
 	iter, err := p.db.NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xFF),
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
@@ -1780,11 +1781,9 @@ func (p *PebbleStore) GetDuplicateBooks() ([][]Book, error) {
 	defer iter.Close()
 
 	for iter.First(); iter.Valid(); iter.Next() {
-		// Skip index keys (they have : in specific patterns)
 		key := string(iter.Key())
-		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
-			strings.Contains(key, ":author:") || strings.Contains(key, ":hash:") ||
-			strings.Contains(key, ":organizedhash:") {
+		// Only process data keys: "book:<ULID>" has exactly 2 parts.
+		if len(strings.Split(key, ":")) != 2 {
 			continue
 		}
 
