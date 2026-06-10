@@ -1447,7 +1447,7 @@ func TestSaveBookToDatabaseNilStore(t *testing.T) {
 	book := &Book{Title: "Test", Author: "Author", FilePath: "/tmp/test.m4b"}
 	err := saveBookToDatabase(context.Background(), book)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "database not initialized")
+	assert.Contains(t, err.Error(), "database store not initialized")
 }
 
 // ---------------------------------------------------------------------------
