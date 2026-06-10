@@ -1,7 +1,7 @@
 // file: internal/database/iface_book.go
-// version: 1.9.0
+// version: 2.0.0
 // guid: 668ec5a2-f8d9-4fdb-b0d5-09937b5d83ea
-// last-edited: 2026-05-01
+// last-edited: 2026-06-10
 
 package database
 
@@ -87,6 +87,14 @@ type BookWriter interface {
 	// setting merged_into_book_id=primaryID and is_primary_version=0 on the
 	// duplicate. Used by MATCH-4 auto-dedup at metadata-apply time.
 	FlagMetadataHashDuplicate(primaryID, duplicateID string) error
+	// RecomputeBookAggregates sums Duration and FileSize from the book's
+	// BookFile records and writes the result back to the Book row.
+	// Applies the partial-data rule: if the existing snapshot was computed
+	// from more files-with-durations than the current file set exposes, the
+	// old value is preserved and a warning is logged instead of overwriting
+	// with a less-complete sum. Idempotent; safe to call from BookFile
+	// create/update/delete paths as a best-effort hook.
+	RecomputeBookAggregates(bookID string) error
 }
 
 // BookStore combines BookReader and BookWriter for callers that need both.

@@ -1,7 +1,7 @@
 // file: internal/database/sqlite_store_books.go
-// version: 1.0.5
+// version: 1.0.6
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-05-16
+// last-edited: 2026-06-10
 
 package database
 
@@ -3643,6 +3643,75 @@ func (s *SQLiteStore) FlagMetadataHashDuplicate(primaryID, duplicateID string) e
 		primaryID, duplicateID,
 	)
 	return err
+}
+
+// RecomputeBookAggregates sums Duration and FileSize from the book's BookFile
+// rows and writes the result back to the books table. Implements the same
+// partial-data rule as the PebbleStore version: if the existing snapshot came
+// from more files-with-durations than the current file set, the old value is
+// preserved. SQLite implementation is intentionally simpler — uses a single
+// query to sum the values and a conditional UPDATE.
+func (s *SQLiteStore) RecomputeBookAggregates(bookID string) error {
+	rows, err := s.db.Query(
+		`SELECT duration, file_size FROM book_files WHERE book_id = ? AND missing = 0`,
+		bookID,
+	)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var sumDuration int
+	var sumFileSize int64
+	filesWithDuration := 0
+	filesWithFileSize := 0
+
+	for rows.Next() {
+		var dur int
+		var size int64
+		if scanErr := rows.Scan(&dur, &size); scanErr != nil {
+			continue
+		}
+		if dur > 0 {
+			sumDuration += dur
+			filesWithDuration++
+		}
+		if size > 0 {
+			sumFileSize += size
+			filesWithFileSize++
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// Partial-data rule: protect populated snapshot from being zeroed out
+	// by a less-complete sum (same rule as PebbleStore version).
+	var existingDuration *int
+	var existingFileSize *int64
+	row := s.db.QueryRow(`SELECT duration, file_size FROM books WHERE id = ?`, bookID)
+	_ = row.Scan(&existingDuration, &existingFileSize)
+
+	writeDuration := true
+	if existingDuration != nil && *existingDuration > 0 && filesWithDuration == 0 {
+		writeDuration = false
+	}
+	writeFileSize := true
+	if existingFileSize != nil && *existingFileSize > 0 && filesWithFileSize == 0 {
+		writeFileSize = false
+	}
+
+	if writeDuration {
+		if _, err := s.db.Exec(`UPDATE books SET duration = ? WHERE id = ?`, sumDuration, bookID); err != nil {
+			return err
+		}
+	}
+	if writeFileSize {
+		if _, err := s.db.Exec(`UPDATE books SET file_size = ? WHERE id = ?`, sumFileSize, bookID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // SQLiteTableStat holds a row count for a single table.

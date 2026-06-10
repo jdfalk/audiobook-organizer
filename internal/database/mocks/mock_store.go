@@ -4828,6 +4828,51 @@ func (_c *MockBookWriter_FlagMetadataHashDuplicate_Call) RunAndReturn(run func(p
 	return _c
 }
 
+// RecomputeBookAggregates provides a mock function for the type MockBookWriter
+func (_mock *MockBookWriter) RecomputeBookAggregates(bookID string) error {
+	ret := _mock.Called(bookID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RecomputeBookAggregates")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(bookID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockBookWriter_RecomputeBookAggregates_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RecomputeBookAggregates'
+type MockBookWriter_RecomputeBookAggregates_Call struct {
+	*mock.Call
+}
+
+// RecomputeBookAggregates is a helper method to define mock.On call
+//   - bookID string
+func (_e *MockBookWriter_Expecter) RecomputeBookAggregates(bookID interface{}) *MockBookWriter_RecomputeBookAggregates_Call {
+	return &MockBookWriter_RecomputeBookAggregates_Call{Call: _e.mock.On("RecomputeBookAggregates", bookID)}
+}
+
+func (_c *MockBookWriter_RecomputeBookAggregates_Call) Run(run func(bookID string)) *MockBookWriter_RecomputeBookAggregates_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockBookWriter_RecomputeBookAggregates_Call) Return(err error) *MockBookWriter_RecomputeBookAggregates_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockBookWriter_RecomputeBookAggregates_Call) RunAndReturn(run func(bookID string) error) *MockBookWriter_RecomputeBookAggregates_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetScanFailCount provides a mock function for the type MockBookWriter
 func (_mock *MockBookWriter) GetScanFailCount(pathHash string) (int, error) {
 	ret := _mock.Called(pathHash)
@@ -5845,6 +5890,51 @@ func (_c *MockBookStore_FlagMetadataHashDuplicate_Call) Return(err error) *MockB
 }
 
 func (_c *MockBookStore_FlagMetadataHashDuplicate_Call) RunAndReturn(run func(primaryID string, duplicateID string) error) *MockBookStore_FlagMetadataHashDuplicate_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RecomputeBookAggregates provides a mock function for the type MockBookStore
+func (_mock *MockBookStore) RecomputeBookAggregates(bookID string) error {
+	ret := _mock.Called(bookID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RecomputeBookAggregates")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(bookID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockBookStore_RecomputeBookAggregates_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RecomputeBookAggregates'
+type MockBookStore_RecomputeBookAggregates_Call struct {
+	*mock.Call
+}
+
+// RecomputeBookAggregates is a helper method to define mock.On call
+//   - bookID string
+func (_e *MockBookStore_Expecter) RecomputeBookAggregates(bookID interface{}) *MockBookStore_RecomputeBookAggregates_Call {
+	return &MockBookStore_RecomputeBookAggregates_Call{Call: _e.mock.On("RecomputeBookAggregates", bookID)}
+}
+
+func (_c *MockBookStore_RecomputeBookAggregates_Call) Run(run func(bookID string)) *MockBookStore_RecomputeBookAggregates_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockBookStore_RecomputeBookAggregates_Call) Return(err error) *MockBookStore_RecomputeBookAggregates_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockBookStore_RecomputeBookAggregates_Call) RunAndReturn(run func(bookID string) error) *MockBookStore_RecomputeBookAggregates_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -31787,6 +31877,51 @@ func (_c *MockStore_FlagMetadataHashDuplicate_Call) Return(err error) *MockStore
 }
 
 func (_c *MockStore_FlagMetadataHashDuplicate_Call) RunAndReturn(run func(primaryID string, duplicateID string) error) *MockStore_FlagMetadataHashDuplicate_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RecomputeBookAggregates provides a mock function for the type MockStore
+func (_mock *MockStore) RecomputeBookAggregates(bookID string) error {
+	ret := _mock.Called(bookID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RecomputeBookAggregates")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(bookID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_RecomputeBookAggregates_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RecomputeBookAggregates'
+type MockStore_RecomputeBookAggregates_Call struct {
+	*mock.Call
+}
+
+// RecomputeBookAggregates is a helper method to define mock.On call
+//   - bookID string
+func (_e *MockStore_Expecter) RecomputeBookAggregates(bookID interface{}) *MockStore_RecomputeBookAggregates_Call {
+	return &MockStore_RecomputeBookAggregates_Call{Call: _e.mock.On("RecomputeBookAggregates", bookID)}
+}
+
+func (_c *MockStore_RecomputeBookAggregates_Call) Run(run func(bookID string)) *MockStore_RecomputeBookAggregates_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockStore_RecomputeBookAggregates_Call) Return(err error) *MockStore_RecomputeBookAggregates_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_RecomputeBookAggregates_Call) RunAndReturn(run func(bookID string) error) *MockStore_RecomputeBookAggregates_Call {
 	_c.Call.Return(run)
 	return _c
 }

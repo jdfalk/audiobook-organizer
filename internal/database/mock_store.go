@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.57.0
+// version: 1.58.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 // last-edited: 2026-06-10
 
@@ -1869,6 +1869,8 @@ func (m *MockStore) MergeChapterBooks(_ string, _ []string, _ string, _ float64)
 }
 
 func (m *MockStore) FlagMetadataHashDuplicate(_, _ string) error { return nil }
+
+func (m *MockStore) RecomputeBookAggregates(_ string) error { return nil }
 
 func (m *MockStore) Optimize() error {
 	return nil
