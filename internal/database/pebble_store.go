@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.84.0
+// version: 1.85.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-06-10
 
@@ -9829,8 +9829,13 @@ func (p *PebbleStore) GetBookMetadataHashStats() (*BookMetadataHashStats, error)
 
 // GetAcoustIDStats returns fingerprint coverage across all book files, grouped by
 // library root (the parent book's source_import_path).
+//
+// Uses getAllBookFilesPebbleScan (Pebble-direct) rather than GetAllBookFiles
+// so that the hasFP check reads the full AcoustIDSeg0..6 fields from storage.
+// After fable5 T019 those fields are stripped from memdb projections; reading
+// them from memdb would return all-zeros and undercount fingerprinted files.
 func (p *PebbleStore) GetAcoustIDStats() (*AcoustIDStats, error) {
-	files, err := p.GetAllBookFiles()
+	files, err := p.getAllBookFilesPebbleScan()
 	if err != nil {
 		return nil, fmt.Errorf("GetAcoustIDStats: %w", err)
 	}
