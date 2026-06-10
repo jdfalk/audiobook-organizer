@@ -1,7 +1,7 @@
 // file: internal/operations/registry/worker.go
-// version: 2.4.0
+// version: 2.4.1
 // guid: b8c9d0e1-f2a3-4b5c-6d7e-8f9a0b1c2d3e
-// last-edited: 2026-06-03
+// last-edited: 2026-06-10
 
 package registry
 
@@ -274,7 +274,8 @@ func (r *Registry) executeRun(parentCtx context.Context, qr *queuedRun) (wasAban
 			r.releaseRunHandle(qr.opID)
 			r.logger.Warn("registry: op goroutine abandoned; spawning replacement worker",
 				"op_id", qr.opID, "plugin", qr.plugin)
-			go r.startWorker(parentCtx, -1)
+			r.goroutineWG.Add(1)
+			go func() { defer r.goroutineWG.Done(); r.startWorker(parentCtx, -1) }()
 			go func() {
 				<-done
 				r.abandoned.decrement(qr.plugin)

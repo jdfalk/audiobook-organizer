@@ -1,7 +1,7 @@
 // file: internal/operations/registry/dispatcher.go
-// version: 2.0.0
+// version: 2.0.1
 // guid: a7b8c9d0-e1f2-3a4b-5c6d-7e8f9a0b1c2d
-// last-edited: 2026-05-06
+// last-edited: 2026-06-10
 
 package registry
 
@@ -33,6 +33,9 @@ func (r *Registry) runDispatcher(ctx context.Context) {
 
 // dispatchCycle walks all queued ops and sends eligible ones to nextRun.
 func (r *Registry) dispatchCycle(ctx context.Context) {
+	if r.shuttingDown.Load() {
+		return
+	}
 	queued, err := r.store.ListQueuedOperationsV2()
 	if err != nil {
 		r.logger.Warn("registry: list queued ops failed", "error", err)

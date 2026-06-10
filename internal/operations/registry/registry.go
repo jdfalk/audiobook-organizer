@@ -1,7 +1,7 @@
 // file: internal/operations/registry/registry.go
-// version: 2.6.0
+// version: 2.7.0
 // guid: f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c
-// last-edited: 2026-06-01
+// last-edited: 2026-06-10
 
 package registry
 
@@ -43,6 +43,12 @@ type Registry struct {
 	// canceled — the new worker's runs then race against database.Close()
 	// and panic with "pebble: closed".
 	shuttingDown atomic.Bool
+
+	// cancelFn cancels the internal goroutine context created in Start().
+	// Shutdown() calls this after draining running ops to stop the
+	// dispatcher, watchdog, and idle workers before returning.
+	cancelFn    context.CancelFunc
+	goroutineWG sync.WaitGroup // tracks dispatcher + watchdog + workers
 
 	// Tunable intervals for testing. Zero means use defaults.
 	watchdogInterval time.Duration
@@ -129,10 +135,19 @@ func (r *Registry) Start(ctx context.Context) {
 	r.logger.Info("registry: starting", "workers", r.workers)
 	// Resume must complete before the dispatcher starts accepting new work.
 	r.resumeAfterStartup(ctx)
-	go r.runDispatcher(ctx)
-	go r.runWatchdog(ctx)
+
+	// Owned context: Shutdown() cancels this after draining running ops so
+	// DB-touching goroutines stop before the caller closes the store.
+	internalCtx, cancel := context.WithCancel(ctx)
+	r.cancelFn = cancel
+
+	r.goroutineWG.Add(1)
+	go func() { defer r.goroutineWG.Done(); r.runDispatcher(internalCtx) }()
+	r.goroutineWG.Add(1)
+	go func() { defer r.goroutineWG.Done(); r.runWatchdog(internalCtx) }()
 	for i := range r.workers {
-		go r.startWorker(ctx, i)
+		r.goroutineWG.Add(1)
+		go func(slot int) { defer r.goroutineWG.Done(); r.startWorker(internalCtx, slot) }(i)
 	}
 }
 
@@ -437,10 +452,10 @@ func (r *Registry) Shutdown(ctx context.Context) error {
 		close(done)
 	}()
 
+	var shutdownErr error
 	select {
 	case <-done:
 		r.logger.Info("registry: all workers drained")
-		return nil
 	case <-ctx.Done():
 		// Mark remaining as interrupted.
 		r.mu.Lock()
@@ -452,8 +467,29 @@ func (r *Registry) Shutdown(ctx context.Context) error {
 		}
 		r.mu.Unlock()
 		r.logger.Warn("registry: shutdown timeout; marked remaining ops as interrupted")
-		return ctx.Err()
+		shutdownErr = ctx.Err()
 	}
+
+	// Cancel the internal context to stop the dispatcher, watchdog, and any
+	// workers that are idle or finishing their current run. Then wait for all
+	// goroutines to fully exit before returning — this guarantees callers can
+	// safely close the underlying store immediately after Shutdown returns,
+	// without racing against goroutines that are still making DB calls.
+	if r.cancelFn != nil {
+		r.cancelFn()
+	}
+	goroutinesDone := make(chan struct{})
+	go func() {
+		r.goroutineWG.Wait()
+		close(goroutinesDone)
+	}()
+	select {
+	case <-goroutinesDone:
+		r.logger.Info("registry: all goroutines exited")
+	case <-time.After(2 * time.Second):
+		r.logger.Warn("registry: goroutines did not exit within 2s; proceeding")
+	}
+	return shutdownErr
 }
 
 // writeStrike appends a strike record to op_strikes_v2 and logs it.
