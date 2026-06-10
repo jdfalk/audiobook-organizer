@@ -1,7 +1,7 @@
 // file: internal/database/pebble_store.go
-// version: 1.82.0
+// version: 1.83.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
-// last-edited: 2026-05-24
+// last-edited: 2026-06-10
 
 package database
 
@@ -8594,6 +8594,10 @@ func decodeLSHMeta(v []byte) ([]fingerprint.Subprint, []byte) {
 // writeFingerprintLSHIndexes derives subprints from f.AcoustIDFingerprint and
 // writes the fpidx + fpidx_meta rows in the supplied batch. No-op when the
 // fingerprint is empty or too short to sample.
+//
+// Value stored in each fpidx: row is the BookID (UTF-8 bytes), matching the
+// spec (SPEC 1 §5) so T013's probe-collector can retrieve the candidate
+// book without a secondary BookFile lookup.
 func writeFingerprintLSHIndexes(batch *pebble.Batch, f *BookFile) error {
 	if len(f.AcoustIDFingerprint) == 0 {
 		return nil
@@ -8606,9 +8610,9 @@ func writeFingerprintLSHIndexes(batch *pebble.Batch, f *BookFile) error {
 	if len(subs) == 0 {
 		return nil
 	}
-	versionVal := []byte{fingerprint.LSHIndexVersion}
+	bookIDVal := []byte(f.BookID)
 	for i := range subs {
-		if err := batch.Set(lshIndexKey(bands[i], subs[i], f.ID), versionVal, nil); err != nil {
+		if err := batch.Set(lshIndexKey(bands[i], subs[i], f.ID), bookIDVal, nil); err != nil {
 			return err
 		}
 	}

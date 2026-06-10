@@ -1,7 +1,7 @@
 // file: internal/plugins/dedup/plugin.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: d1e2f3a4-b5c6-7890-abcd-ef1234567890
-// last-edited: 2026-05-06
+// last-edited: 2026-06-09
 
 // Package dedup is the UOS plugin for deduplication operations.
 // It wraps the internal dedup.Engine and registers OperationDefs through
@@ -39,6 +39,7 @@ func (p *Plugin) Version() string { return "1.0.0" }
 
 // Register registers all dedup OperationDefs with the UOS registry.
 // UOS-07 registers embed-scan; UOS-09 adds full-scan, llm-review, and book-signature-scan.
+// T012 adds lsh-index-build (fable5).
 func (p *Plugin) Register(r sdk.Registry) error {
 	if p.engine == nil {
 		return nil
@@ -52,6 +53,7 @@ func (p *Plugin) Register(r sdk.Registry) error {
 		p.bookSignatureScanDef(),
 		p.splitBookScanDef(),
 		p.purgeStaleDef(),
+		p.lshIndexBuildDef(),
 	}
 
 	for _, op := range ops {
