@@ -1,6 +1,6 @@
 // file: internal/database/embedding_store.go
-// version: 2.0.0
-// last-edited: 2026-05-11
+// version: 2.1.0
+// last-edited: 2026-06-10
 // guid: 7c4a9b2e-d831-4f5c-a07e-3b8d6e1f9c42
 
 package database
@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/pebble/v2"
+	"github.com/falkcorp/audiobook-organizer/internal/dedup/unified"
 	"github.com/falkcorp/audiobook-organizer/internal/metrics"
 )
 
@@ -45,6 +46,11 @@ type embRec struct {
 }
 
 // candRec is the stored value for a dedup candidate.
+//
+// New fields (T015): ScoreBreakdown, Band, FormulaVersion are additive — rows
+// written before T015 will decode with nil/empty values, which is correct
+// (they pre-date the unified scoring pipeline). Old readers silently ignore
+// the extra JSON keys, so the keyspace stays fully backward-compatible.
 type candRec struct {
 	EntityType string   `json:"et"`
 	EntityAID  string   `json:"a"`
@@ -56,6 +62,12 @@ type candRec struct {
 	Status     string   `json:"s"`
 	CreatedAt  int64    `json:"c"` // Unix nanoseconds
 	UpdatedAt  int64    `json:"u"` // Unix nanoseconds
+
+	// Unified scoring fields (T015, SPEC 1 §3). All omitempty so pre-T015
+	// rows round-trip without growing their stored size.
+	ScoreBreakdown *unified.UnifiedDedupScore `json:"sb,omitempty"`
+	Band           string                     `json:"band,omitempty"`
+	FormulaVersion string                     `json:"fv,omitempty"`
 }
 
 // Embedding holds a vector embedding for a single entity.
@@ -76,6 +88,10 @@ type SimilarityResult struct {
 }
 
 // DedupCandidate represents a potential duplicate pair.
+//
+// ScoreBreakdown, Band, and FormulaVersion are additive fields added in T015
+// (SPEC 1 §3). Pre-T015 rows will have nil/empty values here; consumers
+// should treat empty FormulaVersion as "legacy" (pre-unified-pipeline).
 type DedupCandidate struct {
 	ID         int64     `json:"id"`
 	EntityType string    `json:"entity_type"`
@@ -88,6 +104,11 @@ type DedupCandidate struct {
 	Status     string    `json:"status"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
+
+	// Unified scoring fields (T015, SPEC 1 §3). Nil/empty on pre-T015 rows.
+	ScoreBreakdown *unified.UnifiedDedupScore `json:"score_breakdown,omitempty"`
+	Band           string                     `json:"band,omitempty"`
+	FormulaVersion string                     `json:"formula_version,omitempty"`
 }
 
 // CandidateFilter controls ListCandidates queries.
@@ -409,16 +430,19 @@ func (s *EmbeddingStore) UpsertCandidate(c DedupCandidate) error {
 			return err
 		}
 		rec := candRec{
-			EntityType: c.EntityType,
-			EntityAID:  c.EntityAID,
-			EntityBID:  c.EntityBID,
-			Layer:      c.Layer,
-			Similarity: c.Similarity,
-			LLMVerdict: c.LLMVerdict,
-			LLMReason:  c.LLMReason,
-			Status:     c.Status,
-			CreatedAt:  now,
-			UpdatedAt:  now,
+			EntityType:     c.EntityType,
+			EntityAID:      c.EntityAID,
+			EntityBID:      c.EntityBID,
+			Layer:          c.Layer,
+			Similarity:     c.Similarity,
+			LLMVerdict:     c.LLMVerdict,
+			LLMReason:      c.LLMReason,
+			Status:         c.Status,
+			CreatedAt:      now,
+			UpdatedAt:      now,
+			ScoreBreakdown: c.ScoreBreakdown,
+			Band:           c.Band,
+			FormulaVersion: c.FormulaVersion,
 		}
 		data, err := json.Marshal(rec)
 		if err != nil {
@@ -456,11 +480,27 @@ func (s *EmbeddingStore) UpsertCandidate(c DedupCandidate) error {
 	//   exact  → never overwritten (regardless of incoming layer)
 	//   llm    → protected against embedding, but exact still upgrades it
 	//   others → always overwritten with incoming layer + similarity
+	//
+	// T015 addition: a row that already has a non-empty FormulaVersion (i.e.
+	// it was scored by the unified pipeline) is never downgraded by a legacy
+	// writer that lacks a FormulaVersion — formula-versioned data is always
+	// more trustworthy than pre-unified segment-era scores.
 	protected := existing.Layer == "exact" ||
-		(existing.Layer == "llm" && c.Layer != "exact")
+		(existing.Layer == "llm" && c.Layer != "exact") ||
+		(existing.FormulaVersion != "" && c.FormulaVersion == "")
 	if !protected {
 		existing.Layer = c.Layer
 		existing.Similarity = c.Similarity
+		// Carry forward unified-scoring fields when the incoming write has them.
+		if c.ScoreBreakdown != nil {
+			existing.ScoreBreakdown = c.ScoreBreakdown
+		}
+		if c.Band != "" {
+			existing.Band = c.Band
+		}
+		if c.FormulaVersion != "" {
+			existing.FormulaVersion = c.FormulaVersion
+		}
 	}
 	if c.LLMVerdict != "" {
 		existing.LLMVerdict = c.LLMVerdict
@@ -932,17 +972,20 @@ func (s *EmbeddingStore) setJSON(key []byte, v any) error {
 
 func candRecToCandidate(id int64, rec candRec) DedupCandidate {
 	return DedupCandidate{
-		ID:         id,
-		EntityType: rec.EntityType,
-		EntityAID:  rec.EntityAID,
-		EntityBID:  rec.EntityBID,
-		Layer:      rec.Layer,
-		Similarity: rec.Similarity,
-		LLMVerdict: rec.LLMVerdict,
-		LLMReason:  rec.LLMReason,
-		Status:     rec.Status,
-		CreatedAt:  time.Unix(0, rec.CreatedAt),
-		UpdatedAt:  time.Unix(0, rec.UpdatedAt),
+		ID:             id,
+		EntityType:     rec.EntityType,
+		EntityAID:      rec.EntityAID,
+		EntityBID:      rec.EntityBID,
+		Layer:          rec.Layer,
+		Similarity:     rec.Similarity,
+		LLMVerdict:     rec.LLMVerdict,
+		LLMReason:      rec.LLMReason,
+		Status:         rec.Status,
+		CreatedAt:      time.Unix(0, rec.CreatedAt),
+		UpdatedAt:      time.Unix(0, rec.UpdatedAt),
+		ScoreBreakdown: rec.ScoreBreakdown,
+		Band:           rec.Band,
+		FormulaVersion: rec.FormulaVersion,
 	}
 }
 

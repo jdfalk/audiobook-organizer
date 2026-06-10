@@ -1,7 +1,7 @@
 // file: internal/server/handlers/dedup/handler.go
 // version: 1.1.0
 // guid: d1b9e024-d28c-4d62-8f90-96d7064559c4
-// last-edited: 2026-06-09
+// last-edited: 2026-06-10
 
 // Package deduphandler hosts the dedup-domain HTTP handlers extracted from the
 // server package: dedup candidate / cluster / series listing, merge / dismiss /
@@ -1299,6 +1299,42 @@ func (h *Handler) PurgeStaleCandidates(c *gin.Context) {
 	opID, err := h.opRegistry.EnqueueOp(c.Request.Context(), "dedup.purge-stale", nil)
 	if err != nil {
 		httputil.InternalError(c, "failed to enqueue dedup purge-stale", err)
+		return
+	}
+	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
+}
+
+// PurgeLegacyFPCandidates handles POST /api/v1/dedup/purge-legacy-fp.
+//
+// Enqueues the dedup.purge-legacy-fp-candidates UOS op (T015) which marks
+// pre-whole-file-fingerprint exact/embedding sim=1.0 candidates as stale-fp.
+//
+// Optional JSON body: {"apply": true} to execute (default is dry-run, which
+// returns counts only without mutating any rows). The "apply" flag is forwarded
+// verbatim to the op as its params payload.
+//
+// Why an op and not a synchronous handler: the purge touches up to ~12K rows
+// and performs a per-candidate file-hash re-check; it belongs in the op queue
+// so the caller can track progress in the bell and the operation log.
+func (h *Handler) PurgeLegacyFPCandidates(c *gin.Context) {
+	if h.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operation registry not initialized")
+		return
+	}
+
+	// Forward the request body as the op's params JSON so the op can see
+	// {"apply":true/false} without the handler needing to parse it.
+	var paramsJSON json.RawMessage
+	if c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(&paramsJSON); err != nil {
+			httputil.RespondWithBadRequest(c, "invalid JSON body")
+			return
+		}
+	}
+
+	opID, err := h.opRegistry.EnqueueOp(c.Request.Context(), "dedup.purge-legacy-fp-candidates", paramsJSON)
+	if err != nil {
+		httputil.InternalError(c, "failed to enqueue dedup purge-legacy-fp-candidates", err)
 		return
 	}
 	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})

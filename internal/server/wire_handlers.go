@@ -1,7 +1,7 @@
 // file: internal/server/wire_handlers.go
 // version: 2.6.0
 // guid: f7a8b9c0-d1e2-3456-7890-abcdef012345
-// last-edited: 2026-06-09
+// last-edited: 2026-06-10
 
 package server
 
@@ -852,6 +852,7 @@ func (s *Server) wireHandlers(api *gin.RouterGroup, authMiddleware gin.HandlerFu
 	protected.POST("/dedup/scan-book-signature", s.perm(auth.PermScanTrigger), dedupH.TriggerBookSignatureScan)
 	protected.POST("/dedup/refresh", s.perm(auth.PermScanTrigger), dedupH.TriggerDedupRefresh)
 	protected.POST("/dedup/purge-stale", s.perm(auth.PermScanTrigger), dedupH.PurgeStaleCandidates)
+	protected.POST("/dedup/purge-legacy-fp", s.perm(auth.PermScanTrigger), dedupH.PurgeLegacyFPCandidates)
 	protected.POST("/dedup/reset-acoustid", s.perm(auth.PermScanTrigger), dedupH.ResetAcoustIDFingerprints)
 	protected.POST("/dedup/embed", s.perm(auth.PermScanTrigger), dedupH.TriggerEmbedScan)
 	protected.POST("/dedup/embed-async", s.perm(auth.PermScanTrigger), dedupH.TriggerEmbedAsync)

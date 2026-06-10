@@ -1,10 +1,11 @@
 // file: internal/database/embedding_store_test.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package database
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/cockroachdb/pebble/v2"
@@ -234,4 +235,104 @@ func TestEmbeddingStore_ListByType(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, gotAuthors, 1)
 	assert.Equal(t, "a1", gotAuthors[0].EntityID)
+}
+
+// TestCandRec_LegacyDecodeCompat verifies that a candRec JSON payload written
+// before T015 (i.e. without ScoreBreakdown/Band/FormulaVersion keys) decodes
+// cleanly into the new struct with nil/empty values for the new fields. This
+// ensures old PebbleDB rows are never corrupted or rejected after the schema
+// addition.
+func TestCandRec_LegacyDecodeCompat(t *testing.T) {
+	// Minimal JSON as a pre-T015 writer would have stored it — no new keys.
+	const legacyJSON = `{"et":"book","a":"book-aaa","b":"book-bbb","l":"exact","sim":1.0,"s":"pending","c":1000000000,"u":1000000001}`
+
+	var rec candRec
+	require.NoError(t, json.Unmarshal([]byte(legacyJSON), &rec), "legacy candRec JSON must decode without error")
+
+	assert.Equal(t, "book", rec.EntityType)
+	assert.Equal(t, "book-aaa", rec.EntityAID)
+	assert.Equal(t, "exact", rec.Layer)
+	assert.Equal(t, "pending", rec.Status)
+
+	// T015 additions: must decode as zero values, never error.
+	assert.Nil(t, rec.ScoreBreakdown, "ScoreBreakdown must be nil on legacy rows")
+	assert.Empty(t, rec.Band, "Band must be empty on legacy rows")
+	assert.Empty(t, rec.FormulaVersion, "FormulaVersion must be empty on legacy rows")
+}
+
+// TestDedupCandidate_T015Fields_RoundTrip verifies that the three new T015 fields
+// (ScoreBreakdown, Band, FormulaVersion) survive a UpsertCandidate + GetCandidateByID
+// round-trip through PebbleDB.
+func TestDedupCandidate_T015Fields_RoundTrip(t *testing.T) {
+	store := newTestEmbeddingStore(t)
+
+	sim := 0.95
+	cand := DedupCandidate{
+		EntityType:     "book",
+		EntityAID:      "book-aaa",
+		EntityBID:      "book-bbb",
+		Layer:          "embedding",
+		Similarity:     &sim,
+		Status:         "pending",
+		Band:           "HIGH",
+		FormulaVersion: "noisy-or-v1",
+		// ScoreBreakdown intentionally nil — tests the non-nil path separately below.
+	}
+	require.NoError(t, store.UpsertCandidate(cand))
+
+	// List candidates and find ours.
+	candidates, total, err := store.ListCandidates(CandidateFilter{Status: "pending", Limit: 10})
+	require.NoError(t, err)
+	require.Equal(t, 1, total)
+	require.Len(t, candidates, 1)
+
+	got := candidates[0]
+	assert.Equal(t, "HIGH", got.Band, "Band must survive round-trip")
+	assert.Equal(t, "noisy-or-v1", got.FormulaVersion, "FormulaVersion must survive round-trip")
+	assert.Nil(t, got.ScoreBreakdown, "nil ScoreBreakdown must survive round-trip as nil")
+}
+
+// TestUpsertCandidate_FormulaVersionProtection verifies the T015 layer-precedence
+// addition: a row with a non-empty FormulaVersion is never overwritten by a legacy
+// writer that carries an empty FormulaVersion.
+func TestUpsertCandidate_FormulaVersionProtection(t *testing.T) {
+	store := newTestEmbeddingStore(t)
+
+	sim := 0.95
+	unified := DedupCandidate{
+		EntityType:     "book",
+		EntityAID:      "book-aaa",
+		EntityBID:      "book-bbb",
+		Layer:          "embedding",
+		Similarity:     &sim,
+		Status:         "pending",
+		Band:           "HIGH",
+		FormulaVersion: "noisy-or-v1",
+	}
+	require.NoError(t, store.UpsertCandidate(unified))
+
+	// Legacy writer: same pair, no FormulaVersion, lower similarity, different band.
+	legacySim := 0.88
+	legacy := DedupCandidate{
+		EntityType:     "book",
+		EntityAID:      "book-aaa",
+		EntityBID:      "book-bbb",
+		Layer:          "embedding",
+		Similarity:     &legacySim,
+		Status:         "pending",
+		Band:           "", // legacy — no band
+		FormulaVersion: "", // legacy — no formula version
+	}
+	require.NoError(t, store.UpsertCandidate(legacy))
+
+	// The unified-pipeline data must be preserved — the legacy writer must NOT
+	// have overwritten FormulaVersion, Band, or Similarity.
+	candidates, _, err := store.ListCandidates(CandidateFilter{Status: "pending", Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, candidates, 1)
+
+	got := candidates[0]
+	assert.Equal(t, "noisy-or-v1", got.FormulaVersion, "FormulaVersion must not be overwritten by legacy writer")
+	assert.Equal(t, "HIGH", got.Band, "Band must not be overwritten by legacy writer")
+	assert.InDelta(t, 0.95, *got.Similarity, 1e-9, "Similarity must not be overwritten by legacy writer")
 }
