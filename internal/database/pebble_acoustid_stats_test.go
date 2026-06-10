@@ -1,7 +1,7 @@
 // file: internal/database/pebble_acoustid_stats_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e5f6a7b8-c9d0-1234-efab-234567890123
-// last-edited: 2026-05-16
+// last-edited: 2026-06-10
 
 package database
 
@@ -43,8 +43,8 @@ func TestGetAcoustIDStats_Mixed(t *testing.T) {
 		books[i].ID = created.ID
 	}
 
-	// File with fingerprint
-	f1 := &BookFile{BookID: books[0].ID, FilePath: "/lib/audiobooks/book1.m4b", AcoustIDSeg0: "seg0abc"}
+	// File with fingerprint (T020: use AcoustIDFingerprint, not seg fields).
+	f1 := &BookFile{BookID: books[0].ID, FilePath: "/lib/audiobooks/book1.m4b", AcoustIDFingerprint: []byte{1, 2, 3, 4}}
 	require.NoError(t, store.CreateBookFile(f1))
 
 	// File without fingerprint
@@ -55,7 +55,7 @@ func TestGetAcoustIDStats_Mixed(t *testing.T) {
 	stats, err := ps.GetAcoustIDStats()
 	require.NoError(t, err)
 	assert.Equal(t, 2, stats.TotalFiles)
-	assert.Equal(t, 1, stats.WithFingerprint, "only one file has a fingerprint segment")
+	assert.Equal(t, 1, stats.WithFingerprint, "only one file has a fingerprint")
 	assert.Len(t, stats.ByLibrary, 1, "both files belong to same library root")
 	assert.Equal(t, "/lib/audiobooks", stats.ByLibrary[0].LibraryRoot)
 	assert.Equal(t, 2, stats.ByLibrary[0].TotalFiles)
@@ -73,12 +73,12 @@ func TestGetAcoustIDStats_AllSegmentsChecked(t *testing.T) {
 	created, err := store.CreateBook(&book)
 	require.NoError(t, err)
 
-	// File where only seg6 is populated (not seg0)
-	f := &BookFile{BookID: created.ID, FilePath: "/lib/seg6.m4b", AcoustIDSeg6: "last-seg-only"}
+	// File with only a whole-file fingerprint (T020: seg fields are no longer stored).
+	f := &BookFile{BookID: created.ID, FilePath: "/lib/seg6.m4b", AcoustIDFingerprint: []byte{0xAB, 0xCD, 0xEF, 0x01}}
 	require.NoError(t, store.CreateBookFile(f))
 
 	ps := store.(*PebbleStore)
 	stats, err := ps.GetAcoustIDStats()
 	require.NoError(t, err)
-	assert.Equal(t, 1, stats.WithFingerprint, "AcoustIDSeg6 alone should count as having a fingerprint")
+	assert.Equal(t, 1, stats.WithFingerprint, "AcoustIDFingerprint should count as having a fingerprint")
 }

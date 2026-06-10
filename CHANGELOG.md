@@ -7,6 +7,27 @@
 
 ## [Unreleased]
 
+### Changed
+
+#### June 10, 2026 — T020: drop AcoustID segment fields from Pebble book_file values
+
+- **`internal/database/pebble_store.go`**: New `marshalBookFileDropSegs` helper strips
+  `AcoustIDSeg0..6` from the serialized JSON on every `CreateBookFile`, `UpdateBookFile`,
+  and `BatchUpsertBookFiles` write. Struct fields are retained for decoding legacy rows.
+  Also adds `SweepBookFileSegDrop` method for the background sweep op.
+- **`internal/database/pebble_store.go`** (`GetAcoustIDStats`): Updated `hasFP` check
+  to also inspect `AcoustIDFingerprint` (whole-file) so coverage stats remain accurate
+  after the segment fields are removed from new rows.
+- **`internal/plugins/dedup/bookfile_seg_sweep.go`** (NEW): `dedup.bookfile-seg-drop`
+  UOS op — iterates all primary `book_file:` rows, rewrites rows that still carry
+  `AcoustIDSeg0..6` via byte-needle fast-skip (same pattern as
+  `ClearAllAcoustIDFingerprints`), and removes the matching `book_file_acoustid:`
+  secondary index entries. Dry-run default; `{"apply":true}` commits rewrites and sets
+  flag `bookfile_seg_drop_v1_done`. Expected savings: ~200–400 MB Pebble disk.
+- **`internal/plugins/dedup/plugin.go`**: Registered the new op.
+- **`internal/database/pebble_acoustid_stats_test.go`**: Updated to use
+  `AcoustIDFingerprint` instead of legacy seg fields (T020 drops segs on write).
+
 ### Added
 
 #### June 10, 2026 — T016: dedup API extensions (band filter, candidate breakdown, rescore) (PR #1414)
