@@ -106,7 +106,8 @@ func readMhohString(data []byte, offset int) string {
 // TestBuildMhohLE_FixedHeaderLen verifies that buildMhohLE uses headerLen=24,
 // not headerLen=totalLen. Setting headerLen=totalLen corrupts iTunes library.
 func TestBuildMhohLE_FixedHeaderLen(t *testing.T) {
-	chunk := buildMhohLE(0x02, "My Book Title")
+	chunk, ok := buildMhohLE(0x02, "My Book Title")
+	require.True(t, ok, "0x02 is in the corpus table")
 
 	headerLen := binary.LittleEndian.Uint32(chunk[4:8])
 	totalLen := binary.LittleEndian.Uint32(chunk[8:12])
@@ -270,4 +271,53 @@ func TestUpdateMetadataLE_UnknownPID(t *testing.T) {
 	})
 	assert.Equal(t, 0, count, "no tracks should match an unknown PID")
 	assert.Equal(t, payload, updated, "payload should be unchanged for unknown PID")
+}
+
+// TestUpdateMetadataLE_OutputPassesMhohFormatGuard (TASK-005) is the central
+// CRIT-1 regression: after UpdateMetadataLE replaces AND appends mhoh blocks
+// (incl. a non-ASCII title forcing UTF-16LE), EVERY block in the output must
+// pass the T003 mhoh-format guard — byte +27==0, headerLen==24, +24 ∈ corpus.
+func TestUpdateMetadataLE_OutputPassesMhohFormatGuard(t *testing.T) {
+	pid := [8]byte{0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80}
+	pidHex := "1020304050607080"
+
+	// Start with one existing iTunes-format ASCII name block (replace path),
+	// then update with a CJK name (UTF-16LE) plus new artist/album/genre/kind
+	// (append path) — exercising both writer paths.
+	nameMhoh := buildITunesMhohLE(0x02, "Original Title")
+	trackContent := buildLETrackSection(1, pid, nameMhoh)
+	payload := buildLEPayload(trackContent)
+
+	updated, count := UpdateMetadataLE(payload, []ITLMetadataUpdate{
+		{
+			PersistentID: pidHex,
+			Name:         "日本語のタイトル",    // UTF-16LE, replace path
+			Artist:       "Café Artist", // latin1, append path
+			Album:        "Album",
+			Genre:        "Fiction",
+			Kind:         "MPEG audio file", // 0x06 → UTF-16LE always
+			Location:     `W:\itunes\book.mp3`,
+		},
+	})
+	require.Equal(t, 1, count)
+
+	// Every mhoh in the rewritten payload must satisfy the format contract.
+	res := guardMhohFormat(nil, updated, nil, DefaultContractConfig())
+	assert.Empty(t, res.Violations,
+		"all mhoh blocks written by UpdateMetadataLE must pass mhoh-format (CRIT-1): %+v", res.Violations)
+
+	// And the values must round-trip through the dual-convention reader.
+	lib := parseLEPayloadForTest(t, updated)
+	require.Len(t, lib.Tracks, 1)
+	assert.Equal(t, "日本語のタイトル", lib.Tracks[0].Name)
+	assert.Equal(t, "Café Artist", lib.Tracks[0].Artist)
+}
+
+// parseLEPayloadForTest wraps a decompressed LE payload into an ITLLibrary by
+// walking the chunks directly (the payload is already decrypted/inflated).
+func parseLEPayloadForTest(t *testing.T, payload []byte) *ITLLibrary {
+	t.Helper()
+	lib := &ITLLibrary{}
+	walkChunksLEImpl(payload, lib)
+	return lib
 }

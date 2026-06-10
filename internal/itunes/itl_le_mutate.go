@@ -1,5 +1,5 @@
 // file: internal/itunes/itl_le_mutate.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: d5e6f7a8-b9c0-1d2e-3f4a-5b6c7d8e9f00
 //
 // LE-format ITL mutation: add and remove tracks from v10+ (msdh/mith/mhoh)
@@ -70,26 +70,29 @@ func AddTracksLE(data []byte, tracks []ITLNewTrack) []byte {
 	for i, tr := range tracks {
 		trackID := maxTrackID + 1 + i
 
-		// Build mhoh sub-blocks first so we know the total size
+		// Build mhoh sub-blocks first so we know the total size.
+		// appendMhohLE skips types absent from the corpus table (built=false)
+		// rather than writing an invented encoding (CRIT-1) — all six below are
+		// in the table.
 		var mhohData []byte
 		// Location first (0x0D), then metadata — matches iTunes convention
 		if tr.Location != "" {
-			mhohData = append(mhohData, buildMhohLE(0x0D, tr.Location)...)
+			mhohData = appendMhohLE(mhohData, 0x0D, tr.Location)
 		}
 		if tr.Name != "" {
-			mhohData = append(mhohData, buildMhohLE(0x02, tr.Name)...)
+			mhohData = appendMhohLE(mhohData, 0x02, tr.Name)
 		}
 		if tr.Album != "" {
-			mhohData = append(mhohData, buildMhohLE(0x03, tr.Album)...)
+			mhohData = appendMhohLE(mhohData, 0x03, tr.Album)
 		}
 		if tr.Artist != "" {
-			mhohData = append(mhohData, buildMhohLE(0x04, tr.Artist)...)
+			mhohData = appendMhohLE(mhohData, 0x04, tr.Artist)
 		}
 		if tr.Genre != "" {
-			mhohData = append(mhohData, buildMhohLE(0x05, tr.Genre)...)
+			mhohData = appendMhohLE(mhohData, 0x05, tr.Genre)
 		}
 		if tr.Kind != "" {
-			mhohData = append(mhohData, buildMhohLE(0x06, tr.Kind)...)
+			mhohData = appendMhohLE(mhohData, 0x06, tr.Kind)
 		}
 
 		mith := buildMithLE(trackID, tr)
@@ -269,19 +272,45 @@ func buildMithLE(trackID int, tr ITLNewTrack) []byte {
 // see regression test TestRewriteHohmLocationLE_PreservesHeaderLen.
 const mhohFixedHeaderLen = 24
 
-// buildMhohLE builds an LE metadata chunk (mhoh) for a given type and string.
-func buildMhohLE(mhohType uint32, value string) []byte {
-	encodedStr, encFlag := encodeHohmString(value)
-	chunkLen := 40 + len(encodedStr)
-	buf := make([]byte, chunkLen)
+// buildMhohLE builds an LE metadata chunk (mhoh) for a given type and string,
+// emitting an iTunes-conformant header via encodeMhohITunes (TASK-005, CRIT-1).
+//
+// The full 40-byte header is set DETERMINISTICALLY from MhohHeaderBytes: byte
+// +27 is left 0x00 (iTunes never writes a non-zero +27 — K3), the +24 u32 carries
+// the corpus encoding indicator, and bytes +32..+39 stay zero. This is the
+// "append" writer path; rewriteHohmLocationLE is the "replace" path — both build
+// the SAME header from the SAME inputs so their output is byte-identical for
+// identical input.
+//
+// Returns (nil, false) when the type is absent from the corpus table — the
+// caller must then preserve the original block unmodified and WARN, rather than
+// write an invented encoding (SPEC §5 ITW-2: "never invent flags").
+func buildMhohLE(mhohType uint32, value string) ([]byte, bool) {
+	payload, hdr, err := encodeMhohITunes(mhohType, value)
+	if err != nil {
+		return nil, false
+	}
+	buf := make([]byte, hdr.TotalLen)
 	copy(buf[0:4], "mhoh")
-	writeUint32LE(buf, 4, mhohFixedHeaderLen) // headerLen: fixed 24-byte header (NOT totalLen)
-	writeUint32LE(buf, 8, uint32(chunkLen))   // totalLen: full chunk size
+	writeUint32LE(buf, 4, hdr.HeaderLen) // headerLen: fixed 24 (NOT totalLen — K5)
+	writeUint32LE(buf, 8, hdr.TotalLen)  // totalLen: 40 + strLen
 	writeUint32LE(buf, 12, mhohType)
-	buf[16+11] = encFlag
-	writeUint32LE(buf, 28, uint32(len(encodedStr)))
-	copy(buf[40:], encodedStr)
-	return buf
+	writeUint32LE(buf, 24, hdr.At24) // +24: corpus encoding indicator (K3)
+	// byte +27 stays 0x00 (zero-initialized) — iTunes' invariant (K3).
+	writeUint32LE(buf, 28, hdr.StrLen)
+	// bytes +32..+39 stay zero (reserved tail).
+	copy(buf[40:], payload)
+	return buf, true
+}
+
+// appendMhohLE appends an iTunes-conformant mhoh block for (mhohType, value) to
+// dst and returns the result. If the type is absent from the corpus table the
+// block is skipped (no invented encoding — CRIT-1) and dst is returned unchanged.
+func appendMhohLE(dst []byte, mhohType uint32, value string) []byte {
+	if chunk, ok := buildMhohLE(mhohType, value); ok {
+		return append(dst, chunk...)
+	}
+	return dst
 }
 
 // writeUint32LE is defined in itl.go — reuse that.

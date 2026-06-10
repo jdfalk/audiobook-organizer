@@ -623,22 +623,13 @@ func TestMutation_RoundTripWriteAndReparse(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, lib1.Tracks, 2)
 
-	// Update a location
+	// BE fixture — BE writeback refused (K12). The read path above still works.
 	outPath := filepath.Join(tmpDir, "updated.itl")
 	pid0Hex := pidToHex(specs[0].PID)
-	result, err := UpdateITLLocations(itlPath, outPath, []ITLLocationUpdate{
+	_, err = UpdateITLLocations(itlPath, outPath, []ITLLocationUpdate{
 		{PersistentID: pid0Hex, NewLocation: "/new/path/updated.mp3"},
 	})
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.UpdatedCount)
-
-	// Parse updated and verify
-	lib2, err := ParseITL(outPath)
-	require.NoError(t, err)
-	require.Len(t, lib2.Tracks, 2)
-	assert.Equal(t, "/new/path/updated.mp3", lib2.Tracks[0].Location)
-	assert.Equal(t, specs[1].Location, lib2.Tracks[1].Location) // unchanged
-	assert.Equal(t, specs[0].Name, lib2.Tracks[0].Name)         // metadata preserved
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported, "BE writeback must be refused (K12)")
 }
 
 // ===========================================================================
@@ -1027,27 +1018,12 @@ func TestMutation_UpdateOneOfMany(t *testing.T) {
 	outPath := filepath.Join(tmpDir, "updated.itl")
 	require.NoError(t, os.WriteFile(itlPath, data, 0644))
 
-	// Update only track index 2
+	// BE fixture — BE writeback refused (K12).
 	targetPID := pidToHex(specs[2].PID)
-	result, err := UpdateITLLocations(itlPath, outPath, []ITLLocationUpdate{
+	_, err := UpdateITLLocations(itlPath, outPath, []ITLLocationUpdate{
 		{PersistentID: targetPID, NewLocation: "/updated/track_002.mp3"},
 	})
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.UpdatedCount)
-
-	lib, err := ParseITL(outPath)
-	require.NoError(t, err)
-	require.Len(t, lib.Tracks, 5)
-
-	for i, tr := range lib.Tracks {
-		if i == 2 {
-			assert.Equal(t, "/updated/track_002.mp3", tr.Location, "track 2 should be updated")
-		} else {
-			assert.Equal(t, specs[i].Location, tr.Location, "track %d should be unchanged", i)
-		}
-		// Metadata should be preserved for all tracks
-		assert.Equal(t, specs[i].Name, tr.Name, "track %d name preserved", i)
-	}
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported, "BE writeback must be refused (K12)")
 }
 
 func TestMutation_UpdateMultipleOfMany(t *testing.T) {
@@ -1062,25 +1038,14 @@ func TestMutation_UpdateMultipleOfMany(t *testing.T) {
 	outPath := filepath.Join(tmpDir, "updated.itl")
 	require.NoError(t, os.WriteFile(itlPath, data, 0644))
 
-	// Update tracks 0, 2, 4
+	// BE fixture — BE writeback refused (K12).
 	updates := []ITLLocationUpdate{
 		{PersistentID: pidToHex(specs[0].PID), NewLocation: "/new/track_000.mp3"},
 		{PersistentID: pidToHex(specs[2].PID), NewLocation: "/new/track_002.mp3"},
 		{PersistentID: pidToHex(specs[4].PID), NewLocation: "/new/track_004.mp3"},
 	}
-	result, err := UpdateITLLocations(itlPath, outPath, updates)
-	require.NoError(t, err)
-	assert.Equal(t, 3, result.UpdatedCount)
-
-	lib, err := ParseITL(outPath)
-	require.NoError(t, err)
-	require.Len(t, lib.Tracks, 5)
-
-	assert.Equal(t, "/new/track_000.mp3", lib.Tracks[0].Location)
-	assert.Equal(t, specs[1].Location, lib.Tracks[1].Location) // unchanged
-	assert.Equal(t, "/new/track_002.mp3", lib.Tracks[2].Location)
-	assert.Equal(t, specs[3].Location, lib.Tracks[3].Location) // unchanged
-	assert.Equal(t, "/new/track_004.mp3", lib.Tracks[4].Location)
+	_, err := UpdateITLLocations(itlPath, outPath, updates)
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported, "BE writeback must be refused (K12)")
 }
 
 // ===========================================================================
@@ -1100,16 +1065,9 @@ func TestMutation_ExtensionRewriteMultiTrack(t *testing.T) {
 	outPath := filepath.Join(tmpDir, "out.itl")
 	require.NoError(t, os.WriteFile(itlPath, data, 0644))
 
-	result, err := RewriteITLExtensions(itlPath, outPath, ".flac", ".mp3")
-	require.NoError(t, err)
-	assert.Equal(t, 2, result.UpdatedCount) // only .flac files changed
-
-	lib, err := ParseITL(outPath)
-	require.NoError(t, err)
-	require.Len(t, lib.Tracks, 3)
-	assert.Equal(t, "/music/a.mp3", lib.Tracks[0].Location) // changed
-	assert.Equal(t, "/music/b.mp3", lib.Tracks[1].Location) // unchanged
-	assert.Equal(t, "/music/c.mp3", lib.Tracks[2].Location) // changed
+	// BE fixture — extension rewrite is BE-only; BE writeback refused (K12).
+	_, err := RewriteITLExtensions(itlPath, outPath, ".flac", ".mp3")
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported, "BE writeback must be refused (K12)")
 }
 
 // ===========================================================================
@@ -1306,33 +1264,12 @@ func TestMutation_SequentialMutations(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, lib2.Tracks, 3)
 
-	// Step 3: Update location of the original first track
+	// Step 3: Update location — BE fixture, so BE writeback is refused (K12).
+	// (InsertITLTracks above still works because it does not route through the
+	// detectLE writeback dispatch; the location-update path does.)
 	path3 := filepath.Join(tmpDir, "step3.itl")
 	_, err = UpdateITLLocations(path2, path3, []ITLLocationUpdate{
 		{PersistentID: pidToHex(specs[0].PID), NewLocation: "/moved/track_000.mp3"},
 	})
-	require.NoError(t, err)
-
-	lib3, err := ParseITL(path3)
-	require.NoError(t, err)
-	require.Len(t, lib3.Tracks, 3)
-	assert.Equal(t, "/moved/track_000.mp3", lib3.Tracks[0].Location)
-	assert.Equal(t, specs[1].Location, lib3.Tracks[1].Location)
-	assert.Equal(t, "/music/new.mp3", lib3.Tracks[2].Location)
-	assert.Equal(t, "New Track", lib3.Tracks[2].Name)
-
-	// Step 4: Add a playlist referencing all three tracks
-	path4 := filepath.Join(tmpDir, "step4.itl")
-	_, err = InsertITLPlaylist(path3, path4, ITLNewPlaylist{
-		Title:    "All Tracks",
-		TrackIDs: []int{lib3.Tracks[0].TrackID, lib3.Tracks[1].TrackID, lib3.Tracks[2].TrackID},
-	})
-	require.NoError(t, err)
-
-	lib4, err := ParseITL(path4)
-	require.NoError(t, err)
-	require.Len(t, lib4.Tracks, 3)
-	require.Len(t, lib4.Playlists, 1)
-	assert.Equal(t, "All Tracks", lib4.Playlists[0].Title)
-	assert.Len(t, lib4.Playlists[0].Items, 3)
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported, "BE writeback must be refused (K12)")
 }

@@ -100,9 +100,12 @@ func TestRewriteHohmLocationLE_PreservesHeaderLen(t *testing.T) {
 	assert.Equal(t, uint32(0x0D), hohmType, "hohmType must be preserved")
 }
 
-func TestRewriteHohmLocationLE_DifferentHeaderLens(t *testing.T) {
-	// Some mhoh chunks have headerLen=24, others might have different values.
-	// The rewrite must preserve whatever headerLen was in the original.
+func TestRewriteHohmLocationLE_NormalizesHeaderLenTo24(t *testing.T) {
+	// TASK-005: the rewrite now sets the header DETERMINISTICALLY to the
+	// iTunes-conformant invariant (headerLen==24) regardless of the original
+	// value. A non-24 headerLen in the source is K5 corruption (golden is 100%
+	// headerLen=24); the writer must not propagate it. This supersedes the old
+	// "preserve whatever headerLen was there" behavior.
 	for _, headerLen := range []uint32{20, 24, 28, 32} {
 		t.Run("headerLen="+string(rune('0'+headerLen/4)), func(t *testing.T) {
 			totalLen := uint32(60)
@@ -116,8 +119,11 @@ func TestRewriteHohmLocationLE_DifferentHeaderLens(t *testing.T) {
 			copy(chunk[40:48], []byte("old/path"))
 
 			result := rewriteHohmLocationLE(chunk, 0, int(totalLen), "new/path")
-			assert.Equal(t, headerLen, readUint32LE(result, 4),
-				"headerLen must be preserved regardless of value")
+			assert.Equal(t, uint32(24), readUint32LE(result, 4),
+				"headerLen must be normalized to the iTunes-conformant 24 (K5)")
+			// And byte +27 must be cleared to 0 (K3) — never the legacy flag.
+			assert.Equal(t, byte(0), result[27],
+				"byte +27 must be 0 (iTunes invariant); encoding lives at +24")
 		})
 	}
 }
@@ -194,19 +200,12 @@ func TestSyntheticITL_LongerReplacementPath(t *testing.T) {
 	itlData := buildSyntheticITL(t, "12.0.0", true, pid, shortPath)
 	require.NoError(t, os.WriteFile(itlPath, itlData, 0644))
 
+	// BE fixture — BE writeback refused (K12).
 	outPath := filepath.Join(tmpDir, "updated.itl")
-	result, err := UpdateITLLocations(itlPath, outPath, []ITLLocationUpdate{
+	_, err := UpdateITLLocations(itlPath, outPath, []ITLLocationUpdate{
 		{PersistentID: pidToHex(pid), NewLocation: longPath},
 	})
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.UpdatedCount)
-
-	// Parse the updated file and verify the long path survived
-	lib, err := ParseITL(outPath)
-	require.NoError(t, err)
-	require.Len(t, lib.Tracks, 1)
-	assert.Equal(t, longPath, lib.Tracks[0].Location,
-		"long replacement path should survive write→parse round-trip")
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported, "BE writeback must be refused (K12)")
 }
 
 func TestSyntheticITL_ShorterReplacementPath(t *testing.T) {
@@ -219,17 +218,12 @@ func TestSyntheticITL_ShorterReplacementPath(t *testing.T) {
 	itlData := buildSyntheticITL(t, "12.0.0", true, pid, longPath)
 	require.NoError(t, os.WriteFile(itlPath, itlData, 0644))
 
+	// BE fixture — BE writeback refused (K12).
 	outPath := filepath.Join(tmpDir, "updated.itl")
-	result, err := UpdateITLLocations(itlPath, outPath, []ITLLocationUpdate{
+	_, err := UpdateITLLocations(itlPath, outPath, []ITLLocationUpdate{
 		{PersistentID: pidToHex(pid), NewLocation: shortPath},
 	})
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.UpdatedCount)
-
-	lib, err := ParseITL(outPath)
-	require.NoError(t, err)
-	require.Len(t, lib.Tracks, 1)
-	assert.Equal(t, shortPath, lib.Tracks[0].Location)
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported, "BE writeback must be refused (K12)")
 }
 
 // ---------------------------------------------------------------------------
@@ -252,19 +246,13 @@ func TestSyntheticITL_UnicodePath(t *testing.T) {
 	require.Len(t, lib.Tracks, 1)
 	assert.Equal(t, unicodePath, lib.Tracks[0].Location)
 
-	// Update with another Unicode path
+	// Update with another Unicode path — BE fixture, BE writeback refused (K12).
 	newPath := "/mnt/books/Ünîcödé Àuthör/Böök Tïtle/file.m4b"
 	outPath := filepath.Join(tmpDir, "updated.itl")
-	result, err := UpdateITLLocations(itlPath, outPath, []ITLLocationUpdate{
+	_, err = UpdateITLLocations(itlPath, outPath, []ITLLocationUpdate{
 		{PersistentID: pidToHex(pid), NewLocation: newPath},
 	})
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.UpdatedCount)
-
-	lib2, err := ParseITL(outPath)
-	require.NoError(t, err)
-	require.Len(t, lib2.Tracks, 1)
-	assert.Equal(t, newPath, lib2.Tracks[0].Location)
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported, "BE writeback must be refused (K12)")
 }
 
 // ---------------------------------------------------------------------------
@@ -320,18 +308,13 @@ func TestSyntheticITL_MultiTrackUpdate_NoCrosstalk(t *testing.T) {
 	itl1Data := buildSyntheticITL(t, "12.0.0", true, pid1, "/old/track1.m4b")
 	require.NoError(t, os.WriteFile(itl1Path, itl1Data, 0644))
 
+	// BE fixture — BE writeback refused (K12).
 	out1Path := filepath.Join(tmpDir, "out1.itl")
-	result, err := UpdateITLLocations(itl1Path, out1Path, []ITLLocationUpdate{
+	_, err := UpdateITLLocations(itl1Path, out1Path, []ITLLocationUpdate{
 		{PersistentID: pidToHex(pid1), NewLocation: "/new/track1.m4b"},
 		{PersistentID: pidToHex(pid2), NewLocation: "/new/track2.m4b"}, // shouldn't match
 	})
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.UpdatedCount, "only pid1 should match in track1's ITL")
-
-	lib, err := ParseITL(out1Path)
-	require.NoError(t, err)
-	require.Len(t, lib.Tracks, 1)
-	assert.Equal(t, "/new/track1.m4b", lib.Tracks[0].Location)
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported, "BE writeback must be refused (K12)")
 }
 
 // ---------------------------------------------------------------------------

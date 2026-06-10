@@ -1,5 +1,5 @@
 // file: internal/itunes/itl_combined_mutate.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: f7a8b9c0-d1e2-3f4a-5b6c-7d8e9f0a1b2c
 //
 // Combined ITL mutation: applies removes, adds, and location patches in a
@@ -54,6 +54,11 @@ func ApplyITLOperations(inputPath, outputPath string, ops ITLOperationSet) (*ITL
 	}
 
 	isLE := detectLE(decompressed)
+	// BE writeback is refused (K12): see ErrBEWritebackUnsupported. Production is
+	// LE (v12.13); the BE path is unvalidated and shares CRIT-1's flag invention.
+	if !isLE {
+		return nil, ErrBEWritebackUnsupported
+	}
 	totalUpdated := 0
 
 	// Phase 1: Removes
@@ -141,11 +146,15 @@ func ApplyITLOperationsInMemory(inputPath string, ops ITLOperationSet) ([]byte, 
 		return nil, fmt.Errorf("decompressing ITL payload: %w", err)
 	}
 	isLE := detectLE(decompressed)
+	// BE writeback is refused (K12): see ErrBEWritebackUnsupported.
+	if !isLE {
+		return nil, ErrBEWritebackUnsupported
+	}
 
-	if len(ops.Removes) > 0 && isLE {
+	if len(ops.Removes) > 0 {
 		decompressed, _ = RemoveTracksByPIDLE(decompressed, ops.Removes)
 	}
-	if len(ops.Adds) > 0 && isLE {
+	if len(ops.Adds) > 0 {
 		decompressed = AddTracksLE(decompressed, ops.Adds)
 	}
 	if len(ops.LocationUpdates) > 0 {
@@ -153,13 +162,9 @@ func ApplyITLOperationsInMemory(inputPath string, ops ITLOperationSet) ([]byte, 
 		for _, u := range ops.LocationUpdates {
 			updateMap[strings.ToLower(u.PersistentID)] = u.NewLocation
 		}
-		if isLE {
-			decompressed, _ = rewriteChunksLE(decompressed, updateMap)
-		} else {
-			decompressed, _ = rewriteChunksBE(decompressed, updateMap)
-		}
+		decompressed, _ = rewriteChunksLE(decompressed, updateMap)
 	}
-	if len(ops.MetadataUpdates) > 0 && isLE {
+	if len(ops.MetadataUpdates) > 0 {
 		decompressed, _ = UpdateMetadataLE(decompressed, ops.MetadataUpdates)
 	}
 
