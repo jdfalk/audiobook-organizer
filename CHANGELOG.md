@@ -1,11 +1,46 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.14.0 -->
+<!-- version: 3.15.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-06-10 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Added
+
+#### June 10, 2026 — T016: dedup API extensions (band filter, candidate breakdown, rescore) (PR #1414)
+
+- **`GET /api/v1/dedup/candidates`**: Added `band=` query parameter for store-level
+  filtering (CERTAIN/HIGH/MEDIUM/REVIEW). Returned `total` now reflects the filtered
+  count before pagination. Added `include_breakdown=true` query parameter to opt into
+  per-candidate `score` (normalized 0–100 float) and `score_breakdown` (per-signal
+  contributions) in list items. Added top-level `band` and `formula_version` fields to
+  every candidate item. Pre-T015 rows without a stored `ScoreBreakdown` emit the band
+  from the stored record and omit `score`/`score_breakdown`.
+
+- **`GET /api/v1/dedup/candidates/:id/breakdown`** (new endpoint): Returns the raw
+  candidate record plus both books' full detail (metadata + file list) for side-by-side
+  comparison in the dedup UI. Requires `PermLibraryView`. Returns 404 if the candidate
+  does not exist, 503 if the store is unavailable.
+
+- **`POST /api/v1/dedup/rescore`** (new endpoint): Dry-runs (`{}`) or applies
+  (`{"apply":true}`) a full re-score sweep over all pending candidates using
+  `unified.ComposeScore`. Returns `{ inspected, skipped, changed, applied,
+  band_deltas }`. Requires `PermScanTrigger`. Skips candidates with no stored signal
+  set (pre-T015 rows). When `apply=true`, calls `EmbeddingStore.UpdateCandidateScore`
+  to persist the new score, band, and formula version.
+
+- **`internal/database/embedding_store.go`**: Added `Band` field to `CandidateFilter`
+  for store-level band filtering (avoids post-filter pagination inaccuracies). Added
+  `UpdateCandidateScore` method for persisting re-scored results.
+
+- **`internal/dedup/engine.go`**: Added `RescoreResult` struct and `Rescore` method to
+  `*Engine`. The method lists all pending candidates, re-runs `ComposeScore` over
+  stored signal sets, and optionally writes the updated scores back to PebbleDB via
+  `UpdateCandidateScore`.
+
+This API contract is frozen as the T017 (Unified Dedup UI) build target.
 
 ### Fixed
 
