@@ -1,16 +1,17 @@
 // file: cmd/itl-diff/main.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: 9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a
 //
 // Structural diff between two iTunes Library.itl files. Reports:
-//   - hdfm header comparison (version, header length, file length, max_crypt_size,
-//     full byte-diff of the version "remainder" header trailing bytes)
-//   - msdh container inventory (block-type → header-len, total-len)
-//   - mlth track count
-//   - per-track metadata diff (by Persistent ID): which mhoh fields changed,
-//     which fields are present in A but missing in B (and vice versa)
+//   - hdfm header comparison (version, header length, file length; byte-diff
+//     of the first 96 raw bytes)
+//   - msdh container inventory (block-type → hdrLen/totalLen, Δ between A and B)
+//   - track count deltas and per-track metadata diff (by Persistent ID); string
+//     fields are meaningful when T001's mhoh-descent fix is present
+//   - playlist membership diff (per-playlist added/removed TIDs)
+//   - optional: --audit runs AuditITL on both sides and reports per-guard results
 //
-// Usage: itl-diff <a.itl> <b.itl>
+// Usage: itl-diff [flags] <a.itl> <b.itl>
 
 package main
 
@@ -28,9 +29,10 @@ import (
 func main() {
 	verbose := flag.Bool("v", false, "Verbose: list per-track diffs")
 	max := flag.Int("max", 20, "Max per-track diffs to print in verbose mode")
+	audit := flag.Bool("audit", false, "Run AuditITL (ITLSafetyContract) on both libraries")
 	flag.Parse()
 	if flag.NArg() != 2 {
-		fmt.Fprintln(os.Stderr, "Usage: itl-diff [-v] [-max N] <a.itl> <b.itl>")
+		fmt.Fprintln(os.Stderr, "Usage: itl-diff [-v] [-max N] [--audit] <a.itl> <b.itl>")
 		os.Exit(2)
 	}
 
@@ -41,7 +43,7 @@ func main() {
 
 	fmt.Printf("A: %s\nB: %s\n\n", flag.Arg(0), flag.Arg(1))
 
-	// File bytes for low-level comparison
+	// File bytes for low-level comparison.
 	rawA, _ := os.ReadFile(flag.Arg(0))
 	rawB, _ := os.ReadFile(flag.Arg(1))
 	fmt.Printf("File size:        A=%d  B=%d  (Δ=%+d)\n",
@@ -52,14 +54,17 @@ func main() {
 	fmt.Printf("Playlist count:   A=%d B=%d (Δ=%+d)\n\n",
 		len(a.Playlists), len(b.Playlists), len(b.Playlists)-len(a.Playlists))
 
-	// hdfm header comparison
+	// hdfm header hex diff.
 	if len(rawA) >= 96 && len(rawB) >= 96 {
 		fmt.Println("hdfm header (first 96 bytes):")
 		printHexDiff(rawA[:96], rawB[:96])
 		fmt.Println()
 	}
 
-	// Per-track diff by PID
+	// msdh container inventory diff.
+	printInventoryDiff(rawA, rawB)
+
+	// Per-track diff by PID.
 	indexA := map[string]itunes.ITLTrack{}
 	for _, t := range a.Tracks {
 		indexA[hex.EncodeToString(t.PersistentID[:])] = t
@@ -121,6 +126,138 @@ func main() {
 			diffInt("Year", ta.Year, tb.Year)
 		}
 	}
+
+	// Playlist membership diff.
+	fmt.Println()
+	printMembershipDiff(a, b, *verbose, *max)
+
+	// AuditITL on both sides (--audit flag).
+	if *audit {
+		fmt.Println()
+		printAuditSection("A", rawA)
+		printAuditSection("B", rawB)
+	}
+}
+
+// printInventoryDiff prints the msdh container inventory comparison.
+func printInventoryDiff(rawA, rawB []byte) {
+	payloadA, errA := itunes.DecryptAndInflateITL(rawA)
+	payloadB, errB := itunes.DecryptAndInflateITL(rawB)
+
+	fmt.Println("msdh container inventory:")
+	if errA != nil || errB != nil {
+		if errA != nil {
+			fmt.Printf("  (cannot decode A: %v)\n", errA)
+		}
+		if errB != nil {
+			fmt.Printf("  (cannot decode B: %v)\n", errB)
+		}
+		fmt.Println()
+		return
+	}
+
+	invA := itunes.CollectMsdhInventory(payloadA)
+	invB := itunes.CollectMsdhInventory(payloadB)
+
+	// Print per-container table.
+	indexB := make(map[int]itunes.MsdhEntry, len(invB))
+	for _, e := range invB {
+		indexB[e.BlockType] = e
+	}
+	indexA := make(map[int]itunes.MsdhEntry, len(invA))
+	for _, e := range invA {
+		indexA[e.BlockType] = e
+	}
+
+	// Collect all known block types.
+	allTypes := map[int]struct{}{}
+	for _, e := range invA {
+		allTypes[e.BlockType] = struct{}{}
+	}
+	for _, e := range invB {
+		allTypes[e.BlockType] = struct{}{}
+	}
+	sortedTypes := make([]int, 0, len(allTypes))
+	for bt := range allTypes {
+		sortedTypes = append(sortedTypes, bt)
+	}
+	sort.Ints(sortedTypes)
+
+	fmt.Printf("  %-14s  %-12s  %-12s  %-12s  %-12s  %s\n",
+		"type", "A.hdrLen", "A.totalLen", "B.hdrLen", "B.totalLen", "delta")
+	for _, bt := range sortedTypes {
+		ea, okA := indexA[bt]
+		eb, okB := indexB[bt]
+		name := itunes.MsdhEntry{BlockType: bt}.BlockTypeName()
+		label := fmt.Sprintf("%d (%s)", bt, name)
+		if !okA {
+			fmt.Printf("  %-14s  %-12s  %-12s  %-12d  %-12d  (only in B)\n",
+				label, "-", "-", eb.HeaderLen, eb.TotalLen)
+		} else if !okB {
+			fmt.Printf("  %-14s  %-12d  %-12d  %-12s  %-12s  (only in A)\n",
+				label, ea.HeaderLen, ea.TotalLen, "-", "-")
+		} else {
+			delta := eb.TotalLen - ea.TotalLen
+			marker := " "
+			if delta != 0 {
+				marker = "*"
+			}
+			fmt.Printf("  %s %-13s  %-12d  %-12d  %-12d  %-12d  %+d\n",
+				marker, label, ea.HeaderLen, ea.TotalLen, eb.HeaderLen, eb.TotalLen, delta)
+		}
+	}
+	fmt.Println()
+}
+
+// printMembershipDiff prints playlist membership changes.
+func printMembershipDiff(a, b *itunes.ITLLibrary, verbose bool, maxItems int) {
+	result := itunes.DiffPlaylistMembership(a, b)
+
+	fmt.Printf("Playlist membership diff:\n")
+	fmt.Printf("  Playlists only in A: %d\n", len(result.OnlyA))
+	fmt.Printf("  Playlists only in B: %d\n", len(result.OnlyB))
+	fmt.Printf("  Playlists changed:   %d\n", len(result.Changed))
+
+	if !verbose || len(result.Changed) == 0 {
+		return
+	}
+	fmt.Println()
+	for i, ch := range result.Changed {
+		if i >= maxItems {
+			fmt.Printf("  ...and %d more changed playlists\n", len(result.Changed)-maxItems)
+			break
+		}
+		title := ch.Title
+		if title == "" {
+			title = "(untitled)"
+		}
+		fmt.Printf("  Playlist %s %q:\n", ch.PID, title)
+		if len(ch.Added) > 0 {
+			fmt.Printf("    Added   TIDs: %v\n", ch.Added)
+		}
+		if len(ch.Removed) > 0 {
+			fmt.Printf("    Removed TIDs: %v\n", ch.Removed)
+		}
+	}
+}
+
+// printAuditSection runs AuditITL on a raw library and prints the per-guard verdict.
+func printAuditSection(label string, raw []byte) {
+	fmt.Printf("AuditITL (%s):\n", label)
+	verdict := itunes.AuditITL(raw)
+	for _, r := range verdict.Results {
+		status := "PASS"
+		if !r.Pass() {
+			status = fmt.Sprintf("FAIL (%d violation(s))", len(r.Violations))
+		}
+		fmt.Printf("  %-24s  %s\n", r.Guard, status)
+	}
+	if verdict.Pass {
+		fmt.Printf("  -> %s: all guards passed\n", label)
+	} else {
+		fmt.Printf("  -> %s: VIOLATIONS in guards: %v\n", label, verdict.FailedGuards())
+	}
+	fmt.Println()
 }
 
 func tracksEqual(a, b itunes.ITLTrack) bool {
