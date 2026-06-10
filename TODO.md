@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.72.0 -->
+<!-- version: 8.73.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-06-09 -->
+<!-- last-edited: 2026-06-10 -->
 
 # Project TODO
 
@@ -19,11 +19,11 @@ future agent) can scan the entire workspace in one page.
 
 ---
 
-## 🎯 Current Status — June 9, 2026
+## 🎯 Current Status — June 10, 2026
 
 **Library:** ~50K books (~10,891 organized + ~39K iTunes-imported) / 8,837 authors / 21,668 series
 **Production:** PebbleDB primary; Linux, HTTPS at `172.16.2.30:8484`
-**Latest activity:** Burndown bot: `rebase-stale` job (auto-fix CONFLICTING PRs) + dual schedule (08:00/20:00 UTC) + `full` mode for scheduled runs (PRs #1342, #1353). 31 narrow test-coverage issues queued in burndown-tasks (#79–#109).
+**Latest activity:** CI fixes: `memory-leak-scan.yml` YAML parse error (PR #1405), `nightly-burndown.yml` SHA bumped to v1.11.2 using runner image `ob-18f0014` which removes the broken `ContextManagement` OpenAI param (PRs #1407, #1408).
 **In flight:** Burndown bot dispatching test coverage tasks (#79–#109), FE-10 (Vitest coverage thresholds), fingerprint identification pipeline
 
 ---

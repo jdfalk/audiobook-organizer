@@ -1,11 +1,29 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.13.0 -->
+<!-- version: 3.14.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-06-09 -->
+<!-- last-edited: 2026-06-10 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Fixed
+
+#### June 10, 2026 — CI workflow fixes: memory-leak-scan YAML error + nightly-burndown SHA updates
+
+- **`memory-leak-scan.yml`** (PR #1405): Fixed YAML parse error at line 126 — git
+  commit message body lines (`${LEAK_COUNT}…`, `Run: ${RUN_URL}`) had zero
+  indentation inside the `run:` block scalar, causing the YAML parser to terminate
+  the block early.
+- **`nightly-burndown.yml`** (PR #1407): Updated SHA pin to
+  `0484decdc8ca852b2f66b9ab004cac5180c7b24d` (v1.11.1) — fixes callers failing with
+  "workflow file issue" because `secrets.JF_CI_GH_PAT` was used in the reusable
+  workflow but not declared in `on.workflow_call.secrets`.
+- **`nightly-burndown.yml`** (PR #1408): Updated SHA pin to
+  `7e9712f314766266a38b856fa187701db45ed245` (v1.11.2) — picks up runner image
+  `ob-18f0014` which removes the broken `ContextManagement` field from
+  `ResponseNewParams`. Every `dispatch-one` call was failing at iter 1 with
+  `400 "Unsupported context_management type: ''"` from OpenAI's Responses API.
 
 ### Changed
 
