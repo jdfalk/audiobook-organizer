@@ -1,7 +1,7 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.27.0
+// version: 3.28.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
-// last-edited: 2026-05-31
+// last-edited: 2026-06-10
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate, Link as RouterLink } from 'react-router-dom';
@@ -79,6 +79,22 @@ import { DedupSplitBookTab } from '../components/dedup/DedupSplitBookTab';
 import CallSplitIcon from '@mui/icons-material/CallSplit';
 import { cleanDisplayTitle } from '../components/dedup/dedupHelpers';
 import { CoverLightbox } from '../components/CoverLightbox';
+import { UnifiedDedupTab } from '../components/dedup/UnifiedDedupTab';
+import ViewListIcon from '@mui/icons-material/ViewList';
+
+// Feature flag: UNIFIED_DEDUP_TAB is default-off until backfill completes.
+// Enable by setting localStorage key 'feature_unified_dedup' = '1',
+// or by running in a dev environment (VITE_ENABLE_UNIFIED_DEDUP=true).
+function isUnifiedDedupEnabled(): boolean {
+  try {
+    if (typeof window !== 'undefined' && localStorage.getItem('feature_unified_dedup') === '1') {
+      return true;
+    }
+  } catch {
+    // localStorage unavailable (e.g. SSR, private browsing)
+  }
+  return import.meta.env.VITE_ENABLE_UNIFIED_DEDUP === 'true';
+}
 
 // ULID pattern: 26-character alphanumeric (0-9, A-Z only)
 const ULID_PATTERN = /^[0-9A-Z]{26}$/;
@@ -2806,35 +2822,94 @@ export function BookDedup() {
     return idx >= 0 ? idx : 0;
   }, [searchParams]);
 
+  // T017: unified dedup tab feature flag + legacy toggle.
+  // Feature is default-off; enable via localStorage or VITE_ENABLE_UNIFIED_DEDUP.
+  const unifiedEnabled = isUnifiedDedupEnabled();
+  // When unified is enabled the user can still opt into the legacy tabs via
+  // the toggle. State is persisted in sessionStorage so it doesn't reset on
+  // every navigation but resets on a new session (matches "one release" semantics).
+  const [showLegacy, setShowLegacy] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('dedup_show_legacy') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const handleToggleLegacy = () => {
+    setShowLegacy((prev) => {
+      const next = !prev;
+      try { sessionStorage.setItem('dedup_show_legacy', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
   const setTab = (v: number) => {
     setSearchParams({ tab: TAB_NAMES[v] || 'books' }, { replace: true });
   };
 
+  // When the unified tab is active (enabled + not toggled to legacy),
+  // show only the unified surface with a "Show legacy" toggle button.
+  const showUnified = unifiedEnabled && !showLegacy;
+
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h5" sx={{ mb: 2 }}>Deduplication</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2 }}>
+        <Typography variant="h5">Deduplication</Typography>
+        {unifiedEnabled && (
+          <Tooltip
+            title={
+              showLegacy
+                ? 'Switch back to the new unified view'
+                : 'Show legacy tab view (Books / Scan / Acoustic tabs)'
+            }
+          >
+            <Button
+              size="small"
+              variant="outlined"
+              color="inherit"
+              startIcon={<ViewListIcon />}
+              onClick={handleToggleLegacy}
+              data-testid="legacy-toggle-btn"
+            >
+              {showLegacy ? 'New View' : 'Legacy View'}
+            </Button>
+          </Tooltip>
+        )}
+      </Box>
 
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
-        <Tab icon={<Badge color="default"><MenuBookIcon /></Badge>} label="Version Groups" iconPosition="start" />
-        <Tab icon={<Badge color="default"><ContentCopyIcon /></Badge>} label="Duplicate Scan" iconPosition="start" />
-        <Tab icon={<Badge color="default"><PersonIcon /></Badge>} label="Authors" iconPosition="start" />
-        <Tab icon={<Badge color="default"><ListIcon /></Badge>} label="Series" iconPosition="start" />
-        <Tab icon={<Badge color="default"><AutoAwesomeIcon /></Badge>} label="AI Review" iconPosition="start" />
-        <Tab icon={<Badge color="default"><BuildIcon /></Badge>} label="Reconcile" iconPosition="start" />
-        <Tab icon={<Badge color="default"><FingerprintIcon /></Badge>} label="Embedding" iconPosition="start" />
-        <Tab icon={<Badge color="default"><GraphicEqIcon /></Badge>} label="Acoustic" iconPosition="start" />
-        <Tab icon={<Badge color="default"><CallSplitIcon /></Badge>} label="Split Books" iconPosition="start" />
-      </Tabs>
+      {/* T017 Unified Dedup Tab — shown when feature is enabled and legacy toggle is off */}
+      {showUnified && (
+        <Box data-testid="unified-dedup-tab-wrapper">
+          <UnifiedDedupTab />
+        </Box>
+      )}
 
-      {tab === 0 && <DedupBookTab />}
-      {tab === 1 && <BookDedupScanTab />}
-      {tab === 2 && <AuthorDedupTab />}
-      {tab === 3 && <SeriesDedupTab />}
-      {tab === 4 && <AIReviewTab />}
-      {tab === 5 && <ReconcileTab />}
-      {tab === 6 && <EmbeddingDedupTab />}
-      {tab === 7 && <AcousticDedupTab />}
-      {tab === 8 && <DedupSplitBookTab />}
+      {/* Legacy tabs — kept mounted when legacy toggle is on or feature is disabled */}
+      {!showUnified && (
+        <>
+          <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
+            <Tab icon={<Badge color="default"><MenuBookIcon /></Badge>} label="Version Groups" iconPosition="start" />
+            <Tab icon={<Badge color="default"><ContentCopyIcon /></Badge>} label="Duplicate Scan" iconPosition="start" />
+            <Tab icon={<Badge color="default"><PersonIcon /></Badge>} label="Authors" iconPosition="start" />
+            <Tab icon={<Badge color="default"><ListIcon /></Badge>} label="Series" iconPosition="start" />
+            <Tab icon={<Badge color="default"><AutoAwesomeIcon /></Badge>} label="AI Review" iconPosition="start" />
+            <Tab icon={<Badge color="default"><BuildIcon /></Badge>} label="Reconcile" iconPosition="start" />
+            <Tab icon={<Badge color="default"><FingerprintIcon /></Badge>} label="Embedding" iconPosition="start" />
+            <Tab icon={<Badge color="default"><GraphicEqIcon /></Badge>} label="Acoustic" iconPosition="start" />
+            <Tab icon={<Badge color="default"><CallSplitIcon /></Badge>} label="Split Books" iconPosition="start" />
+          </Tabs>
+
+          {tab === 0 && <DedupBookTab />}
+          {tab === 1 && <BookDedupScanTab />}
+          {tab === 2 && <AuthorDedupTab />}
+          {tab === 3 && <SeriesDedupTab />}
+          {tab === 4 && <AIReviewTab />}
+          {tab === 5 && <ReconcileTab />}
+          {tab === 6 && <EmbeddingDedupTab />}
+          {tab === 7 && <AcousticDedupTab />}
+          {tab === 8 && <DedupSplitBookTab />}
+        </>
+      )}
     </Box>
   );
 }
