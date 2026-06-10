@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.74.0 -->
+<!-- version: 8.75.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-06-10 -->
 
@@ -55,7 +55,7 @@ Review deliverables (see files for full detail):
 - [ ] **F5-T014** Collector refactor + `PairEligibility` + NEW metadata-fuzzy collector
 - [ ] **F5-T015** ⚠ Candidate schema additions + legacy-fingerprint purge (~14K stale 100% rows, HIGH-5)
 - [x] **F5-T016** API: band/score/breakdown fields, `/breakdown`, `/rescore` ✅ PR #1414
-- [ ] **F5-T017** Unified Dedup UI tab (feature-flagged until backfill complete)
+- [x] **F5-T017** Unified Dedup UI tab (feature-flagged until backfill complete) ✅ PR pending
 - [ ] **F5-T018** Scan op rationalization (merge embed-scan/async; phase ordering)
 
 ### P3 — Memory & DB optimization (waves 1–5)

@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.15.0 -->
+<!-- version: 3.16.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-06-10 -->
 
@@ -29,6 +29,40 @@
   `AcoustIDFingerprint` instead of legacy seg fields (T020 drops segs on write).
 
 ### Added
+
+#### June 10, 2026 — T017: unified dedup UI tab (band filter, comparison drawer, bulk actions)
+
+- **`web/src/components/dedup/UnifiedDedupTab.tsx`** (new): Single-surface dedup view
+  replacing the three separate Books/Advanced-Scan/Acoustic tabs. Feature-flagged via
+  `localStorage.feature_unified_dedup='1'` or `VITE_ENABLE_UNIFIED_DEDUP=true`; default
+  off until backfill is complete. Uses AbortController fetch for all data calls.
+- **`web/src/components/dedup/BandFilterBar.tsx`** (new): Clickable CERTAIN/HIGH/MEDIUM/REVIEW
+  band chips with per-band pending counts derived from `/api/v1/dedup/stats`.
+- **`web/src/components/dedup/ScoreBadgeRow.tsx`** (new): Compact band+score+layer chip row
+  for candidate table rows.
+- **`web/src/components/dedup/ScoreBreakdownPanel.tsx`** (new): Stacked-bar visualization of
+  per-signal weight contributions + per-signal evidence rows with primary/secondary distinction.
+- **`web/src/components/dedup/FileInfoCompare.tsx`** (new): Side-by-side book/file detail
+  comparison (title, author, format, bitrate, size, duration).
+- **`web/src/components/dedup/AudioSamplePair.tsx`** (new): Launches audio comparison dialog
+  via existing `AudioSampleCompare` component.
+- **`web/src/components/dedup/CandidateCompareDrawer.tsx`** (new): Right-side drawer (640–780px)
+  with Files | Score Breakdown tabs. Fetches breakdown from
+  `/api/v1/dedup/candidates/:id/breakdown` with AbortController cleanup on candidate change.
+  Exposes merge/keep-A/keep-B/dismiss actions.
+- **`web/src/components/dedup/BulkActionBar.tsx`** (new): Sticky bottom bar showing when
+  candidates are selected. Provides merge-selected, dismiss-selected, merge-all-filtered;
+  confirms for CERTAIN band or large result sets.
+- **`web/src/pages/BookDedup.tsx`** (modified v3.28.0): Added `isUnifiedDedupEnabled()`
+  feature flag check and `showLegacy` sessionStorage toggle. Legacy tabs remain mounted
+  behind toggle for one release.
+- **`web/src/components/FingerprintVisualsColumn.tsx`** (modified v1.1.0): Added
+  `CompareInDedupButton` that deep-links to `/dedup?book=<id>`.
+- **`web/src/services/api.ts`** (modified v2.37.0): Added `DedupBand`, `DedupSignal`,
+  `DedupScoreBreakdown` types; extended `DedupCandidate`; added `getDedupCandidateBreakdown`
+  and `rescoreDedupCandidates` functions.
+- **Tests**: 4 Vitest component tests + 1 Playwright E2E spec (5 flows). All 241 unit tests
+  pass.
 
 #### June 10, 2026 — T016: dedup API extensions (band filter, candidate breakdown, rescore) (PR #1414)
 
