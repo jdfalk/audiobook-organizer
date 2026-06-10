@@ -1,5 +1,5 @@
 // file: internal/itunes/service/track_provisioner_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a9c2e4f6-1b3d-5e7f-8a0c-2d4e6f8b0c2e
 //
 // Additional unit tests for TrackProvisioner covering test cases
@@ -257,8 +257,11 @@ func TestProvision_ManagedPath_WindowsMapped(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestProvision_UnmanagedPath_Unchanged(t *testing.T) {
-	// A file whose path is NOT under the iTunes-managed linuxRoot must have its
-	// original path used verbatim — no corruption from a partial mapping.
+	// A file whose path is NOT under the iTunes-managed linuxRoot maps to a
+	// non-Windows path. TASK-006 / SPEC §1b: such a path is UNMAPPABLE for a 0x0D
+	// Location, so the ITL add is SKIPPED (writing a Unix path into 0x0D IS the
+	// CRIT-2 corruption). The PID mapping and BookFile are still persisted; the
+	// stored ITunesPath is left unchanged (linuxToWindowsPath is a no-op off-root).
 	m := dbmocks.NewMockStore(t)
 	enq := &mockEnqueuer{}
 
@@ -279,10 +282,12 @@ func TestProvision_UnmanagedPath_Unchanged(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "/some/external/drive/book/track.flac", file.ITunesPath,
-		"non-managed paths must be passed through unchanged")
+		"non-managed paths must be passed through unchanged in the DB")
 
-	require.Len(t, enq.adds, 1)
-	assert.Equal(t, "FLAC audio file", enq.adds[0].Kind)
+	// The ITL add is skipped because the path cannot be rendered into a valid
+	// 0x0D Windows Location — never enqueue a corrupt location (CRIT-2).
+	require.Len(t, enq.adds, 0,
+		"unmappable (non-Windows) location must NOT be enqueued into the ITL")
 }
 
 // ---------------------------------------------------------------------------

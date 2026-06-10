@@ -1,5 +1,5 @@
 // file: internal/itunes/itl_le_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: c5f9e038-7d4a-4b92-af13-g8c4d9e5f67b
 
 package itunes
@@ -197,8 +197,12 @@ func TestWalkChunksLE_ParsesTracks(t *testing.T) {
 func TestRewriteChunksLE_UpdatesLocation(t *testing.T) {
 	// LE byte order: reversed from XML hex "aabbccddeeff1122"
 	pid := [8]byte{0x22, 0x11, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA}
-	oldLocation := "/old/path/book.m4b"
-	newLocation := "/new/path/book.m4b"
+	// TASK-006 / SPEC §1b: 0x0D Location is a native Windows path. The rewriter
+	// now normalizes the value through LocationPair, so a Windows path is required
+	// (Unix paths are unmappable and would be skipped — the old verbatim behaviour
+	// was the CRIT-2 bug).
+	oldLocation := `W:\old\path\book.m4b`
+	newLocation := `W:\new\path\book.m4b`
 
 	// Build track content
 	mith := testBuildMithLE(42, pid, 1024000, 360000)
@@ -357,15 +361,17 @@ func TestRewriteChunksLE_NoMatchReturnsUnchanged(t *testing.T) {
 func TestRewriteChunksLE_LocalURLUpdate(t *testing.T) {
 	pid := [8]byte{0x22, 0x11, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA}
 	mith := testBuildMithLE(42, pid, 1024000, 360000)
-	localURLMhoh := testBuildMhohLE(0x0B, "file://localhost/old/path.m4b")
+	localURLMhoh := testBuildMhohLE(0x0B, "file://localhost/W:/old/path.m4b")
 
 	var content []byte
 	content = append(content, mith...)
 	content = append(content, localURLMhoh...)
 	data := buildMsdhLE(0x01, content)
 
+	// TASK-006 / SPEC §1b: the update value is the canonical Windows path; the
+	// rewriter derives the file://localhost/ 0x0B URL from it.
 	updateMap := map[string]string{
-		"aabbccddeeff1122": "/new/path.m4b",
+		"aabbccddeeff1122": `W:\new\path.m4b`,
 	}
 
 	rewritten, count := rewriteChunksLEImpl(data, updateMap)
@@ -674,8 +680,9 @@ func TestParseLE_TrackStrings_ViaMiah(t *testing.T) {
 // location string.
 func TestRewriteMithContentLE(t *testing.T) {
 	pid := [8]byte{0x22, 0x11, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA}
-	oldLocation := "/old/location/book.m4b"
-	newLocation := "/new/location/book.m4b"
+	// TASK-006 / SPEC §1b: 0x0D Location is a native Windows path.
+	oldLocation := `W:\old\location\book.m4b`
+	newLocation := `W:\new\location\book.m4b`
 	currentPID := "aabbccddeeff1122" // BE hex — what the updateMap is keyed on
 
 	// buildMithLE returns a 156-byte block; headerLen and totalLen are both 156.

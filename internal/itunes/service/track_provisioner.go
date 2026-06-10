@@ -1,5 +1,5 @@
 // file: internal/itunes/service/track_provisioner.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 8e768742-5ace-4e4b-8495-9550ed4620b5
 //
 // TrackProvisioner generates ITL tracks for books that weren't imported
@@ -118,10 +118,17 @@ func (p *TrackProvisioner) Provision(book *database.Book, bookFile *database.Boo
 	// Determine format-based "Kind" string
 	kind := kindFromExt(filepath.Ext(bookFile.FilePath))
 
+	// TASK-006: ITLNewTrack.Location is the 0x0D side — it must be a canonical
+	// Windows path, never a URL or staging-dir leak (CRIT-2 / SPEC §1b). Normalize
+	// itunesPath through LocationPair; if it is unmappable, SKIP the ITL add (the
+	// PID/mapping are still persisted so a later corrected provision can retry)
+	// rather than enqueue a corrupt 0x0D location.
+	enqueueLocation, locOK := normalizeITunesLocation(pid, itunesPath)
+
 	// Enqueue the ITL add — nil-safe for tests that don't wire a batcher
-	if p.enqueuer != nil {
+	if p.enqueuer != nil && locOK {
 		p.enqueuer.EnqueueAdd(itunes.ITLNewTrack{
-			Location:    itunesPath,
+			Location:    enqueueLocation,
 			Name:        bookFile.Title,
 			Album:       book.Title,
 			Artist:      p.bookAuthor(book),
