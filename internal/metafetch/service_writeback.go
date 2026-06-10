@@ -1,7 +1,7 @@
 // file: internal/metafetch/service_writeback.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: fad73c11-30c2-4fdc-addd-45afef25d792
-// last-edited: 2026-05-01
+// last-edited: 2026-06-10
 
 package metafetch
 
@@ -353,6 +353,12 @@ func (mfs *Service) BuildFullTagMap(
 // filterUnchangedTags reads the current tags from filePath and removes any
 // entries from tagMap whose values already match, so only changed fields are
 // written back to the file.
+//
+// WHY: Custom AUDIOBOOK_ORGANIZER_* tags must be compared via the
+// metadata.Metadata struct fields (BookOrganizerID, Edition, PrintYear, etc.)
+// so that unchanged custom tags don't force a full write-back and inflate
+// copy-on-write (.bak-*) churn. Each tag name in the tagMap (e.g. "book_id")
+// maps 1:1 to a Metadata field and is enumerated below per metadata/custom_tags.go.
 func FilterUnchangedTags(filePath string, tagMap map[string]interface{}) map[string]interface{} {
 	current, err := metadata.ExtractMetadata(filePath, nil)
 	if err != nil {
@@ -360,6 +366,10 @@ func FilterUnchangedTags(filePath string, tagMap map[string]interface{}) map[str
 		return tagMap
 	}
 
+	// Build a map of known tag names to their current values. Every custom tag
+	// key emitted by the writer (via metadata/taglib_tagmap.go buildWriteTagMap)
+	// must have an entry here, mapping the input key to the corresponding
+	// Metadata field value.
 	currentVals := map[string]string{
 		"title":  current.Title,
 		"album":  current.Album,
@@ -382,12 +392,14 @@ func FilterUnchangedTags(filePath string, tagMap map[string]interface{}) map[str
 		"series":          current.Series,
 		"asin":            current.ASIN,
 		"description":     current.Comments, // description is stored in comments field
-		"edition":         current.Edition,
-		"print_year":      current.PrintYear,
+		// Custom AUDIOBOOK_ORGANIZER_* tag mappings from metadata/custom_tags.go:
+		// These map input keys (e.g. "book_id") to Metadata struct fields.
 		"book_id":         current.BookOrganizerID,
 		"open_library_id": current.OpenLibraryID,
 		"hardcover_id":    current.HardcoverID,
 		"google_books_id": current.GoogleBooksID,
+		"edition":         current.Edition,
+		"print_year":      current.PrintYear,
 	}
 	if current.Publisher != "" {
 		currentVals["publisher"] = current.Publisher
@@ -406,7 +418,10 @@ func FilterUnchangedTags(filePath string, tagMap map[string]interface{}) map[str
 	for k, v := range tagMap {
 		cur, ok := currentVals[k]
 		if !ok {
-			// Unknown field (e.g. "track") — always write
+			// Unknown field (e.g. "track") — always write.
+			// Log unknown keys so new custom tags are added consciously to
+			// the mapping above rather than silently forcing writes.
+			slog.Warn("FilterUnchangedTags: unknown tag key (writing)", "key", k)
 			filtered[k] = v
 			continue
 		}
