@@ -68,9 +68,14 @@ Full treatment: SPEC 2 (`fable5-spec-itunes-writeback-hardening.md`).
 
 ### CRIT-2 — Location (0x0D) written as `file://` URL; iTunes stores a native Windows path (BUG, iTunes corruption, LIVE)
 
-**OBSERVED.** Golden: all 93,014 type-0x0D blocks contain Windows paths
-(`W:\itunes\iTunes Media\Audiobooks\...`); the URL form lives only in type-0x0B
-(`file://localhost/W:/itunes/iTunes%20Media/...`). damaged-1/3 contain 83,783 type-0x0D
+**OBSERVED — owner-challenged and re-verified by full census (2026-06-09).** In the
+untouched library (`itunes-lib-good.itl`, SHA-256-identical to the golden copy), all
+93,014 type-0x0D blocks contain Windows paths and **zero** contain `file://`: 91,278
+plain `W:\itunes\iTunes Media\...` + 1,736 UTF-16-encoded backslash paths (non-ASCII
+titles). The URL form lives only in type-0x0B: 93,014 `file://localhost/W:/itunes/...`
+(1:1 with the 0x0D paths) plus 1,187 `https://` podcast feed/stream URLs on tracks that
+have **no** 0x0D at all. (The familiar `file://W:/...` form appears in 0x0B and in the
+`iTunes Library.xml` export — not in binary 0x0D.) damaged-1/3 contain 83,783 type-0x0D
 blocks holding **URLs** (`file://localhost/W:/audiobook-organizer/...`); damaged-4 has 34.
 damaged-4 also shows locations pointing into our staging dir
 (`.../audiobook-organizer/.itunes-writeback/iTunes%20Media/...`).

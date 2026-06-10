@@ -195,9 +195,11 @@ guards except writer changes (T005/T006) — guards detect; they do not fix.
    `itl_le_verify.go` patterns); also per-miph declared (+16) vs actual mtph children.
 3. `mhoh-format`: enforce headerLen==24, totalLen==40+strLen, +27==0, bytes 32–39 zero,
    `+24` ∈ table from T002 when the table has entries for that hohmType.
-4. `location-form`: 0x0D matches `^[A-Za-z]:\\` and contains no `file://` or `%`; 0x0B
-   starts `file://localhost/`, percent-escaping valid, and no value contains
-   `.itunes-writeback/`.
+4. `location-form` (per SPEC 2 §2, census-corrected): operate on **decoded** strings
+   (0x0D can be UTF-16-encoded); per-track: if 0x0D present → matches `^[A-Za-z]:\\`,
+   no `file://`, no `%`-escapes, and sibling 0x0B is a round-tripping
+   `file://localhost/` URL; tracks without 0x0D (podcasts) may hold `http(s)://` in
+   0x0B; no value contains `.itunes-writeback/`.
 5. `parse-roundtrip`: must FAIL (not skip) when master list unlocatable or payload
    uninflatable — uses T010's fail-closed inflate.
 6. `bounded-delta`: config defaults removedTracksMax=5000, rewrittenMhohPctMax=20, with

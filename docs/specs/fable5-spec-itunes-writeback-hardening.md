@@ -87,7 +87,7 @@ Guards (v1, ordered cheapest-first; names are normative for tests):
 | `count-coherence` | `mlth` count == actual mith blocks == proposed header @0x44; playlist count @0x48 == miph count; album @0x4C == miah count; artist @0x54 == miih count; every `miph` declared item count == actual mtph children | **K2**, K8 |
 | `no-new-dangling-refs` | existing `VerifyITLNoNewDanglingRefsLE`, converted to fail-closed | K1 |
 | `mhoh-format` | every mhoh: headerLen == 24; totalLen == 40 + strDataLen; strDataLen bound-checked; byte `+27` == 0x00; bytes `+32..+39` zero; `+24` value ∈ the set observed in iTunes-authored blocks for that hohm type (corpus-derived constant table) | **K3, K5, K7** |
-| `location-form` | every 0x0D value parses as a Windows absolute path (drive letter, backslashes, no `file://`, no `%`-escapes); every 0x0B value is a `file://localhost/` URL with RFC-3986 escaping that round-trips to its sibling 0x0D path; **no value contains `.itunes-writeback/`** or other staging markers | **K4** + staging leak |
+| `location-form` | per-track, on **decoded** strings (0x0D may be UTF-16-encoded — 1,736 of golden's 93,014 are): if a track has a 0x0D, it must parse as a Windows absolute path (drive letter, backslashes, no `file://`, no `%`-escapes) and its sibling 0x0B must be a `file://localhost/` URL with RFC-3986 escaping that round-trips to the 0x0D path; tracks **without** 0x0D (podcast/stream entries — 1,187 in golden) may carry any `http(s)://` URL in 0x0B and are exempt from the pairing rule; **no value contains `.itunes-writeback/`** or other staging markers. Census basis: golden 0x0D = 93,014 blocks, zero `file://`; 0x0B = 94,201 blocks (93,014 `file://localhost/` + 1,187 `https://` podcast) | **K4** + staging leak |
 | `tid-pid-sanity` | TIDs sorted ascending, unique; PIDs unique, nonzero | K6, K9, K11 |
 | `bounded-delta` | guardrail: a single writeback may not remove > N tracks (config, default 5,000) nor rewrite > M% of mhoh blocks (config, default 20%) without an explicit `force` flag | blast-radius cap for HIGH-3-style bugs |
 
@@ -147,8 +147,11 @@ by at least one damaged library unless noted):
    field @0x08 equals on-disk size.
 2. Every mhoh: headerLen == 24; totalLen == 40 + strDataLen; bytes 32–39 zero; byte +27 == 0.
 3. mhoh `+24` encoding indicator ∈ corpus-derived set per hohm type.
-4. 0x0D = absolute Windows path; 0x0B = `file://localhost/` percent-escaped URL; pairwise
-   consistent within a track.
+4. 0x0D (when present) = absolute Windows path, never `file://`; its 0x0B sibling =
+   `file://localhost/` percent-escaped URL, pairwise consistent. Tracks without a local
+   file (podcasts) have no 0x0D and may hold `http(s)://` in 0x0B. Verified by full
+   census of the untouched library (`itunes-lib-good.itl`, SHA-256-identical to golden):
+   93,014 0x0D blocks, zero `file://`; 91,278 ASCII + 1,736 UTF-16-encoded backslash paths.
 5. No `mtph` referencing a TID absent from the master list; per-miph declared count ==
    actual mtph children.
 6. TIDs strictly ascending and unique in the master list; PIDs unique (golden-verified;
