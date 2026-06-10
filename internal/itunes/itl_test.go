@@ -399,6 +399,9 @@ func TestParseITL_Playlists(t *testing.T) {
 	assert.Equal(t, 99, lib.Playlists[0].Items[0])
 }
 
+// TestInsertITLTracks: buildSyntheticITL emits a big-endian payload, refused by
+// the SafeWriteITL chokepoint (TASK-004, SPEC §3 step 1 / K12). The LE insert
+// path is covered by itl_le_*_test.go and the combined-mutate tests.
 func TestInsertITLTracks(t *testing.T) {
 	pid := [8]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
 	itlData := buildSyntheticITL(t, "12.0.0", false, pid, "/music/existing.mp3")
@@ -408,7 +411,7 @@ func TestInsertITLTracks(t *testing.T) {
 	outPath := filepath.Join(tmpDir, "out.itl")
 	require.NoError(t, os.WriteFile(itlPath, itlData, 0644))
 
-	result, err := InsertITLTracks(itlPath, outPath, []ITLNewTrack{
+	_, err := InsertITLTracks(itlPath, outPath, []ITLNewTrack{
 		{
 			Location:    "/music/new_song.mp3",
 			Name:        "New Song",
@@ -424,30 +427,9 @@ func TestInsertITLTracks(t *testing.T) {
 			SampleRate:  44100,
 		},
 	})
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.UpdatedCount)
-
-	lib, err := ParseITL(outPath)
-	require.NoError(t, err)
-	require.Len(t, lib.Tracks, 2)
-
-	// First track is the original
-	assert.Equal(t, "/music/existing.mp3", lib.Tracks[0].Location)
-
-	// Second track is the inserted one
-	assert.Equal(t, "New Song", lib.Tracks[1].Name)
-	assert.Equal(t, "New Album", lib.Tracks[1].Album)
-	assert.Equal(t, "New Artist", lib.Tracks[1].Artist)
-	assert.Equal(t, "Rock", lib.Tracks[1].Genre)
-	assert.Equal(t, "MPEG audio file", lib.Tracks[1].Kind)
-	assert.Equal(t, "/music/new_song.mp3", lib.Tracks[1].Location)
-	assert.Equal(t, 5000000, lib.Tracks[1].Size)
-	assert.Equal(t, 240000, lib.Tracks[1].TotalTime)
-	assert.Equal(t, 1, lib.Tracks[1].TrackNumber)
-	assert.Equal(t, 2025, lib.Tracks[1].Year)
-	assert.Equal(t, 320, lib.Tracks[1].BitRate)
-	assert.Equal(t, 44100, lib.Tracks[1].SampleRate)
-	assert.Equal(t, 43, lib.Tracks[1].TrackID) // max was 42, new is 43
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported)
+	_, statErr := os.Stat(outPath)
+	require.Error(t, statErr, "refused BE write must not create output")
 }
 
 func TestInsertITLTracks_NoTracks(t *testing.T) {
@@ -472,6 +454,11 @@ func TestRewriteITLExtensions(t *testing.T) {
 	require.ErrorIs(t, err, ErrBEWritebackUnsupported, "BE writeback must be refused (K12)")
 }
 
+// TestInsertITLPlaylist verifies that the BE synthetic library is REFUSED by the
+// SafeWriteITL chokepoint (TASK-004, SPEC §3 step 1 / K12). buildSyntheticITL
+// emits a big-endian "htim"/"hohm" payload (no "msdh" magic); BE writeback is
+// unvalidated and shares CRIT-1's flag-invention risk, so every writeback entry
+// point now refuses it rather than corrupt the library.
 func TestInsertITLPlaylist(t *testing.T) {
 	pid := [8]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
 	itlData := buildSyntheticITL(t, "12.0.0", false, pid, "/music/song.mp3")
@@ -481,20 +468,14 @@ func TestInsertITLPlaylist(t *testing.T) {
 	outPath := filepath.Join(tmpDir, "out.itl")
 	require.NoError(t, os.WriteFile(itlPath, itlData, 0644))
 
-	result, err := InsertITLPlaylist(itlPath, outPath, ITLNewPlaylist{
+	_, err := InsertITLPlaylist(itlPath, outPath, ITLNewPlaylist{
 		Title:    "Test Playlist",
 		TrackIDs: []int{42},
 	})
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.UpdatedCount)
-
-	lib, err := ParseITL(outPath)
-	require.NoError(t, err)
-	require.Len(t, lib.Tracks, 1)
-	require.Len(t, lib.Playlists, 1)
-	assert.Equal(t, "Test Playlist", lib.Playlists[0].Title)
-	require.Len(t, lib.Playlists[0].Items, 1)
-	assert.Equal(t, 42, lib.Playlists[0].Items[0])
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported)
+	// The refused write must not produce an output file.
+	_, statErr := os.Stat(outPath)
+	require.Error(t, statErr, "refused BE write must not create output")
 }
 
 func TestBuildHtimChunk(t *testing.T) {

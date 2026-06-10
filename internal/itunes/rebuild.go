@@ -292,8 +292,12 @@ func RebuildITLFromDB(store RebuildStore, itlPath, outputPath string) (*ITLRebui
 		ToAdd:       len(adds),
 	}
 
+	// Nuclear rebuild removes EVERY existing track then re-adds from the DB, so
+	// it intentionally blows past the bounded-delta cap — pass Force (SPEC §2;
+	// structural guards still apply). Without this the contract would reject a
+	// real rebuild of a tens-of-thousands-track library.
 	ops := ITLOperationSet{Removes: removes, Adds: adds}
-	if _, err := ApplyITLOperations(itlPath, outputPath, ops); err != nil {
+	if _, err := ApplyITLOperations(itlPath, outputPath, ops, ForceContractConfig()); err != nil {
 		return nil, fmt.Errorf("apply rebuild ops: %w", err)
 	}
 
@@ -351,8 +355,11 @@ func BuildExportITL(store RebuildStore, templatePath string, bookIDs []string) (
 		removes[pid] = true
 	}
 
+	// Partial export strips ALL template tracks then re-adds the requested
+	// subset — another intentional full-replacement that must Force past
+	// bounded-delta (SPEC §2; structural guards still enforced).
 	ops := ITLOperationSet{Removes: removes, Adds: adds}
-	result, err := ApplyITLOperationsInMemory(templatePath, ops)
+	result, err := ApplyITLOperationsInMemory(templatePath, ops, ForceContractConfig())
 	if err != nil {
 		return nil, fmt.Errorf("build export ITL: %w", err)
 	}

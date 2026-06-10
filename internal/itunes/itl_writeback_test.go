@@ -151,6 +151,10 @@ func TestUpdateITLLocations_NonexistentPID(t *testing.T) {
 // InsertITLTracks — path format tests
 // ---------------------------------------------------------------------------
 
+// TestInsertITLTracks_PathFormat_Windows: buildSyntheticITL emits a big-endian
+// payload, which the SafeWriteITL chokepoint now refuses (TASK-004, SPEC §3
+// step 1 / K12). The path-format conversion logic is covered by the LE tests in
+// itl_le_*_test.go; here we assert the BE refusal contract.
 func TestInsertITLTracks_PathFormat_Windows(t *testing.T) {
 	pid := [8]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
 	itlData := buildSyntheticITL(t, "12.0.0", false, pid, "/music/existing.mp3")
@@ -171,17 +175,13 @@ func TestInsertITLTracks_PathFormat_Windows(t *testing.T) {
 		TotalTime: 36000000,
 	}
 
-	result, err := InsertITLTracks(itlPath, outPath, []ITLNewTrack{newTrack})
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.UpdatedCount)
-
-	lib, err := ParseITL(outPath)
-	require.NoError(t, err)
-	require.Len(t, lib.Tracks, 2)
-	assert.Equal(t, newTrack.Location, lib.Tracks[1].Location, "Windows path should be stored verbatim")
-	assert.Equal(t, newTrack.Name, lib.Tracks[1].Name)
+	_, err := InsertITLTracks(itlPath, outPath, []ITLNewTrack{newTrack})
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported)
+	_, statErr := os.Stat(outPath)
+	require.Error(t, statErr, "refused BE write must not create output")
 }
 
+// TestInsertITLTracks_PathFormat_UnixWithSpaces: BE fixture → refused (see above).
 func TestInsertITLTracks_PathFormat_UnixWithSpaces(t *testing.T) {
 	pid := [8]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
 	itlData := buildSyntheticITL(t, "12.0.0", false, pid, "/music/existing.mp3")
@@ -192,62 +192,39 @@ func TestInsertITLTracks_PathFormat_UnixWithSpaces(t *testing.T) {
 	require.NoError(t, os.WriteFile(itlPath, itlData, 0644))
 
 	loc := "/mnt/bigdata/books/itunes/iTunes Media/Audiobooks/Brandon Sanderson/The Way of Kings.m4b"
-	result, err := InsertITLTracks(itlPath, outPath, []ITLNewTrack{
+	_, err := InsertITLTracks(itlPath, outPath, []ITLNewTrack{
 		{Location: loc, Name: "The Way of Kings", Artist: "Brandon Sanderson", Kind: "Audiobook"},
 	})
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.UpdatedCount)
-
-	lib, err := ParseITL(outPath)
-	require.NoError(t, err)
-	require.Len(t, lib.Tracks, 2)
-	assert.Equal(t, loc, lib.Tracks[1].Location)
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported)
+	_, statErr := os.Stat(outPath)
+	require.Error(t, statErr, "refused BE write must not create output")
 }
 
 // ---------------------------------------------------------------------------
 // InsertITLPlaylist — with tracks
 // ---------------------------------------------------------------------------
 
+// TestInsertITLPlaylist_WithMultipleTracks: buildFixtureITL emits a big-endian
+// payload, refused by the SafeWriteITL chokepoint (TASK-004, SPEC §3 step 1).
 func TestInsertITLPlaylist_WithMultipleTracks(t *testing.T) {
-	// Build a fixture with multiple tracks, then insert a playlist referencing them.
 	fixtureData := buildFixtureITL()
 	tmpDir := t.TempDir()
 	itlPath := filepath.Join(tmpDir, "fixture.itl")
 	outPath := filepath.Join(tmpDir, "with_playlist.itl")
 	require.NoError(t, os.WriteFile(itlPath, fixtureData, 0644))
 
-	// Create a playlist referencing first 3 track IDs from fixture
 	playlist := ITLNewPlaylist{
 		Title:    "My Audiobook Picks",
 		TrackIDs: []int{fixtureTracks[0].trackID, fixtureTracks[1].trackID, fixtureTracks[3].trackID},
 	}
 
-	result, err := InsertITLPlaylist(itlPath, outPath, playlist)
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.UpdatedCount)
-
-	lib, err := ParseITL(outPath)
-	require.NoError(t, err)
-
-	// Should have the existing fixture playlists plus the new one
-	require.GreaterOrEqual(t, len(lib.Playlists), 1)
-
-	// Find our new playlist
-	var found *ITLPlaylist
-	for i := range lib.Playlists {
-		if lib.Playlists[i].Title == "My Audiobook Picks" {
-			found = &lib.Playlists[i]
-			break
-		}
-	}
-	require.NotNil(t, found, "inserted playlist should be found")
-	assert.Equal(t, "My Audiobook Picks", found.Title)
-	require.Len(t, found.Items, 3)
-	assert.Equal(t, fixtureTracks[0].trackID, found.Items[0])
-	assert.Equal(t, fixtureTracks[1].trackID, found.Items[1])
-	assert.Equal(t, fixtureTracks[3].trackID, found.Items[2])
+	_, err := InsertITLPlaylist(itlPath, outPath, playlist)
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported)
+	_, statErr := os.Stat(outPath)
+	require.Error(t, statErr, "refused BE write must not create output")
 }
 
+// TestInsertITLPlaylist_EmptyPlaylist: BE fixture → refused (see above).
 func TestInsertITLPlaylist_EmptyPlaylist(t *testing.T) {
 	pid := [8]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
 	itlData := buildSyntheticITL(t, "12.0.0", false, pid, "/music/song.mp3")
@@ -257,18 +234,13 @@ func TestInsertITLPlaylist_EmptyPlaylist(t *testing.T) {
 	outPath := filepath.Join(tmpDir, "out.itl")
 	require.NoError(t, os.WriteFile(itlPath, itlData, 0644))
 
-	result, err := InsertITLPlaylist(itlPath, outPath, ITLNewPlaylist{
+	_, err := InsertITLPlaylist(itlPath, outPath, ITLNewPlaylist{
 		Title:    "Empty Playlist",
 		TrackIDs: nil,
 	})
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.UpdatedCount)
-
-	lib, err := ParseITL(outPath)
-	require.NoError(t, err)
-	require.Len(t, lib.Playlists, 1)
-	assert.Equal(t, "Empty Playlist", lib.Playlists[0].Title)
-	assert.Empty(t, lib.Playlists[0].Items)
+	require.ErrorIs(t, err, ErrBEWritebackUnsupported)
+	_, statErr := os.Stat(outPath)
+	require.Error(t, statErr, "refused BE write must not create output")
 }
 
 // ---------------------------------------------------------------------------

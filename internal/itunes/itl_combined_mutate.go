@@ -28,145 +28,112 @@ func (ops *ITLOperationSet) IsEmpty() bool {
 		len(ops.LocationUpdates) == 0 && len(ops.MetadataUpdates) == 0
 }
 
+// applyOpsMutate returns the SafeWriteITL mutate closure that applies an
+// ITLOperationSet (removes → adds → location → metadata) to a decompressed LE
+// payload. *updated is set to the total number of items touched. The closure
+// performs no I/O and no header work — header regeneration and the full
+// ITLSafetyContract (including the dangling-ref check, now the
+// `no-new-dangling-refs` guard) run inside SafeWriteITL / safeEncodeITL
+// (TASK-004), which is why the old in-line VerifyITLNoNewDanglingRefsLE gate is
+// gone from here.
+func applyOpsMutate(ops ITLOperationSet, updated *int) func([]byte) ([]byte, error) {
+	return func(decompressed []byte) ([]byte, error) {
+		// BE refusal is enforced by SafeWriteITL/safeEncodeITL BEFORE mutate is
+		// invoked (the contract chokepoint), so production here is always LE.
+		total := 0
+
+		// Phase 1: Removes
+		if len(ops.Removes) > 0 {
+			var removed int
+			decompressed, removed = RemoveTracksByPIDLE(decompressed, ops.Removes)
+			total += removed
+		}
+		// Phase 2: Adds
+		if len(ops.Adds) > 0 {
+			decompressed = AddTracksLE(decompressed, ops.Adds)
+			total += len(ops.Adds)
+		}
+		// Phase 3: Location patches
+		if len(ops.LocationUpdates) > 0 {
+			updateMap := make(map[string]string, len(ops.LocationUpdates))
+			for _, u := range ops.LocationUpdates {
+				updateMap[strings.ToLower(u.PersistentID)] = u.NewLocation
+			}
+			var patched int
+			decompressed, patched = rewriteChunksLE(decompressed, updateMap)
+			total += patched
+		}
+		// Phase 4: Metadata updates (title, artist, album, genre, etc.)
+		if len(ops.MetadataUpdates) > 0 {
+			var metaUpdated int
+			decompressed, metaUpdated = UpdateMetadataLE(decompressed, ops.MetadataUpdates)
+			total += metaUpdated
+		}
+		if updated != nil {
+			*updated = total
+		}
+		return decompressed, nil
+	}
+}
+
 // ApplyITLOperations reads the ITL file, applies all mutations to the
-// decompressed payload in one pass, and writes the result.
-// Order: removes first, then adds, then location patches.
-func ApplyITLOperations(inputPath, outputPath string, ops ITLOperationSet) (*ITLWriteBackResult, error) {
+// decompressed payload in one pass, and writes the result through the
+// SafeWriteITL atomic protocol (TASK-004): header counts are regenerated from
+// the mutated payload (CRIT-3) and the full ITLSafetyContract runs on both the
+// in-memory and re-read bytes before anything reaches disk.
+// Order: removes, then adds, then location patches, then metadata.
+//
+// The optional cfg overrides the contract guardrails. The default (no cfg) is
+// the SPEC bounded-delta cap (max 5000 removed tracks / 20% mhoh rewrite); the
+// nuclear rebuild and full-export paths pass ForceContractConfig() because they
+// INTENTIONALLY remove every track — bounded-delta is explicitly
+// Force-overridable for these (SPEC §2). Structural guards never relax.
+func ApplyITLOperations(inputPath, outputPath string, ops ITLOperationSet, cfg ...ContractConfig) (*ITLWriteBackResult, error) {
 	if ops.IsEmpty() {
 		return &ITLWriteBackResult{OutputPath: outputPath}, nil
 	}
 
-	data, err := os.ReadFile(inputPath)
+	contractCfg := contractCfgOrDefault(cfg)
+	totalUpdated := 0
+	mutate := applyOpsMutate(ops, &totalUpdated)
+
+	// In-place write → full atomic SafeWriteITL protocol (backup + rotation +
+	// fsync + re-read contract). A distinct output path (e.g. a caller-managed
+	// .tmp that the batcher renames itself) → safe in-memory encode (header
+	// regeneration + contract) written to outputPath.
+	if inputPath == outputPath {
+		if _, err := SafeWriteITL(inputPath, mutate, WithContractConfig(contractCfg)); err != nil {
+			return nil, err
+		}
+		return &ITLWriteBackResult{UpdatedCount: totalUpdated, OutputPath: outputPath}, nil
+	}
+
+	raw, err := os.ReadFile(inputPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading ITL: %w", err)
 	}
-
-	hdr, err := parseHdfmHeader(data)
+	outBytes, err := safeEncodeITL(raw, mutate, contractCfg)
 	if err != nil {
 		return nil, err
 	}
-
-	payload := data[hdr.headerLen:]
-	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed, err := itlInflate(decrypted)
-	if err != nil {
-		return nil, fmt.Errorf("decompressing ITL payload: %w", err)
+	if err := writeFileSync(outputPath, outBytes); err != nil {
+		return nil, fmt.Errorf("writing ITL: %w", err)
 	}
-
-	isLE := detectLE(decompressed)
-	// BE writeback is refused (K12): see ErrBEWritebackUnsupported. Production is
-	// LE (v12.13); the BE path is unvalidated and shares CRIT-1's flag invention.
-	if !isLE {
-		return nil, ErrBEWritebackUnsupported
-	}
-	totalUpdated := 0
-
-	// Phase 1: Removes
-	if len(ops.Removes) > 0 {
-		if isLE {
-			var removed int
-			decompressed, removed = RemoveTracksByPIDLE(decompressed, ops.Removes)
-			totalUpdated += removed
-		}
-		// BE remove not implemented (production is LE)
-	}
-
-	// Phase 2: Adds
-	if len(ops.Adds) > 0 {
-		if isLE {
-			decompressed = AddTracksLE(decompressed, ops.Adds)
-			totalUpdated += len(ops.Adds)
-		}
-		// BE add not implemented (production is LE)
-	}
-
-	// Phase 3: Location patches
-	if len(ops.LocationUpdates) > 0 {
-		updateMap := make(map[string]string, len(ops.LocationUpdates))
-		for _, u := range ops.LocationUpdates {
-			updateMap[strings.ToLower(u.PersistentID)] = u.NewLocation
-		}
-
-		var patched int
-		if isLE {
-			decompressed, patched = rewriteChunksLE(decompressed, updateMap)
-		} else {
-			decompressed, patched = rewriteChunksBE(decompressed, updateMap)
-		}
-		totalUpdated += patched
-	}
-
-	// Phase 4: Metadata updates (title, artist, album, genre, etc.)
-	if len(ops.MetadataUpdates) > 0 {
-		if isLE {
-			var metaUpdated int
-			decompressed, metaUpdated = UpdateMetadataLE(decompressed, ops.MetadataUpdates)
-			totalUpdated += metaUpdated
-		}
-	}
-
-	// Safety gate: re-read the original payload and diff dangling playlist
-	// refs. If our writes introduced any new orphans, refuse to write the
-	// file rather than corrupt the iTunes library. Re-decoding the input
-	// is intentional — we want to compare against an immutable baseline,
-	// not whatever the in-memory `decompressed` started as before mutation.
-	if isLE {
-		origPayload := data[hdr.headerLen:]
-		origDec := itlDecrypt(hdr, origPayload)
-		origInflated, _, err := itlInflate(origDec)
-		if err != nil {
-			return nil, fmt.Errorf("decompressing original ITL for verification: %w", err)
-		}
-		if err := VerifyITLNoNewDanglingRefsLE(origInflated, decompressed); err != nil {
-			return nil, fmt.Errorf("aborting ITL write to %s: %w", outputPath, err)
-		}
-	}
-
-	return writeITLFile(outputPath, hdr, decompressed, wasCompressed, totalUpdated)
+	fixITLPermissions(outputPath)
+	return &ITLWriteBackResult{UpdatedCount: totalUpdated, OutputPath: outputPath}, nil
 }
 
 // ApplyITLOperationsInMemory applies the same mutations as ApplyITLOperations
-// but returns the resulting ITL bytes instead of writing to disk.
+// but returns the resulting ITL bytes instead of writing to disk. It routes
+// through safeEncodeITL so the export path also gets header regeneration
+// (CRIT-3) and the full ITLSafetyContract (TASK-004). The optional cfg has the
+// same Force semantics as ApplyITLOperations (the full-export path passes
+// ForceContractConfig() because it strips every template track).
 // Used by the partial-export path (Task 033 / ARCH-6-4).
-func ApplyITLOperationsInMemory(inputPath string, ops ITLOperationSet) ([]byte, error) {
-	data, err := os.ReadFile(inputPath)
+func ApplyITLOperationsInMemory(inputPath string, ops ITLOperationSet, cfg ...ContractConfig) ([]byte, error) {
+	raw, err := os.ReadFile(inputPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading ITL: %w", err)
 	}
-
-	hdr, err := parseHdfmHeader(data)
-	if err != nil {
-		return nil, err
-	}
-
-	payload := data[hdr.headerLen:]
-	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed, err := itlInflate(decrypted)
-	if err != nil {
-		return nil, fmt.Errorf("decompressing ITL payload: %w", err)
-	}
-	isLE := detectLE(decompressed)
-	// BE writeback is refused (K12): see ErrBEWritebackUnsupported.
-	if !isLE {
-		return nil, ErrBEWritebackUnsupported
-	}
-
-	if len(ops.Removes) > 0 {
-		decompressed, _ = RemoveTracksByPIDLE(decompressed, ops.Removes)
-	}
-	if len(ops.Adds) > 0 {
-		decompressed = AddTracksLE(decompressed, ops.Adds)
-	}
-	if len(ops.LocationUpdates) > 0 {
-		updateMap := make(map[string]string, len(ops.LocationUpdates))
-		for _, u := range ops.LocationUpdates {
-			updateMap[strings.ToLower(u.PersistentID)] = u.NewLocation
-		}
-		decompressed, _ = rewriteChunksLE(decompressed, updateMap)
-	}
-	if len(ops.MetadataUpdates) > 0 {
-		decompressed, _ = UpdateMetadataLE(decompressed, ops.MetadataUpdates)
-	}
-
-	return encodeITLPayload(hdr, decompressed, wasCompressed)
+	return safeEncodeITL(raw, applyOpsMutate(ops, nil), contractCfgOrDefault(cfg))
 }
