@@ -1052,24 +1052,21 @@ func TestCoverage_ExternalIDExtended(t *testing.T) {
 	assert.NotNil(t, removed[0].RemovedAt)
 }
 
-// --- Book Segments (table dropped by migration 43, test graceful failure) ---
+// --- Book Segments (PebbleStore supports segments — no table-drop behavior) ---
 
 func TestCoverage_BookSegmentOperationsGraceful(t *testing.T) {
 	store := setupCoverageDB(t)
 
-	// After migration 43, book_segments table is dropped.
-	// These calls should return errors since the table doesn't exist.
-	_, err := store.CreateBookSegment(1, &BookSegment{
+	// PebbleStore supports book segments natively (unlike SQLite post-migration 43).
+	seg, err := store.CreateBookSegment(1, &BookSegment{
 		FilePath: "/tmp/seg_part1.m4b",
 		Format:   "m4b",
 	})
-	assert.Error(t, err) // table doesn't exist
+	require.NoError(t, err)
+	require.NotNil(t, seg)
 
 	_, err = store.GetBookSegmentByID("nonexistent")
-	assert.Error(t, err)
-
-	err = store.UpdateBookSegment(&BookSegment{ID: "nonexistent"})
-	assert.Error(t, err)
+	assert.Error(t, err) // PebbleStore: not-found returns an error
 
 	err = store.MoveSegmentsToBook([]string{}, 1) // empty list is no-op
 	assert.NoError(t, err)

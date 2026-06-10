@@ -1829,8 +1829,39 @@ func (p *PebbleStore) GetDuplicateBooks() ([][]Book, error) {
 	return duplicateGroups, nil
 }
 
+// GetBooksByTitleInDir returns books whose lowercased title matches normalizedTitle
+// and whose FilePath lives directly under dirPath (same directory, any filename).
+// Always scans Pebble — MemStore has no title+dir index.
 func (p *PebbleStore) GetBooksByTitleInDir(normalizedTitle, dirPath string) ([]Book, error) {
-	return nil, nil
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var results []Book
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
+			strings.Contains(key, ":author:") {
+			continue
+		}
+		var book Book
+		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+			continue
+		}
+		if strings.ToLower(book.Title) != strings.ToLower(normalizedTitle) {
+			continue
+		}
+		if filepath.Dir(book.FilePath) != dirPath {
+			continue
+		}
+		results = append(results, book)
+	}
+	return results, nil
 }
 
 func (p *PebbleStore) GetFolderDuplicates() ([][]Book, error) {
@@ -6472,15 +6503,32 @@ func (p *PebbleStore) IncrementBookPlayStats(bookNumericID int, seconds int) err
 	return p.incrementIntKey(fmt.Sprintf("stats:book:listen_seconds:%d", bookNumericID), seconds)
 }
 func (p *PebbleStore) GetBookStats(bookNumericID int) (*BookStats, error) {
-	plays, _ := p.readIntKey(fmt.Sprintf("stats:book:plays:%d", bookNumericID))
-	secs, _ := p.readIntKey(fmt.Sprintf("stats:book:listen_seconds:%d", bookNumericID))
+	playsKey := fmt.Sprintf("stats:book:plays:%d", bookNumericID)
+	secsKey := fmt.Sprintf("stats:book:listen_seconds:%d", bookNumericID)
+	plays, playsErr := p.readIntKey(playsKey)
+	secs, secsErr := p.readIntKey(secsKey)
+	// Return nil,nil when no stats have been recorded for this book (both keys absent).
+	if playsErr == nil && secsErr == nil && plays == 0 && secs == 0 {
+		// Check if either key actually exists (zero is a valid recorded value).
+		if _, _, err := p.db.Get([]byte(playsKey)); err == pebble.ErrNotFound {
+			if _, _, err2 := p.db.Get([]byte(secsKey)); err2 == pebble.ErrNotFound {
+				return nil, nil
+			}
+		}
+	}
 	return &BookStats{BookID: bookNumericID, PlayCount: plays, ListenSeconds: secs, Version: 1}, nil
 }
 func (p *PebbleStore) IncrementUserListenStats(userID string, seconds int) error {
 	return p.incrementIntKey("stats:user:listen_seconds:"+userID, seconds)
 }
 func (p *PebbleStore) GetUserStats(userID string) (*UserStats, error) {
-	secs, _ := p.readIntKey("stats:user:listen_seconds:" + userID)
+	secsKey := "stats:user:listen_seconds:" + userID
+	secs, _ := p.readIntKey(secsKey)
+	if secs == 0 {
+		if _, _, err := p.db.Get([]byte(secsKey)); err == pebble.ErrNotFound {
+			return nil, nil
+		}
+	}
 	return &UserStats{UserID: userID, ListenSeconds: secs, Version: 1}, nil
 }
 
