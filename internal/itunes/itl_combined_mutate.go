@@ -48,7 +48,10 @@ func ApplyITLOperations(inputPath, outputPath string, ops ITLOperationSet) (*ITL
 
 	payload := data[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed := itlInflate(decrypted)
+	decompressed, wasCompressed, err := itlInflate(decrypted)
+	if err != nil {
+		return nil, fmt.Errorf("decompressing ITL payload: %w", err)
+	}
 
 	isLE := detectLE(decompressed)
 	totalUpdated := 0
@@ -105,7 +108,10 @@ func ApplyITLOperations(inputPath, outputPath string, ops ITLOperationSet) (*ITL
 	if isLE {
 		origPayload := data[hdr.headerLen:]
 		origDec := itlDecrypt(hdr, origPayload)
-		origInflated, _ := itlInflate(origDec)
+		origInflated, _, err := itlInflate(origDec)
+		if err != nil {
+			return nil, fmt.Errorf("decompressing original ITL for verification: %w", err)
+		}
 		if err := VerifyITLNoNewDanglingRefsLE(origInflated, decompressed); err != nil {
 			return nil, fmt.Errorf("aborting ITL write to %s: %w", outputPath, err)
 		}
@@ -130,7 +136,10 @@ func ApplyITLOperationsInMemory(inputPath string, ops ITLOperationSet) ([]byte, 
 
 	payload := data[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed := itlInflate(decrypted)
+	decompressed, wasCompressed, err := itlInflate(decrypted)
+	if err != nil {
+		return nil, fmt.Errorf("decompressing ITL payload: %w", err)
+	}
 	isLE := detectLE(decompressed)
 
 	if len(ops.Removes) > 0 && isLE {

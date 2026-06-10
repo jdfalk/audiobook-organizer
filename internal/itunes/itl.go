@@ -1,7 +1,7 @@
 // file: internal/itunes/itl.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: 7f2a8b3c-4d5e-6f01-a2b3-c4d5e6f7a8b9
-// last-edited: 2026-05-15
+// last-edited: 2026-06-09
 
 package itunes
 
@@ -296,27 +296,38 @@ func itlEncrypt(hdr *hdfmHeader, data []byte) []byte {
 // ---------------------------------------------------------------------------
 
 // maxDecompressedSize caps zlib decompression to prevent decompression bombs.
-// 512 MB is well above any legitimate iTunes library payload.
-const maxDecompressedSize = 512 * 1024 * 1024
+// 2 GB: legitimate iTunes library payloads are ~236MB and growing;
+// fail closed on bomb or exceed, never silently pass through.
+const maxDecompressedSize = 2 * 1024 * 1024 * 1024
 
-func itlInflate(data []byte) ([]byte, bool) {
+// itlInflate decompresses a zlib-compressed ITL payload.
+// Returns (data, wasCompressed, error).
+// If payload doesn't start with 0x78 (zlib magic byte), returns (data, false, nil) —
+// legitimately uncompressed payload.
+// If zlib decompression fails or exceeds maxDecompressedSize, returns (nil, false, error) —
+// fail-closed behavior required because downstream verifiers fail open on parse errors.
+func itlInflate(data []byte) ([]byte, bool, error) {
 	if len(data) == 0 || data[0] != 0x78 {
-		return data, false
+		// Not a zlib stream: pass through as-is, uncompressed
+		return data, false, nil
 	}
 	r, err := zlib.NewReader(bytes.NewReader(data))
 	if err != nil {
-		return data, false
+		// zlib stream expected but reader failed: explicit error, never silent fallback
+		return nil, false, fmt.Errorf("zlib decompression: %w", err)
 	}
 	defer r.Close()
 	limited := io.LimitReader(r, maxDecompressedSize+1)
 	out, err := io.ReadAll(limited)
 	if err != nil {
-		return data, false
+		// decompression read failed: explicit error
+		return nil, false, fmt.Errorf("zlib decompression read: %w", err)
 	}
 	if int64(len(out)) > maxDecompressedSize {
-		return data, false // decompressed data exceeds size limit — reject as decompression bomb
+		// decompressed data exceeds size limit — explicit error, reject as decompression bomb
+		return nil, false, fmt.Errorf("decompressed ITL payload %d bytes exceeds cap %d bytes (decompression bomb)", len(out), maxDecompressedSize)
 	}
-	return out, true
+	return out, true, nil
 }
 
 func itlDeflate(data []byte) []byte {
@@ -513,7 +524,10 @@ func parseITLData(data []byte) (*ITLLibrary, error) {
 	decrypted := itlDecrypt(hdr, payload)
 
 	// Decompress
-	decompressed, wasCompressed := itlInflate(decrypted)
+	decompressed, wasCompressed, err := itlInflate(decrypted)
+	if err != nil {
+		return nil, fmt.Errorf("decompressing ITL payload: %w", err)
+	}
 
 	lib := &ITLLibrary{
 		Version:         hdr.version,
@@ -643,7 +657,10 @@ func ValidateITL(path string) error {
 	}
 
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, _ := itlInflate(decrypted)
+	decompressed, _, err := itlInflate(decrypted)
+	if err != nil {
+		return fmt.Errorf("decompressing ITL payload: %w", err)
+	}
 
 	if len(decompressed) < 4 {
 		return fmt.Errorf("decrypted ITL payload too short")
@@ -687,7 +704,10 @@ func UpdateITLLocations(inputPath, outputPath string, updates []ITLLocationUpdat
 
 	payload := data[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed := itlInflate(decrypted)
+	decompressed, wasCompressed, err := itlInflate(decrypted)
+	if err != nil {
+		return nil, fmt.Errorf("decompressing ITL payload: %w", err)
+	}
 
 	// Walk and rewrite — dispatch on endianness
 	var newData []byte
@@ -751,7 +771,10 @@ func InsertITLTracks(inputPath, outputPath string, tracks []ITLNewTrack) (*ITLWr
 
 	payload := data[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed := itlInflate(decrypted)
+	decompressed, wasCompressed, err := itlInflate(decrypted)
+	if err != nil {
+		return nil, fmt.Errorf("decompressing ITL payload: %w", err)
+	}
 
 	// Find max track ID
 	maxID := findMaxTrackID(decompressed)
@@ -886,7 +909,10 @@ func RewriteITLExtensions(inputPath, outputPath string, oldExt, newExt string) (
 
 	payload := data[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed := itlInflate(decrypted)
+	decompressed, wasCompressed, err := itlInflate(decrypted)
+	if err != nil {
+		return nil, fmt.Errorf("decompressing ITL payload: %w", err)
+	}
 
 	newData, count := rewriteExtensionsInChunks(decompressed, oldExt, newExt)
 
@@ -958,7 +984,10 @@ func InsertITLPlaylist(inputPath, outputPath string, playlist ITLNewPlaylist) (*
 
 	payload := data[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed := itlInflate(decrypted)
+	decompressed, wasCompressed, err := itlInflate(decrypted)
+	if err != nil {
+		return nil, fmt.Errorf("decompressing ITL payload: %w", err)
+	}
 
 	// Build playlist chunks
 	var plChunks bytes.Buffer

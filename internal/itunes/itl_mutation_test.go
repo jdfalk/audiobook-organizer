@@ -1132,7 +1132,8 @@ func TestMutation_ChunkStructureMinimalTrack(t *testing.T) {
 
 	payload := data[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, _ := itlInflate(decrypted)
+	decompressed, _, err := itlInflate(decrypted)
+	require.NoError(t, err)
 
 	// Walk the raw chunks and catalog them
 	offset := 0
@@ -1173,7 +1174,8 @@ func TestMutation_ChunkStructureFullTrack(t *testing.T) {
 	require.NoError(t, err)
 	payload := data[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, _ := itlInflate(decrypted)
+	decompressed, _, err := itlInflate(decrypted)
+	require.NoError(t, err)
 
 	offset := 0
 	var tags []string
@@ -1217,7 +1219,8 @@ func TestMutation_HohmTypeOrdering(t *testing.T) {
 	require.NoError(t, err)
 	payload := data[hdr.headerLen:]
 	decrypted := itlDecrypt(hdr, payload)
-	decompressed, _ := itlInflate(decrypted)
+	decompressed, _, err := itlInflate(decrypted)
+	require.NoError(t, err)
 
 	offset := 0
 	var hohmTypes []int
