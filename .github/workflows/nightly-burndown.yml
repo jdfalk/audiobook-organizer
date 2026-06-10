@@ -1,5 +1,5 @@
 # file: .github/workflows/nightly-burndown.yml
-# version: 2.6.0
+# version: 2.7.0
 name: Nightly burndown
 
 on:
@@ -25,7 +25,7 @@ on:
 
 jobs:
   burndown:
-    uses: falkcorp/github-common/.github/workflows/reusable-burndown.yml@c3dac07c4af0a9efac2c89f7d15b9c02bcd5e49f # v1.11.0
+    uses: falkcorp/github-common/.github/workflows/reusable-burndown.yml@0484decdc8ca852b2f66b9ab004cac5180c7b24d # v1.11.1
     with:
       # Scheduled runs always use full mode (auto-merge ready PRs).
       # Manual dispatch respects the input selection (default: draft-only for safety).
