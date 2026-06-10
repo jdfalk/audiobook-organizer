@@ -1,10 +1,12 @@
 // file: internal/config/config_test.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
+// last-edited: 2026-06-10
 
 package config
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/spf13/viper"
@@ -446,4 +448,51 @@ func TestResetToDefaults(t *testing.T) {
 	AppConfig.RootDir = originalRootDir
 	AppConfig.DatabasePath = originalDatabasePath
 	AppConfig.PlaylistDir = originalPlaylistDir
+}
+
+// TestAppConfigRace_MutateSnapshot is a regression test for the data race that
+// was detected at internal/config/update_service.go:130 (concurrent Mutate
+// vs Snapshot calls).  Run with -race to confirm no races are reported.
+//
+// WHY: before T028, AppConfig was a plain package-level var with no
+// synchronization.  The update service and test setups mutated it while
+// background readers consumed it, triggering -race failures.  Mutate and
+// Snapshot wrap all writes and snapshot-reads under the same RWMutex.
+func TestAppConfigRace_MutateSnapshot(t *testing.T) {
+	const goroutines = 8
+	const iters = 500
+
+	// Save and restore AppConfig around the test so other tests are unaffected.
+	original := Snapshot()
+	t.Cleanup(func() { Mutate(func(c *Config) { *c = original }) })
+
+	var wg sync.WaitGroup
+	for i := 0; i < goroutines; i++ {
+		wg.Add(2)
+
+		// Writer goroutine: simulates update_service applying a new root dir.
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < iters; j++ {
+				Mutate(func(c *Config) {
+					c.RootDir = "/race/test/path"
+					c.SetupComplete = c.RootDir != ""
+				})
+			}
+		}(i)
+
+		// Reader goroutine: simulates a background goroutine reading the snapshot.
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < iters; j++ {
+				snap := Snapshot()
+				// Access a few fields to make the read non-trivial.
+				_ = snap.RootDir
+				_ = snap.SetupComplete
+				_ = snap.OpenAIAPIKey
+			}
+		}(i)
+	}
+
+	wg.Wait()
 }

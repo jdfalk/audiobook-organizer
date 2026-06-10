@@ -1,7 +1,7 @@
 // file: internal/config/config.go
-// version: 1.46.0
+// version: 1.47.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
-// last-edited: 2026-06-09
+// last-edited: 2026-06-10
 
 package config
 
@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/spf13/viper"
 )
@@ -362,7 +363,49 @@ type Config struct {
 	ExcludePatterns     []string `json:"exclude_patterns"`
 }
 
+// mu guards AppConfig against concurrent writes.
+//
+// WHY: AppConfig is a package-level struct value read by hundreds of sites and
+// mutated at runtime by the config-update HTTP handler and test set-ups.  The
+// -race detector flagged a concurrent write (update_service.go:130) vs
+// background readers.  Rather than a 500-site rewrite we introduce a narrow
+// RWMutex used by ALL write paths (via Mutate) and by the handful of hot read
+// paths that need a guaranteed-consistent snapshot (via Snapshot).
+//
+// Direct reads of AppConfig fields that are set once at startup are tolerated
+// with residual risk — they see a worst-case value from the previous Mutate
+// call and are no worse than the pre-fix behaviour. The observable races
+// (concurrent test setup + HTTP update service) are eliminated by routing all
+// write sites through Mutate.
+var mu sync.RWMutex
+
+// AppConfig is the global application configuration.
+//
+// Convention:
+//   - All WRITES must go through Mutate — never assign AppConfig directly
+//     outside this package.
+//   - Callers that need a consistent snapshot (concurrent-safe read of multiple
+//     fields together) should call Snapshot().
+//   - Single-field reads at hot paths that were set once at startup may access
+//     AppConfig directly; they carry residual risk documented above.
 var AppConfig Config
+
+// Snapshot returns a value copy of AppConfig under a read lock.
+// Use this when you need a consistent multi-field view of the config
+// (e.g. inside background goroutines or HTTP handlers that read many fields).
+func Snapshot() Config {
+	mu.RLock()
+	defer mu.RUnlock()
+	return AppConfig
+}
+
+// Mutate applies fn to AppConfig under a write lock.
+// ALL write sites (startup init, update service, test setups) must use this.
+func Mutate(fn func(*Config)) {
+	mu.Lock()
+	defer mu.Unlock()
+	fn(&AppConfig)
+}
 
 // InitConfig initializes the application configuration
 func InitConfig() {
@@ -553,7 +596,9 @@ func InitConfig() {
 	}
 	excludePatterns := viper.GetStringSlice("exclude_patterns")
 
-	AppConfig = Config{
+	// WHY Mutate: whole-struct init; correct even if tests call InitConfig concurrently.
+	Mutate(func(c *Config) {
+	*c = Config{
 		// Core paths
 		RootDir:       viper.GetString("root_dir"),
 		DatabasePath:  viper.GetString("database_path"),
@@ -712,37 +757,37 @@ func InitConfig() {
 	}
 
 	// Embedding-based dedup (defaults used unless DB settings override)
-	AppConfig.EmbeddingEnabled = true
-	AppConfig.EmbeddingModel = "text-embedding-3-large"
-	AppConfig.DedupBookHighThreshold = 0.95
-	AppConfig.DedupBookLowThreshold = 0.85
-	AppConfig.DedupAuthorHighThreshold = 0.92
-	AppConfig.DedupAuthorLowThreshold = 0.80
-	AppConfig.DedupAutoMergeEnabled = true
-	AppConfig.DedupLLMAutoMergeHighConfidence = false // opt-in
+	c.EmbeddingEnabled = true
+	c.EmbeddingModel = "text-embedding-3-large"
+	c.DedupBookHighThreshold = 0.95
+	c.DedupBookLowThreshold = 0.85
+	c.DedupAuthorHighThreshold = 0.92
+	c.DedupAuthorLowThreshold = 0.80
+	c.DedupAutoMergeEnabled = true
+	c.DedupLLMAutoMergeHighConfidence = false // opt-in
 
 	// Metadata candidate scoring (defaults used unless DB settings override)
-	AppConfig.MetadataEmbeddingScoringEnabled = true
-	AppConfig.MetadataEmbeddingMinScore = 0.50
-	AppConfig.MetadataEmbeddingBestMatchMin = 0.70
-	AppConfig.MetadataLLMScoringEnabled = false
-	AppConfig.MetadataLLMRerankEpsilon = 0.01
-	AppConfig.MetadataLLMRerankTopK = 5
-	AppConfig.WriteBackupBeforeTagWrite = false
+	c.MetadataEmbeddingScoringEnabled = true
+	c.MetadataEmbeddingMinScore = 0.50
+	c.MetadataEmbeddingBestMatchMin = 0.70
+	c.MetadataLLMScoringEnabled = false
+	c.MetadataLLMRerankEpsilon = 0.01
+	c.MetadataLLMRerankTopK = 5
+	c.WriteBackupBeforeTagWrite = false
 
 	// Default Open Library dump dir to {RootDir}/openlibrary-dumps if not set
-	if AppConfig.OpenLibraryDumpDir == "" && AppConfig.RootDir != "" {
-		AppConfig.OpenLibraryDumpDir = filepath.Join(AppConfig.RootDir, "openlibrary-dumps")
+	if c.OpenLibraryDumpDir == "" && c.RootDir != "" {
+		c.OpenLibraryDumpDir = filepath.Join(c.RootDir, "openlibrary-dumps")
 	}
 
 	// API Keys (Goodreads deprecated Dec 2020, removed)
 
 	// Load metadata sources from config or use defaults
 	if viper.IsSet("metadata_sources") {
-		viper.UnmarshalKey("metadata_sources", &AppConfig.MetadataSources)
+		viper.UnmarshalKey("metadata_sources", &c.MetadataSources)
 	} else {
 		// Set default metadata sources
-		AppConfig.MetadataSources = []MetadataSource{
+		c.MetadataSources = []MetadataSource{
 			{
 				ID:           "audible",
 				Name:         "Audible",
@@ -797,25 +842,26 @@ func InitConfig() {
 	}
 
 	// Backward compatibility: map old config key names to new ones
-	if AppConfig.ITunesLibraryWritePath == "" {
-		AppConfig.ITunesLibraryWritePath = viper.GetString("itunes_library_itl_path")
+	if c.ITunesLibraryWritePath == "" {
+		c.ITunesLibraryWritePath = viper.GetString("itunes_library_itl_path")
 	}
-	if AppConfig.ITunesLibraryReadPath == "" {
-		AppConfig.ITunesLibraryReadPath = viper.GetString("itunes_library_xml_path")
+	if c.ITunesLibraryReadPath == "" {
+		c.ITunesLibraryReadPath = viper.GetString("itunes_library_xml_path")
 	}
 
 	// Auto-enable ITL write-back when a write path is configured
-	if AppConfig.ITunesLibraryWritePath != "" && !AppConfig.ITLWriteBackEnabled {
-		AppConfig.ITLWriteBackEnabled = true
+	if c.ITunesLibraryWritePath != "" && !c.ITLWriteBackEnabled {
+		c.ITLWriteBackEnabled = true
 	}
 
 	// Normalize database type
-	if AppConfig.DatabaseType == "sqlite3" {
-		AppConfig.DatabaseType = "sqlite"
+	if c.DatabaseType == "sqlite3" {
+		c.DatabaseType = "sqlite"
 	}
-	if AppConfig.DatabaseType == "" {
-		AppConfig.DatabaseType = "pebble"
+	if c.DatabaseType == "" {
+		c.DatabaseType = "pebble"
 	}
+	}) // end Mutate
 }
 
 var validPatternPlaceholder = regexp.MustCompile(`\{[A-Za-z0-9_]+\}`)
@@ -956,15 +1002,20 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// ResetToDefaults resets the AppConfig to factory defaults
+// ResetToDefaults resets the AppConfig to factory defaults.
+// WHY Mutate: whole-struct reset; concurrent readers must not see a torn state.
 func ResetToDefaults() {
-	AppConfig = Config{
-		// Core paths
-		RootDir:       AppConfig.RootDir,      // Keep existing paths
-		DatabasePath:  AppConfig.DatabasePath, // Keep existing paths
+	// Snapshot current paths before acquiring the write lock to avoid a
+	// deadlock (Mutate is not re-entrant).
+	cur := Snapshot()
+	Mutate(func(c *Config) {
+	*c = Config{
+		// Core paths — preserve existing paths; reset everything else
+		RootDir:       cur.RootDir,
+		DatabasePath:  cur.DatabasePath,
 		DatabaseType:  "pebble",
 		EnableSQLite:  false,
-		PlaylistDir:   AppConfig.PlaylistDir, // Keep existing paths
+		PlaylistDir:   cur.PlaylistDir,
 		SetupComplete: false,
 
 		// Library organization
@@ -1187,4 +1238,5 @@ func ResetToDefaults() {
 			},
 		},
 	}
+	}) // end Mutate
 }

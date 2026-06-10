@@ -1,6 +1,7 @@
 // file: internal/config/update_service.go
-// version: 3.0.1
+// version: 3.1.0
 // guid: f6g7h8i9-j0k1-l2m3-n4o5-p6q7r8s9t0u1
+// last-edited: 2026-06-10
 
 package config
 
@@ -89,22 +90,24 @@ func (us *UpdateService) UpdateConfig(payload map[string]any) (int, map[string]a
 
 	// Apply secrets explicitly — they need masking/debug logging and must not
 	// flow through the JSON round-trip to avoid plaintext exposure.
+	// WHY Mutate: each assignment here is a write to the global AppConfig that
+	// races with concurrent HTTP readers; Mutate serialises under the write lock.
 	if val, ok := payloadString(payload, "openai_api_key"); ok {
 		slog.Debug("UpdateConfig updating OpenAI API key (len)", "val_count", len(val))
-		AppConfig.OpenAIAPIKey = val
+		Mutate(func(c *Config) { c.OpenAIAPIKey = val })
 	}
 	if val, ok := payloadString(payload, "acoustid_api_key"); ok {
 		slog.Debug("UpdateConfig updating AcoustID API key (len)", "val_count", len(val))
-		AppConfig.AcoustIDAPIKey = val
+		Mutate(func(c *Config) { c.AcoustIDAPIKey = val })
 	}
 	if val, ok := payloadString(payload, "google_books_api_key"); ok {
-		AppConfig.GoogleBooksAPIKey = val
+		Mutate(func(c *Config) { c.GoogleBooksAPIKey = val })
 	}
 	if val, ok := payloadString(payload, "hardcover_api_token"); ok {
-		AppConfig.HardcoverAPIToken = val
+		Mutate(func(c *Config) { c.HardcoverAPIToken = val })
 	}
 	if val, ok := payloadString(payload, "basic_auth_password"); ok {
-		AppConfig.BasicAuthPassword = val
+		Mutate(func(c *Config) { c.BasicAuthPassword = val })
 	}
 
 	// Build filtered payload without secrets (already applied above)
@@ -118,17 +121,25 @@ func (us *UpdateService) UpdateConfig(payload map[string]any) (int, map[string]a
 
 	// Apply all remaining fields via JSON round-trip.
 	// Any field in Config with a matching json tag is set automatically.
+	// WHY Mutate: json.Unmarshal writes multiple fields in sequence; without the
+	// write lock a concurrent Snapshot() call could observe a half-written struct.
 	payloadJSON, err := json.Marshal(filtered)
 	if err != nil {
 		return http.StatusBadRequest, map[string]any{"error": "failed to encode payload: " + err.Error()}
 	}
-	if err := json.Unmarshal(payloadJSON, &AppConfig); err != nil {
-		return http.StatusBadRequest, map[string]any{"error": "failed to apply config: " + err.Error()}
+	var unmarshalErr error
+	Mutate(func(c *Config) {
+		if err := json.Unmarshal(payloadJSON, c); err != nil {
+			unmarshalErr = err
+			return
+		}
+		// Post-process inside the lock: trim root_dir whitespace, derive setup_complete
+		c.RootDir = strings.TrimSpace(c.RootDir)
+		c.SetupComplete = c.RootDir != ""
+	})
+	if unmarshalErr != nil {
+		return http.StatusBadRequest, map[string]any{"error": "failed to apply config: " + unmarshalErr.Error()}
 	}
-
-	// Post-process: trim root_dir whitespace, derive setup_complete
-	AppConfig.RootDir = strings.TrimSpace(AppConfig.RootDir)
-	AppConfig.SetupComplete = AppConfig.RootDir != ""
 
 	if err := SaveConfigToDatabase(us.DB); err != nil {
 		slog.Error("failed to persist config", "err", err)
@@ -142,7 +153,7 @@ func (us *UpdateService) UpdateConfig(payload map[string]any) (int, map[string]a
 
 	return http.StatusOK, map[string]any{
 		"message": "configuration updated and saved to database",
-		"config":  us.MaskSecrets(AppConfig),
+		"config":  us.MaskSecrets(Snapshot()),
 	}
 }
 

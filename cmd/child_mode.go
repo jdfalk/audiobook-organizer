@@ -1,6 +1,7 @@
 // file: cmd/child_mode.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 8c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
+// last-edited: 2026-06-10
 
 package cmd
 
@@ -22,10 +23,13 @@ import (
 // open the same store and load the same config the parent has.
 func init() {
 	registry.ChildEnvFunc = func() []string {
+		// WHY Snapshot: consistent multi-field read; the parent may call UpdateConfig
+		// concurrently while this closure executes.
+		c := config.Snapshot()
 		return []string{
-			fmt.Sprintf("%s=%s", registry.EnvChildDBPath, config.AppConfig.DatabasePath),
-			fmt.Sprintf("%s=%s", registry.EnvChildDBType, config.AppConfig.DatabaseType),
-			fmt.Sprintf("%s=%s", registry.EnvChildRootDir, config.AppConfig.RootDir),
+			fmt.Sprintf("%s=%s", registry.EnvChildDBPath, c.DatabasePath),
+			fmt.Sprintf("%s=%s", registry.EnvChildDBType, c.DatabaseType),
+			fmt.Sprintf("%s=%s", registry.EnvChildRootDir, c.RootDir),
 		}
 	}
 }
@@ -43,23 +47,28 @@ func RunOperationRunner() {
 	// Resolve database configuration from environment overrides set by the
 	// parent. Fall back to whatever may already be in AppConfig, then to a
 	// reasonable default — but in practice the parent always sets them.
-	if v := os.Getenv(registry.EnvChildDBPath); v != "" {
-		config.AppConfig.DatabasePath = v
-	}
-	if v := os.Getenv(registry.EnvChildDBType); v != "" {
-		config.AppConfig.DatabaseType = v
-	}
-	if v := os.Getenv(registry.EnvChildRootDir); v != "" {
-		config.AppConfig.RootDir = v
-	}
-	if config.AppConfig.DatabasePath == "" {
-		config.AppConfig.DatabasePath = "audiobooks.pebble"
-	}
-	if config.AppConfig.DatabaseType == "" {
-		config.AppConfig.DatabaseType = "pebble"
-	}
+	// WHY Mutate: these writes happen before any goroutines start in child mode,
+	// but Mutate is still correct and cheap; it also satisfies the race detector.
+	config.Mutate(func(c *config.Config) {
+		if v := os.Getenv(registry.EnvChildDBPath); v != "" {
+			c.DatabasePath = v
+		}
+		if v := os.Getenv(registry.EnvChildDBType); v != "" {
+			c.DatabaseType = v
+		}
+		if v := os.Getenv(registry.EnvChildRootDir); v != "" {
+			c.RootDir = v
+		}
+		if c.DatabasePath == "" {
+			c.DatabasePath = "audiobooks.pebble"
+		}
+		if c.DatabaseType == "" {
+			c.DatabaseType = "pebble"
+		}
+	})
 
-	store, err := initializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite)
+	snap := config.Snapshot()
+	store, err := initializeStore(snap.DatabaseType, snap.DatabasePath, snap.EnableSQLite)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "child mode: initializeStore: %v\n", err)
 		os.Exit(2)
@@ -70,10 +79,10 @@ func RunOperationRunner() {
 	if err := loadConfigFromDB(store); err != nil {
 		slog.Warn("child mode: loadConfigFromDB", "err", err)
 	}
-	if config.AppConfig.RootDir == "" {
+	if config.Snapshot().RootDir == "" {
 		// Re-apply env override after loadConfigFromDB may have reset it.
 		if v := os.Getenv(registry.EnvChildRootDir); v != "" {
-			config.AppConfig.RootDir = v
+			config.Mutate(func(c *config.Config) { c.RootDir = v })
 		}
 	}
 
