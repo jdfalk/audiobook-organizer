@@ -56,6 +56,19 @@ graph TD
   end
 ```
 
+## Model assignments (authoritative — overrides per-task `Agent:` lines)
+
+Match model to task character to control spend: Haiku for mechanical well-specified
+changes, Sonnet for standard implementation/integration, Opus for the
+irreversible-stakes iTunes writer internals. Fable 5 is coordinator/reviewer only and
+implements nothing.
+
+| Model | Tasks | Rationale |
+|---|---|---|
+| **haiku-4.5** | T009, T010, T018, T023, T025, T027 | S-effort, mechanical, fully specified steps; failure is cheap and caught by `make ci` |
+| **sonnet-4.6** | T001, T002, T007, T008, T011, T012, T013, T014, T015, T016, T017, T019, T020, T021, T022, T024, T026 | standard implementation + integration work; ⚠-flagged ones (T012, T015, T019, T020, T022) get mandatory Fable line-review before merge |
+| **opus-4.8** | T003, T004, T005, T006 | iTunes writer internals — binary-format correctness with irreversible production stakes; cheapest place to pay for the strongest model |
+
 ## Parallel execution groups
 
 | Wave | Tasks (parallel within wave) | Notes |
@@ -327,7 +340,9 @@ Priority: P2 · Effort: M · Agent: sonnet-4.6 · Depends: [T005]
 
 **Context.** CRIT-2: 0x0D must hold a native Windows path, 0x0B the percent-escaped
 `file://localhost/` URL; our writers pass through whatever callers provide (URLs observed
-in 83,783 0x0D blocks of damaged-1/3, staging-dir paths in damaged-4).
+in 83,783 0x0D blocks of damaged-1/3, staging-dir paths in damaged-4). **The normative
+field contract — including the podcast (no-0x0D) and UTF-16 edge cases — is SPEC 2 §1b;
+implement exactly that, it is census-verified and not open to interpretation.**
 
 **Exact files to change**
 - `internal/itunes/location_pair.go` — NEW: `type LocationPair struct{ WinPath, URL string }`;
