@@ -1,5 +1,5 @@
 // file: internal/itunes/itl_safety_contract.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 404bbed1-87ba-4e56-b9e4-a492a2281163
 //
 // ITLSafetyContract — the iTunes writeback write-safety contract (fable5 TASK-003).
@@ -1021,26 +1021,23 @@ func forEachTrackLocations(data []byte, fn func(trackOffset int, loc0D, loc0B st
 	}
 }
 
-// decodeMhohString decodes the string carried by an mhoh block, reading the
-// legacy +27 encoding flag (the reader is intentionally permissive so that
-// location-form operates on the DECODED string regardless of how it was stamped
-// — SPEC §2 "on decoded strings").
+// decodeMhohString decodes the string carried by an mhoh block using the
+// DUAL-convention decoder (TASK-005): +27!=0 → legacy flag at +27; +27==0 →
+// corpus +24 indicator (1=latin1, 3=UTF-16LE). This makes location-form operate
+// on the DECODED string regardless of how it was stamped (SPEC §2 "on decoded
+// strings"), correctly handling iTunes-conformant UTF-16LE locations that the
+// old +27-only reader would have mis-decoded as ASCII.
 func decodeMhohString(data []byte, offset, span int) string {
 	if span < 40 || offset+40 > len(data) {
 		return ""
 	}
-	encodingFlag := data[offset+16+11]
-	strLen := int(readUint32LE(data, offset+28))
-	strStart := offset + 40
-	if strStart+strLen > offset+span || strStart+strLen > len(data) {
-		strLen = offset + span - strStart
-		if strLen < 0 {
-			return ""
-		}
+	blockLen := span
+	if offset+blockLen > len(data) {
+		blockLen = len(data) - offset
 	}
-	s, err := decodeHohmString(data[strStart:strStart+strLen], encodingFlag)
+	s, err := decodeMhohBlock(data[offset : offset+blockLen])
 	if err != nil {
-		return string(data[strStart : strStart+strLen])
+		return ""
 	}
 	return s
 }

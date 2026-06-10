@@ -1,5 +1,5 @@
 // file: internal/itunes/itl_le_metadata_update.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f01234567890
 //
 // Update track metadata (title, artist, album, genre, etc.) in LE-format
@@ -188,7 +188,12 @@ func UpdateMetadataLE(data []byte, updates []ITLMetadataUpdate) ([]byte, int) {
 		appendOrder := []uint32{0x0D, 0x02, 0x03, 0x04, 0x05, 0x06, 0x0C}
 		for _, ht := range appendOrder {
 			if val, ok := replacements[ht]; ok && !replaced[ht] {
-				newMhohs.Write(buildMhohLE(ht, val))
+				// buildMhohLE returns built=false for hohmTypes absent from the
+				// corpus table — skip rather than write an invented encoding
+				// (CRIT-1). All appendOrder types are present in the table.
+				if chunk, built := buildMhohLE(ht, val); built {
+					newMhohs.Write(chunk)
+				}
 			}
 		}
 

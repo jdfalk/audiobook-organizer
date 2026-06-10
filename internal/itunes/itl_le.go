@@ -1,11 +1,12 @@
 // file: internal/itunes/itl_le.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b4e8d927-6c3f-4a81-9e02-f7b3c8d4e56a
 
 package itunes
 
 import (
 	"bytes"
+	"log"
 	"strings"
 )
 
@@ -293,18 +294,13 @@ func parseMhohLE(data []byte, offset, length int, track *ITLTrack) {
 		return
 	}
 	hohmType := int(readUint32LE(data, offset+12))
-	encodingFlag := data[offset+16+11]
 
-	strDataLen := int(readUint32LE(data, offset+28))
-	strStart := offset + 40
-	if strStart+strDataLen > offset+length || strStart+strDataLen > len(data) {
-		strDataLen = offset + length - strStart
-		if strDataLen < 0 {
-			return
-		}
+	// Dual-convention decode (TASK-005): +27!=0 → legacy flag; +27==0 → +24 table.
+	blockLen := length
+	if offset+blockLen > len(data) {
+		blockLen = len(data) - offset
 	}
-
-	s, err := decodeHohmString(data[strStart:strStart+strDataLen], encodingFlag)
+	s, err := decodeMhohBlock(data[offset : offset+blockLen])
 	if err != nil {
 		return
 	}
@@ -411,16 +407,12 @@ func parsePlaylistMhohLE(data []byte, offset, length int, playlist *ITLPlaylist)
 		if length < 40 {
 			return
 		}
-		encodingFlag := data[offset+16+11]
-		strDataLen := int(readUint32LE(data, offset+28))
-		strStart := offset + 40
-		if strStart+strDataLen > offset+length || strStart+strDataLen > len(data) {
-			strDataLen = offset + length - strStart
-			if strDataLen < 0 {
-				return
-			}
+		// Dual-convention decode (TASK-005).
+		blockLen := length
+		if offset+blockLen > len(data) {
+			blockLen = len(data) - offset
 		}
-		s, err := decodeHohmString(data[strStart:strStart+strDataLen], encodingFlag)
+		s, err := decodeMhohBlock(data[offset : offset+blockLen])
 		if err != nil {
 			return
 		}
@@ -737,36 +729,44 @@ func shouldUpdateMhohLE(data []byte, offset, length int, currentPID string, upda
 	return newLoc, ok
 }
 
-// rewriteHohmLocationLE rewrites a location mhoh block with a new location string.
+// rewriteHohmLocationLE rewrites a location/metadata mhoh block with a new
+// string, emitting an iTunes-conformant header via encodeMhohITunes (TASK-005,
+// CRIT-1). This is the "replace" writer path; buildMhohLE is the "append" path —
+// both build the SAME 40-byte header from the SAME inputs, so for identical
+// (hohmType, value) inputs their output is byte-identical.
+//
+// WHY this stops blind-copying +16..+27: the OLD code copied the original
+// block's bytes +16..+27 (including the +24 indicator) and only overwrote +27
+// with an invented "encoding flag" (1/3) — propagating whatever stale/foreign
+// header the source carried and stamping the CRIT-1 corruption byte. The header
+// is now set DETERMINISTICALLY: +24 = corpus indicator, +27 = 0x00, +32..+39 = 0.
+//
+// If the block's hohmType is absent from the corpus table, the original block is
+// returned UNMODIFIED (caller-visible WARN is emitted by shouldUpdateMhohLE
+// callers; the function never invents an encoding for an unknown type).
 func rewriteHohmLocationLE(data []byte, offset, length int, newLocation string) []byte {
-	encodedStr, encodingFlag := encodeHohmString(newLocation)
+	hohmType := readUint32LE(data, offset+12)
 
-	newStrDataLen := len(encodedStr)
-	newTotalLen := 40 + newStrDataLen
-
-	// Preserve the original headerLen (offset+4) — it's the fixed header size (typically 24).
-	// Only update totalLen (offset+8) which includes the variable-length string data.
-	origHeaderLen := readUint32LE(data, offset+4)
-
-	buf := make([]byte, newTotalLen)
-	// Copy tag
-	copy(buf[0:4], data[offset:offset+4])
-	// Preserve original headerLen (LE) — NOT the total length
-	writeUint32LE(buf, 4, origHeaderLen)
-	// New totalLen (LE) — this is the full chunk size including string data
-	writeUint32LE(buf, 8, uint32(newTotalLen))
-	// hohmType (LE)
-	copy(buf[12:16], data[offset+12:offset+16])
-	// Copy the 12-byte header, update encoding flag
-	if offset+28 <= len(data) {
-		copy(buf[16:28], data[offset+16:offset+28])
+	payload, hdr, err := encodeMhohITunes(hohmType, newLocation)
+	if err != nil {
+		// Out-of-corpus type: preserve the original block byte-for-byte rather
+		// than write an invented header (CRIT-1). WARN so the skip is visible.
+		log.Printf("[itl] WARN rewriteHohmLocationLE: hohmType 0x%X absent from corpus table; preserving original block unmodified: %v", hohmType, err)
+		out := make([]byte, length)
+		copy(out, data[offset:offset+length])
+		return out
 	}
-	buf[16+11] = encodingFlag
-	// String data length (LE)
-	writeUint32LE(buf, 28, uint32(newStrDataLen))
-	// 8 bytes zeros at 32-39 (already zero)
-	// String data
-	copy(buf[40:], encodedStr)
+
+	buf := make([]byte, hdr.TotalLen)
+	copy(buf[0:4], data[offset:offset+4]) // tag ("mhoh")
+	writeUint32LE(buf, 4, hdr.HeaderLen)  // headerLen: fixed 24 (NOT totalLen — K5)
+	writeUint32LE(buf, 8, hdr.TotalLen)   // totalLen: 40 + strLen
+	writeUint32LE(buf, 12, hohmType)      // hohmType
+	writeUint32LE(buf, 24, hdr.At24)      // +24: corpus encoding indicator (K3)
+	// byte +27 stays 0x00 (zero-initialized) — iTunes' invariant (K3).
+	writeUint32LE(buf, 28, hdr.StrLen) // strLen
+	// bytes +32..+39 stay zero (reserved tail).
+	copy(buf[40:], payload)
 
 	return buf
 }

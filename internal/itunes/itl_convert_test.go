@@ -22,6 +22,17 @@ import (
 // Helpers: build a minimal synthetic ITL file (LE / v12 format)
 // ---------------------------------------------------------------------------
 
+// mustBuildMhohLE wraps the production buildMhohLE (which now returns
+// ([]byte, ok) — ok=false for hohmTypes absent from the corpus table) for use in
+// fixtures where the type is known to be in the table.
+func mustBuildMhohLE(hohmType uint32, value string) []byte {
+	chunk, ok := buildMhohLE(hohmType, value)
+	if !ok {
+		panic("buildMhohLE: hohmType absent from corpus table in test fixture")
+	}
+	return chunk
+}
+
 // buildConvertTestITL constructs a minimal valid ITL binary containing one track
 // and one playlist.  It uses the LE (v12) msdh format the real parser expects.
 func buildConvertTestITL(t *testing.T) []byte {
@@ -33,19 +44,19 @@ func buildConvertTestITL(t *testing.T) []byte {
 	pidLE := [8]byte{0x12, 0x01, 0xCD, 0x23, 0x45, 0x67, 0x89, 0xAB}
 
 	trackContent := buildMithLeForConvert(1001, pidLE, 4096000, 28800000)
-	trackContent = append(trackContent, buildMhohLE(0x02, "Test Audiobook")...)  // Name
-	trackContent = append(trackContent, buildMhohLE(0x04, "Test Author")...)     // Artist
-	trackContent = append(trackContent, buildMhohLE(0x03, "Test Series")...)     // Album
-	trackContent = append(trackContent, buildMhohLE(0x05, "Audiobooks")...)      // Genre
-	trackContent = append(trackContent, buildMhohLE(0x06, "MPEG audio file")...) // Kind
-	trackContent = append(trackContent, buildMhohLE(0x0D,
+	trackContent = append(trackContent, mustBuildMhohLE(0x02, "Test Audiobook")...)  // Name
+	trackContent = append(trackContent, mustBuildMhohLE(0x04, "Test Author")...)     // Artist
+	trackContent = append(trackContent, mustBuildMhohLE(0x03, "Test Series")...)     // Album
+	trackContent = append(trackContent, mustBuildMhohLE(0x05, "Audiobooks")...)      // Genre
+	trackContent = append(trackContent, mustBuildMhohLE(0x06, "MPEG audio file")...) // Kind
+	trackContent = append(trackContent, mustBuildMhohLE(0x0D,
 		"file://localhost/mnt/bigdata/books/test.mp3")...) // Location
 
 	trackMsdh := buildMsdhLE(0x01, trackContent)
 
 	// Playlist: one miph + one mhoh title + one mtph referencing track 1001
 	playlistContent := buildMiphLEMin(1)
-	playlistContent = append(playlistContent, buildMhohLE(0x64, "My Playlist")...) // title
+	playlistContent = append(playlistContent, mustBuildMhohLE(0x64, "My Playlist")...) // title
 	playlistContent = append(playlistContent, buildMtphLEMin(1001)...)
 
 	playlistMsdh := buildMsdhLE(0x02, playlistContent)
@@ -268,9 +279,9 @@ func TestParseITLAsLibrary_LocationFallback(t *testing.T) {
 	pidLE := [8]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
 
 	trackContent := buildMithLeForConvert(2002, pidLE, 1024, 60000)
-	trackContent = append(trackContent, buildMhohLE(0x02, "Fallback Track")...)
+	trackContent = append(trackContent, mustBuildMhohLE(0x02, "Fallback Track")...)
 	// Only 0x0B (LocalURL), no 0x0D (Location)
-	trackContent = append(trackContent, buildMhohLE(0x0B, "file://localhost/mnt/fallback.mp3")...)
+	trackContent = append(trackContent, mustBuildMhohLE(0x0B, "file://localhost/mnt/fallback.mp3")...)
 
 	trackMsdh := buildMsdhLE(0x01, trackContent)
 
@@ -319,7 +330,7 @@ func TestParseITLAsLibrary_PlayDateConversion(t *testing.T) {
 	// Overwrite PlayCount offset to set LastPlayDate at offset 100.
 	putUint32LE(buf, 100, macSecs)
 
-	trackContent := append(buf, buildMhohLE(0x02, "PlayDate Track")...)
+	trackContent := append(buf, mustBuildMhohLE(0x02, "PlayDate Track")...)
 	trackMsdh := buildMsdhLE(0x01, trackContent)
 
 	version := "12.13.10.3"

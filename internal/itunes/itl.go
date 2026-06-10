@@ -1,7 +1,7 @@
 // file: internal/itunes/itl.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: 7f2a8b3c-4d5e-6f01-a2b3-c4d5e6f7a8b9
-// last-edited: 2026-06-09
+// last-edited: 2026-06-10
 
 package itunes
 
@@ -709,7 +709,11 @@ func UpdateITLLocations(inputPath, outputPath string, updates []ITLLocationUpdat
 		return nil, fmt.Errorf("decompressing ITL payload: %w", err)
 	}
 
-	// Walk and rewrite — dispatch on endianness
+	// Walk and rewrite — dispatch on endianness.
+	// BE writeback is refused (K12): see ErrBEWritebackUnsupported.
+	if !detectLE(decompressed) {
+		return nil, ErrBEWritebackUnsupported
+	}
 	var newData []byte
 	var updatedCount int
 	if detectLE(decompressed) {
@@ -912,6 +916,13 @@ func RewriteITLExtensions(inputPath, outputPath string, oldExt, newExt string) (
 	decompressed, wasCompressed, err := itlInflate(decrypted)
 	if err != nil {
 		return nil, fmt.Errorf("decompressing ITL payload: %w", err)
+	}
+
+	// rewriteExtensionsInChunks is a BE ("hohm") path. BE writeback is refused
+	// (K12): the BE writer shares CRIT-1's +27 flag invention with no corpus to
+	// validate against. Production is LE; refuse rather than corrupt.
+	if !detectLE(decompressed) {
+		return nil, ErrBEWritebackUnsupported
 	}
 
 	newData, count := rewriteExtensionsInChunks(decompressed, oldExt, newExt)
