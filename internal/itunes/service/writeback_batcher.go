@@ -1,5 +1,5 @@
 // file: internal/itunes/service/writeback_batcher.go
-// version: 5.1.0
+// version: 5.2.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e90
 //
 // Combined write-back batcher: handles location updates, track additions,
@@ -18,6 +18,7 @@ package itunesservice
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"os"
@@ -110,6 +111,13 @@ type WriteBackBatcher struct {
 	// (pre-wiring path in older test fixtures); runtime call sites
 	// nil-guard.
 	store WriteBackStore
+
+	// libraryNotInUse is an optional pre-flight check wired to the
+	// iTunes sync-service running-state signal. When non-nil, flush()
+	// calls it before writing; a non-nil error aborts the write and
+	// the batch is re-queued on the next timer tick rather than lost.
+	// Set via SetLibraryNotInUse. Safe to call after construction.
+	libraryNotInUse func() error
 }
 
 // NewWriteBackBatcher creates a batcher with the given debounce delay.
@@ -135,6 +143,16 @@ func (b *WriteBackBatcher) UpdateConfig(cfg WriteBackBatcherConfig) {
 	b.itlWriteBackEnabled = cfg.ITLWriteBackEnabled
 	b.libraryWritePath = cfg.LibraryWritePath
 	b.cfgMu.Unlock()
+}
+
+// SetLibraryNotInUse wires the iTunes-running signal into the batcher.
+// The check function is called immediately before each ITL write; if it
+// returns a non-nil error the write is skipped this cycle and the pending
+// state is preserved for the next timer tick. Safe to call after Start.
+func (b *WriteBackBatcher) SetLibraryNotInUse(check func() error) {
+	b.mu.Lock()
+	b.libraryNotInUse = check
+	b.mu.Unlock()
 }
 
 // autoWriteBackEnabled returns the current AutoWriteBack value under RLock.
@@ -291,9 +309,63 @@ func (b *WriteBackBatcher) flush() {
 		return
 	}
 
+	// Check whether iTunes is currently using the library file. When
+	// the check function is wired, a non-nil error means "in use":
+	// skip this cycle so we don't race a concurrent iTunes write.
+	// The pending state was already snapshotted and cleared above, so
+	// we re-enqueue the book IDs to preserve them for the next tick.
+	b.mu.Lock()
+	notInUse := b.libraryNotInUse
+	b.mu.Unlock()
+	if notInUse != nil {
+		if err := notInUse(); err != nil {
+			slog.Warn("iTunes write-back deferred: library in use", "reason", err)
+			// Re-enqueue so the work is not lost. resetTimer must be called
+			// while b.mu is held (same as Enqueue / EnqueueAdd / EnqueueRemove).
+			b.mu.Lock()
+			for _, id := range bookIDs {
+				b.pendingBooks[id] = true
+			}
+			b.pendingAdds = append(b.pendingAdds, adds...)
+			for pid := range removes {
+				b.pendingRemoves[pid] = true
+			}
+			if b.firstEnqueue.IsZero() && len(bookIDs)+len(adds)+len(removes) > 0 {
+				b.firstEnqueue = time.Now()
+			}
+			b.resetTimer()
+			b.mu.Unlock()
+			return
+		}
+	}
+
+	// Parse the current ITL library to enable diff-before-write.
+	// We build a PID → track index once per flush, then compare each
+	// desired update against the current values. This prevents writing
+	// ~90K mhoh blocks every sync when only a handful of tracks have
+	// actually changed (HIGH-3 / T008 fix).
+	//
+	// Parse failure is non-fatal: if we can't read the library (e.g.
+	// first-run or file temporarily locked), we skip the metadata diff
+	// and write everything. The safety contract in SafeWriteITL still
+	// validates the output before landing it.
+	var tracksByPID map[string]*itunes.ITLTrack
+	if lib, err := parseITLFn(writePath); err != nil {
+		slog.Warn("iTunes write-back could not parse library for diff; writing all metadata updates",
+			"err", err, "path", writePath)
+	} else {
+		tracksByPID = make(map[string]*itunes.ITLTrack, len(lib.Tracks))
+		for i := range lib.Tracks {
+			t := &lib.Tracks[i]
+			pid := strings.ToLower(hex.EncodeToString(t.PersistentID[:]))
+			tracksByPID[pid] = t
+		}
+	}
+
 	// Build location and metadata updates from book IDs
 	var locationUpdates []itunes.ITLLocationUpdate
 	var metadataUpdates []itunes.ITLMetadataUpdate
+	var skippedMetadata, changedMetadata int
 	for _, id := range bookIDs {
 		book, err := store.GetBookByID(id)
 		if err != nil || book == nil {
@@ -337,31 +409,88 @@ func (b *WriteBackBatcher) flush() {
 				if f.ITunesPersistentID == "" {
 					continue
 				}
+				// Diff-before-write (T008 / HIGH-3): only enqueue an
+				// ITLMetadataUpdate (and/or location update) when at
+				// least one field differs from the current library value.
+				// ITLTrack.Composer is not stored in the parsed struct
+				// (0x0C not read), so it is always included in the update
+				// when other fields change.
+				pidKey := strings.ToLower(f.ITunesPersistentID)
+				desiredLoc := ""
 				if f.ITunesPath != "" {
 					// SPEC §1b / TASK-006: normalize f.ITunesPath (which has
-					// historically held BOTH native paths and file:// URLs) into
-					// the canonical WinPath. The LE writer derives the 0x0B URL
-					// from it. Unmappable values (relative, staging-dir leak,
-					// podcast URL) are NOT written — per-item WARN + metric, never
-					// a raw value into 0x0D (the CRIT-2 corruption).
+					// historically held BOTH native paths and file:// URLs)
+					// into the canonical WinPath. Unmappable values are NOT
+					// written — per-item WARN + metric, never a raw value into
+					// 0x0D (the CRIT-2 corruption).
 					if winPath, ok := normalizeITunesLocation(f.ITunesPersistentID, f.ITunesPath); ok {
-						locationUpdates = append(locationUpdates, itunes.ITLLocationUpdate{
-							PersistentID: f.ITunesPersistentID,
-							NewLocation:  winPath,
-						})
+						desiredLoc = winPath
 					}
 				}
-				// Always push metadata so iTunes has current values
-				metadataUpdates = append(metadataUpdates, itunes.ITLMetadataUpdate{
-					PersistentID: f.ITunesPersistentID,
-					Name:         f.Title,
-					Album:        book.Title,
-					Artist:       authorName,
-					Composer:     narrator,
-					Genre:        genre,
-				})
+
+				if cur, ok := tracksByPID[pidKey]; ok {
+					// We have current library state: compare field by field.
+					// Location update is suppressed when the desired path
+					// matches the current 0x0D value (or is unmappable/empty).
+					locationChanged := desiredLoc != "" && cur.Location != desiredLoc
+					metadataChanged := cur.Name != f.Title ||
+						cur.Album != book.Title ||
+						cur.Artist != authorName ||
+						cur.Genre != genre
+
+					if !locationChanged && !metadataChanged {
+						skippedMetadata++
+						continue
+					}
+					if locationChanged {
+						locationUpdates = append(locationUpdates, itunes.ITLLocationUpdate{
+							PersistentID: f.ITunesPersistentID,
+							NewLocation:  desiredLoc,
+						})
+					}
+					if metadataChanged {
+						changedMetadata++
+						metadataUpdates = append(metadataUpdates, itunes.ITLMetadataUpdate{
+							PersistentID: f.ITunesPersistentID,
+							Name:         f.Title,
+							Album:        book.Title,
+							Artist:       authorName,
+							Composer:     narrator,
+							Genre:        genre,
+						})
+					}
+				} else {
+					// No current library state for this PID (track is new or
+					// library parse failed) — emit both unconditionally.
+					if desiredLoc != "" {
+						locationUpdates = append(locationUpdates, itunes.ITLLocationUpdate{
+							PersistentID: f.ITunesPersistentID,
+							NewLocation:  desiredLoc,
+						})
+					}
+					changedMetadata++
+					metadataUpdates = append(metadataUpdates, itunes.ITLMetadataUpdate{
+						PersistentID: f.ITunesPersistentID,
+						Name:         f.Title,
+						Album:        book.Title,
+						Artist:       authorName,
+						Composer:     narrator,
+						Genre:        genre,
+					})
+				}
 			}
 		} else if book.ITunesPersistentID != nil && *book.ITunesPersistentID != "" {
+			pidKey := strings.ToLower(*book.ITunesPersistentID)
+			if cur, ok := tracksByPID[pidKey]; ok {
+				if cur.Name == book.Title &&
+					cur.Album == book.Title &&
+					cur.Artist == authorName &&
+					cur.Genre == genre {
+					skippedMetadata++
+					continue
+				}
+			}
+			changedMetadata++
 			metadataUpdates = append(metadataUpdates, itunes.ITLMetadataUpdate{
 				PersistentID: *book.ITunesPersistentID,
 				Name:         book.Title,
@@ -384,7 +513,12 @@ func (b *WriteBackBatcher) flush() {
 		return
 	}
 
-	slog.Info("iTunes write-back flushing location updates, metadata updates, adds, removes", "locationUpdates_count", len(locationUpdates), "metadataUpdates_count", len(metadataUpdates), "adds_count", len(adds), "removes_count", len(removes))
+	slog.Info("iTunes write-back flushing",
+		"locationUpdates", len(locationUpdates),
+		"metadataUpdates_changed", changedMetadata,
+		"metadataUpdates_skipped", skippedMetadata,
+		"adds", len(adds),
+		"removes", len(removes))
 
 	if dryRun {
 		slog.Info("iTunes write-back DRY-RUN active — no file written",
@@ -416,13 +550,14 @@ func (b *WriteBackBatcher) flush() {
 
 // Test hooks. Production code wires these to the real itunes
 // package functions at package init. Tests override them so the
-// safe-write cycle can be unit-tested without needing a valid
-// ITL fixture on disk — the fixture itself is fragile, format
-// changes have broken it before, and mocking the two external
-// calls lets us test the logic in isolation.
+// safe-write cycle and diff-before-write logic can be unit-tested
+// without needing a valid ITL fixture on disk — the fixture itself
+// is fragile, format changes have broken it before, and mocking the
+// external calls lets us test the logic in isolation.
 var (
 	itlValidateFn        = itunes.ValidateITL
 	itlApplyOperationsFn = itunes.ApplyITLOperations
+	parseITLFn           = itunes.ParseITL
 )
 
 // SafeWriteITL performs a backup → write-temp → validate-temp →

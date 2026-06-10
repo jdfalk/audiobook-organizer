@@ -1,16 +1,19 @@
 // file: internal/itunes/service/writeback_batcher_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: d4e5f6a7-b8c9-0123-def4-56789abcdef0
 
 package itunesservice
 
 import (
+	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 	"github.com/falkcorp/audiobook-organizer/internal/itunes"
 )
 
@@ -399,5 +402,204 @@ func TestFlush_DryRunSkipsWrite(t *testing.T) {
 	got, _ := os.ReadFile(itlPath)
 	if string(got) != "untouched" {
 		t.Errorf("dry-run modified the ITL file: got %q want %q", string(got), "untouched")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Diff-before-write tests (T008 / HIGH-3)
+// ---------------------------------------------------------------------------
+
+// withFakeParseITLHook replaces the parseITLFn package-level hook with a
+// test double that returns the provided library and restores the original on
+// cleanup. Analogous to withFakeITLHooks.
+func withFakeParseITLHook(t *testing.T, lib *itunes.ITLLibrary, err error) {
+	t.Helper()
+	prev := parseITLFn
+	parseITLFn = func(_ string) (*itunes.ITLLibrary, error) { return lib, err }
+	t.Cleanup(func() { parseITLFn = prev })
+}
+
+// makePIDBytes builds an [8]byte PID from a 16-char hex string, stored in
+// the BE (MSB-first) order that parseMithLE writes into ITLTrack.PersistentID.
+func makePIDBytes(hexStr string) [8]byte {
+	var pid [8]byte
+	b, err := hex.DecodeString(hexStr)
+	if err != nil || len(b) != 8 {
+		panic("makePIDBytes: invalid hex " + hexStr)
+	}
+	copy(pid[:], b)
+	return pid
+}
+
+// TestFlush_NoChangeProducesZeroMetadataUpdates is the primary T008 regression
+// guard: when the ITL library already contains identical Name/Album/Artist/
+// Genre/Location values, flush must NOT emit any ITLMetadataUpdate entries and
+// SafeWriteITL must NOT be called. Without the diff-before-write fix this test
+// would have witnessed ~90K unnecessary mhoh writes every sync.
+func TestFlush_NoChangeProducesZeroMetadataUpdates(t *testing.T) {
+	const pid = "aabbccdd11223344"
+	const bookID = "book-no-change"
+
+	dir := t.TempDir()
+	itlPath := makeITL(t, dir, "library.itl", "x")
+
+	// Build a fake ITL library whose single track already matches
+	// what the DB wants to write. The diff should see no change and
+	// produce zero updates.
+	fakeLib := &itunes.ITLLibrary{
+		Tracks: []itunes.ITLTrack{
+			{
+				PersistentID: makePIDBytes(pid),
+				Name:         "Chapter 1",
+				Album:        "Great Book",
+				Artist:       "Jane Author",
+				Genre:        "Audiobook",
+				Location:     `C:\Books\Great Book\Chapter 1.m4b`,
+				DateAdded:    time.Now(),
+			},
+		},
+	}
+	withFakeParseITLHook(t, fakeLib, nil)
+
+	applyCalls := 0
+	withFakeITLHooks(t,
+		func(string) error { return nil },
+		func(in, out string, _ itunes.ITLOperationSet) (*itunes.ITLWriteBackResult, error) {
+			applyCalls++
+			data, _ := os.ReadFile(in)
+			_ = os.WriteFile(out, data, 0o644)
+			return &itunes.ITLWriteBackResult{UpdatedCount: 0, OutputPath: out}, nil
+		},
+	)
+
+	isPrimary := true
+	title := "Great Book"
+	authorID := 42
+	authorName := "Jane Author"
+	store := &database.MockStore{
+		GetBookByIDFunc: func(id string) (*database.Book, error) {
+			return &database.Book{
+				ID:               bookID,
+				Title:            title,
+				AuthorID:         &authorID,
+				IsPrimaryVersion: &isPrimary,
+			}, nil
+		},
+		GetAuthorByIDFunc: func(id int) (*database.Author, error) {
+			return &database.Author{Name: authorName}, nil
+		},
+		GetBookFilesFunc: func(_ string) ([]database.BookFile, error) {
+			return []database.BookFile{
+				{
+					ITunesPersistentID: pid,
+					Title:              "Chapter 1",
+					ITunesPath:         `C:\Books\Great Book\Chapter 1.m4b`,
+				},
+			}, nil
+		},
+	}
+
+	b := &WriteBackBatcher{
+		pendingBooks:        map[string]bool{bookID: true},
+		pendingRemoves:      map[string]bool{},
+		autoWriteBack:       true,
+		itlWriteBackEnabled: true,
+		libraryWritePath:    itlPath,
+		store:               store,
+	}
+	b.flush()
+
+	if applyCalls != 0 {
+		t.Errorf("no-change: expected 0 apply calls (no metadata changes), got %d", applyCalls)
+	}
+}
+
+// TestFlush_SingleFieldChangeProducesOneUpdate verifies that when exactly one
+// field (Album) differs between the DB and the parsed library, flush emits
+// exactly one ITLMetadataUpdate and SafeWriteITL is called once.
+func TestFlush_SingleFieldChangeProducesOneUpdate(t *testing.T) {
+	const pid = "aabbccdd11223344"
+	const bookID = "book-single-change"
+
+	dir := t.TempDir()
+	itlPath := makeITL(t, dir, "library.itl", "x")
+
+	// Library has stale album name; DB wants "Great Book (New Edition)".
+	fakeLib := &itunes.ITLLibrary{
+		Tracks: []itunes.ITLTrack{
+			{
+				PersistentID: makePIDBytes(pid),
+				Name:         "Chapter 1",
+				Album:        "Great Book", // stale
+				Artist:       "Jane Author",
+				Genre:        "Audiobook",
+				Location:     `C:\Books\Great Book\Chapter 1.m4b`,
+				DateAdded:    time.Now(),
+			},
+		},
+	}
+	withFakeParseITLHook(t, fakeLib, nil)
+
+	var capturedOps itunes.ITLOperationSet
+	applyCalls := 0
+	withFakeITLHooks(t,
+		func(string) error { return nil },
+		func(in, out string, ops itunes.ITLOperationSet) (*itunes.ITLWriteBackResult, error) {
+			applyCalls++
+			capturedOps = ops
+			data, _ := os.ReadFile(in)
+			_ = os.WriteFile(out, data, 0o644)
+			return &itunes.ITLWriteBackResult{UpdatedCount: 1, OutputPath: out}, nil
+		},
+	)
+
+	isPrimary := true
+	updatedTitle := "Great Book (New Edition)"
+	authorID := 42
+	authorName := "Jane Author"
+	store := &database.MockStore{
+		GetBookByIDFunc: func(id string) (*database.Book, error) {
+			return &database.Book{
+				ID:               bookID,
+				Title:            updatedTitle, // DB has new title/album
+				AuthorID:         &authorID,
+				IsPrimaryVersion: &isPrimary,
+			}, nil
+		},
+		GetAuthorByIDFunc: func(id int) (*database.Author, error) {
+			return &database.Author{Name: authorName}, nil
+		},
+		GetBookFilesFunc: func(_ string) ([]database.BookFile, error) {
+			return []database.BookFile{
+				{
+					ITunesPersistentID: pid,
+					Title:              "Chapter 1",
+					ITunesPath:         `C:\Books\Great Book\Chapter 1.m4b`,
+				},
+			}, nil
+		},
+	}
+
+	b := &WriteBackBatcher{
+		pendingBooks:        map[string]bool{bookID: true},
+		pendingRemoves:      map[string]bool{},
+		autoWriteBack:       true,
+		itlWriteBackEnabled: true,
+		libraryWritePath:    itlPath,
+		store:               store,
+	}
+	b.flush()
+
+	if applyCalls != 1 {
+		t.Errorf("single-change: expected 1 apply call, got %d", applyCalls)
+	}
+	if len(capturedOps.MetadataUpdates) != 1 {
+		t.Fatalf("single-change: expected 1 MetadataUpdate, got %d", len(capturedOps.MetadataUpdates))
+	}
+	if capturedOps.MetadataUpdates[0].Album != updatedTitle {
+		t.Errorf("single-change: expected Album=%q, got %q", updatedTitle, capturedOps.MetadataUpdates[0].Album)
+	}
+	if strings.ToLower(capturedOps.MetadataUpdates[0].PersistentID) != pid {
+		t.Errorf("single-change: expected PID=%q, got %q", pid, capturedOps.MetadataUpdates[0].PersistentID)
 	}
 }
