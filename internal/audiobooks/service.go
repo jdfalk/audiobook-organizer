@@ -1,5 +1,5 @@
 // file: internal/audiobooks/service.go
-// version: 1.29.0
+// version: 1.30.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 // last-edited: 2026-05-29
 
@@ -2371,9 +2371,10 @@ func (svc *AudiobookService) DeleteAudiobook(ctx context.Context, id string, opt
 		opts = &DeleteAudiobookOptions{}
 	}
 
-	// Get the book first to access its hash
+	// Get the book first to access its hash.
+	// PebbleStore returns nil, nil for a not-found book; check both.
 	book, err := svc.store.GetBookByID(id)
-	if err != nil {
+	if err != nil || book == nil {
 		return nil, fmt.Errorf("audiobook not found")
 	}
 
