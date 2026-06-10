@@ -1,6 +1,7 @@
 // file: internal/server/user_tags.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef0123456789
+// last-edited: 2026-06-10
 
 package server
 
@@ -53,11 +54,11 @@ func (s *Server) setBookUserTags(c *gin.Context) {
 			validTags = append(validTags, t)
 		}
 	}
-	if err := store.SetBookUserTags(id, validTags); err != nil {
+	if err := store.SetBookTags(id, validTags); err != nil {
 		httputil.InternalError(c, "failed to set tags", err)
 		return
 	}
-	tags, err := store.GetBookUserTags(id)
+	tags, err := store.GetBookTags(id)
 	if err != nil {
 		httputil.InternalError(c, "failed to get tags after set", err)
 		return
@@ -88,11 +89,11 @@ func (s *Server) addBookUserTag(c *gin.Context) {
 		return
 	}
 	tag := normalizeTag(req.Tag)
-	if err := store.AddBookUserTag(id, tag); err != nil {
+	if err := store.AddBookTag(id, tag); err != nil {
 		httputil.InternalError(c, "failed to add tag", err)
 		return
 	}
-	tags, err := store.GetBookUserTags(id)
+	tags, err := store.GetBookTags(id)
 	if err != nil {
 		httputil.InternalError(c, "failed to get tags after add", err)
 		return
@@ -120,11 +121,11 @@ func (s *Server) removeBookUserTag(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, "tag parameter required")
 		return
 	}
-	if err := store.RemoveBookUserTag(id, tag); err != nil {
+	if err := store.RemoveBookTag(id, tag); err != nil {
 		httputil.InternalError(c, "failed to remove tag", err)
 		return
 	}
-	tags, err := store.GetBookUserTags(id)
+	tags, err := store.GetBookTags(id)
 	if err != nil {
 		httputil.InternalError(c, "failed to get tags after remove", err)
 		return
