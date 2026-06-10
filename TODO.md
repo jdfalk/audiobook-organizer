@@ -55,7 +55,7 @@ Review deliverables (see files for full detail):
 - [ ] **F5-T014** Collector refactor + `PairEligibility` + NEW metadata-fuzzy collector
 - [ ] **F5-T015** ⚠ Candidate schema additions + legacy-fingerprint purge (~14K stale 100% rows, HIGH-5)
 - [x] **F5-T016** API: band/score/breakdown fields, `/breakdown`, `/rescore` ✅ PR #1414
-- [x] **F5-T017** Unified Dedup UI tab (feature-flagged until backfill complete) ✅ PR pending
+- [x] **F5-T017** Unified Dedup UI tab (feature-flagged until backfill complete) ✅ PR #1416
 - [ ] **F5-T018** Scan op rationalization (merge embed-scan/async; phase ordering)
 
 ### P3 — Memory & DB optimization (waves 1–5)
