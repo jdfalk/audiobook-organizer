@@ -1,7 +1,7 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.28.0
+// version: 3.29.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
-// last-edited: 2026-06-10
+// last-edited: 2026-06-11
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate, Link as RouterLink } from 'react-router-dom';
@@ -82,18 +82,10 @@ import { CoverLightbox } from '../components/CoverLightbox';
 import { UnifiedDedupTab } from '../components/dedup/UnifiedDedupTab';
 import ViewListIcon from '@mui/icons-material/ViewList';
 
-// Feature flag: UNIFIED_DEDUP_TAB is default-off until backfill completes.
-// Enable by setting localStorage key 'feature_unified_dedup' = '1',
-// or by running in a dev environment (VITE_ENABLE_UNIFIED_DEDUP=true).
+// LSH backfill completed 2026-06-11 (275K files indexed, 15K dedup pairs scored).
+// Feature gate removed — unified dedup tab is now always enabled.
 function isUnifiedDedupEnabled(): boolean {
-  try {
-    if (typeof window !== 'undefined' && localStorage.getItem('feature_unified_dedup') === '1') {
-      return true;
-    }
-  } catch {
-    // localStorage unavailable (e.g. SSR, private browsing)
-  }
-  return import.meta.env.VITE_ENABLE_UNIFIED_DEDUP === 'true';
+  return true;
 }
 
 // ULID pattern: 26-character alphanumeric (0-9, A-Z only)
