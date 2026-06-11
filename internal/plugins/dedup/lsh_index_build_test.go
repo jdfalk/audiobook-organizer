@@ -1,7 +1,7 @@
 // file: internal/plugins/dedup/lsh_index_build_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: c1cf5590-1bc1-4f88-9031-62333bcb593f
-// last-edited: 2026-06-10
+// last-edited: 2026-06-11
 
 package dedup
 
@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/falkcorp/audiobook-organizer/internal/database"
 	"github.com/falkcorp/audiobook-organizer/internal/fingerprint"
@@ -292,5 +293,66 @@ func TestLSHIndexBuild_NoEnqueueWhenAllHaveFingerprints(t *testing.T) {
 
 	if len(reg.enqueuedDefs) != 0 {
 		t.Errorf("expected no EnqueueOp calls when all files have fingerprints, got %d", len(reg.enqueuedDefs))
+	}
+}
+
+// TestLSHIndexBuild_SkipsPermanentlyFailedBooksFromEnqueue verifies that books
+// whose noFP files are ALL permanently failed (FingerprintFailedAt != nil) are
+// NOT enqueued for fingerprint-rescan. This prevents an infinite retry loop for
+// structurally impossible files (too short, corrupt, DRM-protected).
+//
+// A book is only enqueued if at least one of its noFP files has
+// FingerprintFailedAt == nil (i.e., was never tried).
+func TestLSHIndexBuild_SkipsPermanentlyFailedBooksFromEnqueue(t *testing.T) {
+	fp := synthRawLSH(42, 57600)
+	now := time.Now()
+
+	ms := &mockLSHStore{
+		files: []database.BookFile{
+			// book-has-fp: has fingerprint → indexed
+			{ID: "file-1", BookID: "book-has-fp", AcoustIDFingerprint: fp},
+			// book-perm-fail: noFP but ALL files permanently failed → no enqueue
+			{ID: "file-2", BookID: "book-perm-fail", FingerprintFailedAt: &now},
+			{ID: "file-3", BookID: "book-perm-fail", FingerprintFailedAt: &now},
+			// book-never-tried: noFP, never attempted → should be enqueued
+			{ID: "file-4", BookID: "book-never-tried"},
+		},
+		indexedFiles: map[string]bool{},
+	}
+
+	reg := &mockRegistry{}
+	p := &Plugin{
+		store:    &mockLSHStoreAdapter{inner: ms},
+		registry: reg,
+	}
+
+	if err := p.runLSHIndexBuild(context.Background(), json.RawMessage("{}"), &fakeReporter{}); err != nil {
+		t.Fatalf("runLSHIndexBuild: %v", err)
+	}
+
+	// Exactly one EnqueueOp for the one book with never-tried files.
+	if len(reg.enqueuedDefs) != 1 {
+		t.Fatalf("expected 1 EnqueueOp call, got %d", len(reg.enqueuedDefs))
+	}
+
+	params, ok := reg.enqueuedParams[0].(map[string]any)
+	if !ok {
+		t.Fatalf("params not map[string]any")
+	}
+	bookIDs, ok := params["book_ids"].([]string)
+	if !ok {
+		t.Fatalf("book_ids not []string")
+	}
+	if len(bookIDs) != 1 {
+		t.Errorf("expected 1 book_id (book-never-tried only), got %d: %v", len(bookIDs), bookIDs)
+	}
+	if len(bookIDs) > 0 && bookIDs[0] != "book-never-tried" {
+		t.Errorf("expected book-never-tried, got %s", bookIDs[0])
+	}
+	// book-perm-fail must not appear in the enqueue list.
+	for _, id := range bookIDs {
+		if id == "book-perm-fail" {
+			t.Errorf("book-perm-fail (all files permanently failed) should not be enqueued")
+		}
 	}
 }
