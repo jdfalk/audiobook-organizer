@@ -1,0 +1,13 @@
+{
+  "name": "audiobook-organizer",
+  "version": "1.0.0",
+  "description": "Expert Claude Code assistance for the audiobook-organizer codebase — shared context loading, Go/DB/docs/PII specialist agents.",
+  "author": {
+    "name": "audiobook-organizer contributors",
+    "url": "https://github.com/jdfalk/audiobook-organizer"
+  },
+  "homepage": "https://github.com/jdfalk/audiobook-organizer",
+  "repository": "https://github.com/jdfalk/audiobook-organizer",
+  "license": "MIT",
+  "keywords": ["go", "audiobook", "pebbledb", "pii-scanner", "documentation"]
+}
