@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "audiobook-organizer",
+  "description": "Claude Code plugin for the audiobook-organizer project — expert agents, Go/DB/docs/PII specialists, shared context loading.",
+  "owner": {
+    "name": "audiobook-organizer contributors",
+    "url": "https://github.com/jdfalk/audiobook-organizer"
+  },
+  "plugins": [
+    {
+      "name": "audiobook-organizer",
+      "description": "Expert Claude Code assistance for the audiobook-organizer codebase — shared context loading, Go/DB/docs/PII specialist agents.",
+      "author": {
+        "name": "audiobook-organizer contributors"
+      },
+      "category": "development",
+      "source": ".",
+      "homepage": "https://github.com/jdfalk/audiobook-organizer"
+    }
+  ]
+}
