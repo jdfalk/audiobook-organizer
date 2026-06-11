@@ -1,7 +1,7 @@
 // file: internal/plugins/acoustid/backfill.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: f6a7b8c9-d0e1-2345-def0-123456789abc
-// last-edited: 2026-05-31
+// last-edited: 2026-06-11
 
 package acoustid
 
@@ -201,8 +201,15 @@ var audioExtensions = map[string]bool{
 // the caller should stop. Returns the zero value and `false` when the caller
 // should proceed with fpcalc. Pure function, no I/O except os.Stat.
 func fingerprintEligibility(f database.BookFile, force bool) (fingerprintFileOutcome, string, bool) {
-	if (len(f.AcoustIDFingerprint) > 0 || f.AcoustIDSeg0 != "") && !force {
+	// AcoustIDFingerprintDurationSec > 0 is the memdb-safe proxy for "has whole-file fp"
+	// (AcoustIDFingerprint itself is stripped from memdb rows by stripBookFileForMemdb).
+	if (len(f.AcoustIDFingerprint) > 0 || f.AcoustIDSeg0 != "" || f.AcoustIDFingerprintDurationSec > 0) && !force {
 		return fingerprintOutcomeSkipped, "", true
+	}
+	// Permanently-failed files (too short, corrupt, DRM) are skipped unless
+	// force=true, which allows an operator to retry specific files intentionally.
+	if f.FingerprintFailedAt != nil && !force {
+		return fingerprintOutcomeIneligible, "permanent_failure", true
 	}
 	if f.FilePath == "" {
 		return fingerprintOutcomeIneligible, "empty_path", true
@@ -238,16 +245,20 @@ func doFingerprintFile(store database.Store, f database.BookFile, force bool) fi
 	wf, err := fingerprint.FileWholeFingerprint(f.FilePath)
 	if err != nil && !errors.Is(err, fingerprint.ErrNotAvailable) {
 		slog.Warn("fingerprint", "path", f.FilePath, "err", err)
+		markFingerprintFailure(store, f, "fpcalc_error", err.Error())
 		return fingerprintOutcomeFailed
 	}
 
 	updated := f
 
 	if err == nil {
-		// Whole-file path (fpcalc available).
+		// Whole-file path (fpcalc available). Clear any prior failure tombstone.
 		updated.AcoustIDFingerprint = wf.Raw
 		updated.AcoustIDFingerprintDurationSec = wf.DurationSec
 		updated.AcoustIDSeg0 = fingerprint.NormalizeForStorage(fingerprint.DeriveSeg0(wf.Raw))
+		updated.FingerprintFailedAt = nil
+		updated.FingerprintFailureReason = nil
+		updated.FingerprintFailureDetail = nil
 		if force {
 			updated.AcoustIDSeg1 = ""
 			updated.AcoustIDSeg2 = ""
@@ -261,6 +272,7 @@ func doFingerprintFile(store database.Store, f database.BookFile, force bool) fi
 		segs, serr := fingerprint.FileSegments(f.FilePath, f.Duration)
 		if serr != nil {
 			slog.Warn("fingerprint segments", "path", f.FilePath, "err", serr)
+			markFingerprintFailure(store, f, "ffmpeg_error", serr.Error())
 			return fingerprintOutcomeFailed
 		}
 		updated.AcoustIDSeg0 = fingerprint.NormalizeForStorage(segs[0])
@@ -270,6 +282,9 @@ func doFingerprintFile(store database.Store, f database.BookFile, force bool) fi
 		updated.AcoustIDSeg4 = fingerprint.NormalizeForStorage(segs[4])
 		updated.AcoustIDSeg5 = fingerprint.NormalizeForStorage(segs[5])
 		updated.AcoustIDSeg6 = fingerprint.NormalizeForStorage(segs[6])
+		updated.FingerprintFailedAt = nil
+		updated.FingerprintFailureReason = nil
+		updated.FingerprintFailureDetail = nil
 	}
 
 	if err := store.UpdateBookFile(f.ID, &updated); err != nil {
@@ -277,6 +292,20 @@ func doFingerprintFile(store database.Store, f database.BookFile, force bool) fi
 		return fingerprintOutcomeFailed
 	}
 	return fingerprintOutcomeFingerprinted
+}
+
+// markFingerprintFailure writes a permanent failure tombstone to the BookFile row so
+// future fingerprint scans skip it (unless force=true). The tombstone survives
+// service restarts — only a successful fingerprinting run clears it.
+func markFingerprintFailure(store database.Store, f database.BookFile, reason, detail string) {
+	now := time.Now()
+	updated := f
+	updated.FingerprintFailedAt = &now
+	updated.FingerprintFailureReason = &reason
+	updated.FingerprintFailureDetail = &detail
+	if err := store.UpdateBookFile(f.ID, &updated); err != nil {
+		slog.Warn("fingerprint: mark failure", "id", f.ID, "reason", reason, "err", err)
+	}
 }
 
 // synthesizeBookSignatureForBook generates and persists the unified book

@@ -1,7 +1,7 @@
 // file: internal/plugins/dedup/lsh_index_build.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: e61b955e-93bf-4ea6-bb1f-7acd30491fdb
-// last-edited: 2026-06-10
+// last-edited: 2026-06-11
 
 package dedup
 
@@ -126,9 +126,12 @@ func (p *Plugin) runLSHIndexBuild(ctx context.Context, _ json.RawMessage, report
 	prog := sdk.NewProgress(reporter, total)
 	prog.Start(fmt.Sprintf("Indexing LSH bands: 0 / %d files", total))
 
-	var indexed, skipped, noFP, errs int
+	var indexed, skipped, noFP, noFPPermFailed, errs int
 	// Track unique book IDs whose files lack a fingerprint so we can
 	// enqueue acoustid.fingerprint-rescan for them after the main loop.
+	// Books are only added if at least one file has never been tried
+	// (FingerprintFailedAt == nil) — permanently-failed files are excluded
+	// to prevent an infinite rescan loop.
 	noFPBookSet := make(map[string]struct{})
 
 	for i, f := range files {
@@ -144,10 +147,19 @@ func (p *Plugin) runLSHIndexBuild(ctx context.Context, _ json.RawMessage, report
 		default:
 		}
 
-		// Files without a fingerprint are queued for fingerprinting below.
-		if len(f.AcoustIDFingerprint) == 0 {
+		// Files without a fingerprint: only enqueue for fingerprinting if
+		// they haven't permanently failed. Permanently-failed files (too short,
+		// corrupt, DRM) will never yield a fingerprint — don't trigger an
+		// infinite rescan loop. AcoustIDFingerprintDurationSec > 0 is the
+		// memdb-safe proxy for "has whole-file fp" (fingerprint blob stripped
+		// from memdb rows by stripBookFileForMemdb).
+		if len(f.AcoustIDFingerprint) == 0 && f.AcoustIDFingerprintDurationSec == 0 {
 			noFP++
-			noFPBookSet[f.BookID] = struct{}{}
+			if f.FingerprintFailedAt == nil {
+				noFPBookSet[f.BookID] = struct{}{}
+			} else {
+				noFPPermFailed++
+			}
 			continue
 		}
 
@@ -156,6 +168,14 @@ func (p *Plugin) runLSHIndexBuild(ctx context.Context, _ json.RawMessage, report
 		// when re-running after a partial build.
 		if lshStore.HasLSHIndex(f.ID) {
 			skipped++
+			continue
+		}
+
+		// If the fingerprint bytes are nil but the duration proxy indicates a
+		// fingerprint was written (memdb strips AcoustIDFingerprint to save RAM),
+		// we cannot compute subprints. Skip silently; a Pebble-direct run
+		// (UseMemDB=false or cold-start) will index this file on the next pass.
+		if len(f.AcoustIDFingerprint) == 0 {
 			continue
 		}
 
@@ -170,8 +190,13 @@ func (p *Plugin) runLSHIndexBuild(ctx context.Context, _ json.RawMessage, report
 		}
 		if len(subs) == 0 {
 			// Fingerprint too short to sample (< 4 frames after edge trim).
+			// Apply same permanent-failure exclusion as the noFP path above.
 			noFP++
-			noFPBookSet[f.BookID] = struct{}{}
+			if f.FingerprintFailedAt == nil {
+				noFPBookSet[f.BookID] = struct{}{}
+			} else {
+				noFPPermFailed++
+			}
 			continue
 		}
 
@@ -186,12 +211,12 @@ func (p *Plugin) runLSHIndexBuild(ctx context.Context, _ json.RawMessage, report
 		// Progress every lshBuildBatchSize files and at the last file.
 		if (i+1)%lshBuildBatchSize == 0 || i == total-1 {
 			prog.StepN(i+1, fmt.Sprintf(
-				"Indexing LSH bands: %d / %d files (indexed=%d skipped=%d noFP=%d errors=%d)",
-				i+1, total, indexed, skipped, noFP, errs))
+				"Indexing LSH bands: %d / %d files (indexed=%d skipped=%d noFP=%d permFailed=%d errors=%d)",
+				i+1, total, indexed, skipped, noFP, noFPPermFailed, errs))
 			slog.Info("lsh-index-build: progress",
 				"processed", i+1, "total", total,
 				"indexed", indexed, "skipped", skipped,
-				"no_fp", noFP, "errors", errs)
+				"no_fp", noFP, "no_fp_perm_failed", noFPPermFailed, "errors", errs)
 		}
 	}
 
@@ -233,11 +258,12 @@ func (p *Plugin) runLSHIndexBuild(ctx context.Context, _ json.RawMessage, report
 	}
 
 	summary := fmt.Sprintf(
-		"LSH index build complete — %d indexed, %d skipped (already indexed), %d no-fingerprint (%d books queued for rescan), %d errors (of %d files)",
-		indexed, skipped, noFP, len(noFPBookSet), errs, total)
+		"LSH index build complete — %d indexed, %d skipped (already indexed), %d no-fingerprint (%d books queued for rescan, %d permanently failed), %d errors (of %d files)",
+		indexed, skipped, noFP, len(noFPBookSet), noFPPermFailed, errs, total)
 	prog.Done(summary)
 	slog.Info("lsh-index-build: complete",
 		"indexed", indexed, "skipped", skipped,
-		"no_fp", noFP, "no_fp_books", len(noFPBookSet), "errors", errs, "total", total)
+		"no_fp", noFP, "no_fp_books", len(noFPBookSet),
+		"no_fp_perm_failed", noFPPermFailed, "errors", errs, "total", total)
 	return nil
 }

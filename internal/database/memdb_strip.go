@@ -1,7 +1,7 @@
 // file: internal/database/memdb_strip.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-mema-aaaa-aaaa-stripbook0001
-// last-edited: 2026-06-10
+// last-edited: 2026-06-11
 
 package database
 
@@ -60,9 +60,14 @@ func stripBookForMemdb(src *Book) *Book {
 //	AcoustIDFingerprint (~230 KB per 2hr file)       → ~3+ GB (already stripped)
 //	FingerprintDiagnosticJSON (*string, KB-class)    → can dominate when populated
 //	FingerprintFailureReason / Detail (*string)      → small but per-row
-//	FingerprintFailedAt (*time.Time)                 → 24B + heap overhead
+//	FingerprintFailedAt (*time.Time)                 → 24B retained (needed by LSH builder)
 //
 // Combined drop from Seg0..6 + diagnostic fields: ~550-900 MB + diagnostic overhead.
+//
+// FingerprintFailedAt is intentionally NOT stripped: it is 24 bytes per row (~7 MB
+// at 308K rows) and is read by the LSH index builder to skip permanently-failed files
+// from the fingerprint-rescan enqueue queue. Stripping it would cause the builder to
+// re-enqueue those books on every warm-memdb run, triggering an infinite retry loop.
 //
 // AcoustIDSeg0..6 strip rationale (fable5 T019):
 //
@@ -84,7 +89,7 @@ func stripBookFileForMemdb(src *BookFile) *BookFile {
 		return nil
 	}
 	cp := *src
-	cp.FingerprintFailedAt = nil
+	// FingerprintFailedAt is intentionally kept — see comment above.
 	cp.FingerprintFailureReason = nil
 	cp.FingerprintFailureDetail = nil
 	cp.FingerprintDiagnosticJSON = nil

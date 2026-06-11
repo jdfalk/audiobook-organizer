@@ -1,7 +1,7 @@
 // file: internal/database/memdb_strip_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: e6f7a8b9-c0d1-4e2f-3a4b-5c6d7e8f9012
-// last-edited: 2026-06-10
+// last-edited: 2026-06-11
 
 package database
 
@@ -12,8 +12,10 @@ import (
 )
 
 // TestStripBookFileForMemdb_NilsLargeFields verifies that stripBookFileForMemdb
-// strips all fingerprint diagnostic fields AND all AcoustIDSeg0..6 fields (fable5 T019),
-// while preserving identity fields and AcoustIDFingerprintDurationSec.
+// strips heavy fingerprint diagnostic fields AND all AcoustIDSeg0..6 fields (fable5 T019),
+// while preserving identity fields, AcoustIDFingerprintDurationSec, and FingerprintFailedAt.
+// FingerprintFailedAt is intentionally preserved (it is 24B per row and is read by the
+// LSH index builder to skip permanently-failed files from rescan enqueue).
 func TestStripBookFileForMemdb_NilsLargeFields(t *testing.T) {
 	now := time.Now()
 	reason := "corrupt_audio"
@@ -44,12 +46,9 @@ func TestStripBookFileForMemdb_NilsLargeFields(t *testing.T) {
 		t.Fatal("stripped is nil")
 	}
 
-	// --- Diagnostic fields must be nil ---
+	// --- Heavy fields must be nil ---
 	if stripped.AcoustIDFingerprint != nil {
 		t.Errorf("AcoustIDFingerprint not stripped: got len=%d, want nil", len(stripped.AcoustIDFingerprint))
-	}
-	if stripped.FingerprintFailedAt != nil {
-		t.Errorf("FingerprintFailedAt not stripped")
 	}
 	if stripped.FingerprintFailureReason != nil {
 		t.Errorf("FingerprintFailureReason not stripped")
@@ -101,6 +100,11 @@ func TestStripBookFileForMemdb_NilsLargeFields(t *testing.T) {
 	// for GetAcoustIDSeg0's memdb fallback path (bookfile_fingerprint.go).
 	if stripped.AcoustIDFingerprintDurationSec != 7200.5 {
 		t.Errorf("AcoustIDFingerprintDurationSec not preserved: %v", stripped.AcoustIDFingerprintDurationSec)
+	}
+	// FingerprintFailedAt is preserved for the LSH index builder to skip
+	// permanently-failed files from fingerprint-rescan enqueue.
+	if stripped.FingerprintFailedAt == nil {
+		t.Errorf("FingerprintFailedAt should be preserved (needed by LSH builder)")
 	}
 
 	// --- Source must not be mutated ---
