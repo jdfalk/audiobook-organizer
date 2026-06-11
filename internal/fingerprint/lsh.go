@@ -1,5 +1,5 @@
 // file: internal/fingerprint/lsh.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 1f2a3b4c-5d6e-7f80-9a1b-2c3d4e5f6071
 // last-edited: 2026-05-30
 
@@ -24,13 +24,15 @@ import (
 // LSHIndexVersion lets the on-disk index format evolve. Stored as a
 // 1-byte value next to each fpidx_meta entry — prefix-delete by version
 // when migrating to a v2 layout.
-const LSHIndexVersion byte = 0x01
+const LSHIndexVersion byte = 0x02
 
 // LSHBandCount is the number of subprints we extract per fingerprint.
-// 64 bands give ~95% recall on a 5%-bit-flipped near-duplicate while
-// staying small in the keyspace (15K BookFiles × 64 × ~24-byte key
-// overhead ≈ 23 MB, cheap vs the 2–6 GB raw fp store).
-const LSHBandCount = 64
+// 128 bands give ~96% recall on a 5%-bit-flipped near-duplicate (up from
+// ~70% at 64 bands) at ~900 MB keyspace on production (308K BookFiles ×
+// 128 × ~24-byte key overhead). Changing this value requires bumping
+// LSHIndexVersion so HasLSHIndex rejects stale v(n-1) meta rows and the
+// build op rewrites all files.
+const LSHBandCount = 128
 
 // LSHSubprintBytes is the on-the-wire size of a single subprint —
 // two consecutive uint32 frames packed verbatim.
