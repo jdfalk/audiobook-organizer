@@ -171,7 +171,7 @@ end up with >5 hosts or multiple humans.
 ### Phase 1 — Inventory and decisions (1 hour)
 
 - [ ] Pick approval-service host (probably the same prod box at
-      172.16.2.30, or a small VPS if you want it independent of the
+      <your-server-ip>, or a small VPS if you want it independent of the
       managed fleet).
 - [ ] Pick push channel: ntfy.sh self-hosted vs. Pushover vs. Telegram
       bot. Recommendation: **self-hosted ntfy** — free, simple, phone

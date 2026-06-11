@@ -14,8 +14,8 @@ on branch `fix/server-tests-followup`. **Main checkout:**
 `Makefile.local` with `make deploy`). Deploy from main checkout (the worktree's
 musl-cross build env is missing `-lz`).
 
-**Deployed prod:** https://172.16.2.30:8484/ — verify after every deploy with
-`curl -skIo /dev/null -w "%{http_code}\n" https://172.16.2.30:8484/` (expect 200).
+**Deployed prod:** https://<your-server-ip>:8484/ — verify after every deploy with
+`curl -skIo /dev/null -w "%{http_code}\n" https://<your-server-ip>:8484/` (expect 200).
 
 ## Operating rules — read first
 
@@ -183,13 +183,13 @@ npx vitest --run
 cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer
 git pull --ff-only origin main
 make deploy
-curl -skIo /dev/null -w "%{http_code}\n" https://172.16.2.30:8484/
+curl -skIo /dev/null -w "%{http_code}\n" https://<your-server-ip>:8484/
 
 # tail prod logs (user reads these to find performance hotspots)
-ssh jdfalk@172.16.2.30 'sudo journalctl -u audiobook-organizer -f --no-pager'
+ssh <your-username>@<your-server-ip> 'sudo journalctl -u audiobook-organizer -f --no-pager'
 
 # pebble store on prod
-ssh jdfalk@172.16.2.30 'sudo ls -la /var/lib/audiobook-organizer/audiobooks.pebble/'
+ssh <your-username>@<your-server-ip> 'sudo ls -la /var/lib/audiobook-organizer/audiobooks.pebble/'
 ```
 
 ## Files you'll touch (cheatsheet)
