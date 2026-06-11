@@ -1,7 +1,7 @@
 // file: internal/fingerprint/lsh_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 2b3c4d5e-6f70-8192-a3b4-c5d6e7f80921
-// last-edited: 2026-05-30
+// last-edited: 2026-06-10
 
 package fingerprint
 
@@ -152,16 +152,17 @@ func TestSubprints_RejectsMisalignedBytes(t *testing.T) {
 }
 
 func TestSubprints_ShortFpFallsBackToFewerBands(t *testing.T) {
-	// 200 frames — middle slice after edge-skip would be ~160 frames,
-	// below MinMiddleFrames (240). Spec says we keep full frames and
-	// emit min(LSHBandCount, frames/2) = min(64, 100) = 64 bands.
+	// 200 frames — middle slice after edge-skip would be 160 frames,
+	// below MinMiddleFrames (240). Edge-skip is disabled and we emit
+	// min(LSHBandCount, totalFrames/2) = min(128, 100) = 100 bands.
+	const wantBands = 100
 	raw := makeRaw(200, func(i int) uint32 { return uint32(i) })
 	sp, _, err := Subprints(raw)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(sp) != LSHBandCount {
-		t.Fatalf("expected %d bands for 200-frame fp, got %d", LSHBandCount, len(sp))
+	if len(sp) != wantBands {
+		t.Fatalf("expected %d bands for 200-frame fp, got %d", wantBands, len(sp))
 	}
 	// All sample positions must stay inside the fp.
 	// (Implicit: no panic during Subprints call already proves bounds OK.)
