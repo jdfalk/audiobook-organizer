@@ -10,7 +10,5 @@
   "repository": "https://github.com/jdfalk/audiobook-organizer",
   "license": "MIT",
   "keywords": ["go", "audiobook", "pebbledb", "pii-scanner", "documentation"],
-  "agents": "./plugin/agents/",
-  "skills": "./plugin/skills/",
-  "hooks": "./plugin/hooks/hooks.json"
+  "hooks": "./hooks/hooks.json"
 }
