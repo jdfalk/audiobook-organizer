@@ -1,7 +1,7 @@
 // file: internal/plugins/dedup/lsh_index_build_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: c1cf5590-1bc1-4f88-9031-62333bcb593f
-// last-edited: 2026-06-09
+// last-edited: 2026-06-10
 
 package dedup
 
@@ -209,5 +209,88 @@ func TestLSHIndexBuild_OpNonLSHStore(t *testing.T) {
 	err := p.runLSHIndexBuild(context.Background(), json.RawMessage("{}"), &fakeReporter{})
 	if err == nil {
 		t.Fatal("expected error when store doesn't implement LSHIndexStore, got nil")
+	}
+}
+
+// TestLSHIndexBuild_EnqueuesFingerRescanForNoFPBooks verifies that books
+// whose files lack a fingerprint trigger an acoustid.fingerprint-rescan
+// enqueue, and that book IDs are deduplicated (multiple files per book
+// produce exactly one entry).
+func TestLSHIndexBuild_EnqueuesFingerRescanForNoFPBooks(t *testing.T) {
+	fp := synthRawLSH(42, 57600)
+
+	ms := &mockLSHStore{
+		files: []database.BookFile{
+			{ID: "file-1", BookID: "book-has-fp", AcoustIDFingerprint: fp},
+			{ID: "file-2", BookID: "book-nofp-a", AcoustIDFingerprint: nil},
+			{ID: "file-3", BookID: "book-nofp-a", AcoustIDFingerprint: nil}, // same book → deduplicated
+			{ID: "file-4", BookID: "book-nofp-b", AcoustIDFingerprint: nil},
+		},
+		indexedFiles: map[string]bool{},
+	}
+
+	reg := &mockRegistry{}
+	p := &Plugin{
+		store:    &mockLSHStoreAdapter{inner: ms},
+		registry: reg,
+	}
+
+	if err := p.runLSHIndexBuild(context.Background(), json.RawMessage("{}"), &fakeReporter{}); err != nil {
+		t.Fatalf("runLSHIndexBuild: %v", err)
+	}
+
+	// Exactly one EnqueueOp call should have been made.
+	if len(reg.enqueuedDefs) != 1 {
+		t.Fatalf("expected 1 EnqueueOp call, got %d", len(reg.enqueuedDefs))
+	}
+	if reg.enqueuedDefs[0] != "acoustid.fingerprint-rescan" {
+		t.Errorf("expected acoustid.fingerprint-rescan, got %s", reg.enqueuedDefs[0])
+	}
+
+	// Params must contain 2 unique book IDs (book-nofp-a deduped).
+	params, ok := reg.enqueuedParams[0].(map[string]any)
+	if !ok {
+		t.Fatalf("params not map[string]any")
+	}
+	bookIDs, ok := params["book_ids"].([]string)
+	if !ok {
+		t.Fatalf("book_ids not []string")
+	}
+	if len(bookIDs) != 2 {
+		t.Errorf("expected 2 unique book IDs, got %d: %v", len(bookIDs), bookIDs)
+	}
+	// file-1 (book-has-fp) must NOT be in the list.
+	for _, id := range bookIDs {
+		if id == "book-has-fp" {
+			t.Errorf("book-has-fp (has fingerprint) should not appear in fingerprint-rescan book_ids")
+		}
+	}
+}
+
+// TestLSHIndexBuild_NoEnqueueWhenAllHaveFingerprints verifies that no
+// fingerprint-rescan is enqueued when every file already has a fingerprint.
+func TestLSHIndexBuild_NoEnqueueWhenAllHaveFingerprints(t *testing.T) {
+	fp := synthRawLSH(7, 57600)
+
+	ms := &mockLSHStore{
+		files: []database.BookFile{
+			{ID: "f1", BookID: "b1", AcoustIDFingerprint: fp},
+			{ID: "f2", BookID: "b2", AcoustIDFingerprint: fp},
+		},
+		indexedFiles: map[string]bool{},
+	}
+
+	reg := &mockRegistry{}
+	p := &Plugin{
+		store:    &mockLSHStoreAdapter{inner: ms},
+		registry: reg,
+	}
+
+	if err := p.runLSHIndexBuild(context.Background(), json.RawMessage("{}"), &fakeReporter{}); err != nil {
+		t.Fatalf("runLSHIndexBuild: %v", err)
+	}
+
+	if len(reg.enqueuedDefs) != 0 {
+		t.Errorf("expected no EnqueueOp calls when all files have fingerprints, got %d", len(reg.enqueuedDefs))
 	}
 }

@@ -1,5 +1,5 @@
 // file: internal/plugins/dedup/plugin.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: d1e2f3a4-b5c6-7890-abcd-ef1234567890
 // last-edited: 2026-06-10
 
@@ -20,6 +20,7 @@ type Plugin struct {
 	engine         *dedupengine.Engine
 	store          database.Store
 	embeddingStore *database.EmbeddingStore
+	registry       sdk.Registry // set in Register; used by ops that enqueue follow-on work
 }
 
 // New constructs a dedup Plugin. engine and embeddingStore may be nil if embedding is disabled;
@@ -41,6 +42,7 @@ func (p *Plugin) Version() string { return "1.0.0" }
 // UOS-07 registers embed-scan; UOS-09 adds full-scan, llm-review, and book-signature-scan.
 // T012 adds lsh-index-build (fable5).
 func (p *Plugin) Register(r sdk.Registry) error {
+	p.registry = r // save so op runners can enqueue follow-on operations
 	if p.engine == nil {
 		return nil
 	}
