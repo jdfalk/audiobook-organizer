@@ -1,7 +1,7 @@
 // file: internal/plugins/dedup/plugin_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b8c9d0e1-f2a3-4567-def0-123456789abc
-// last-edited: 2026-05-06
+// last-edited: 2026-06-10
 
 package dedup
 
@@ -12,9 +12,12 @@ import (
 	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
-// mockRegistry is a test double for sdk.Registry that records registered ops.
+// mockRegistry is a test double for sdk.Registry that records both
+// registered ops and enqueued ops.
 type mockRegistry struct {
-	registeredOps []sdk.OperationDef
+	registeredOps  []sdk.OperationDef
+	enqueuedDefs   []string
+	enqueuedParams []any
 }
 
 func (m *mockRegistry) RegisterOp(op sdk.OperationDef) error {
@@ -22,9 +25,10 @@ func (m *mockRegistry) RegisterOp(op sdk.OperationDef) error {
 	return nil
 }
 
-// EnqueueOp is a no-op for testing.
-func (m *mockRegistry) EnqueueOp(ctx context.Context, defID string, params any, opts ...sdk.EnqueueOption) (string, error) {
-	return "", nil
+func (m *mockRegistry) EnqueueOp(_ context.Context, defID string, params any, _ ...sdk.EnqueueOption) (string, error) {
+	m.enqueuedDefs = append(m.enqueuedDefs, defID)
+	m.enqueuedParams = append(m.enqueuedParams, params)
+	return "fake-op-id", nil
 }
 
 func TestPluginRegisterNoEngine(t *testing.T) {

@@ -1,7 +1,7 @@
 // file: internal/plugins/dedup/lsh_index_build.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e61b955e-93bf-4ea6-bb1f-7acd30491fdb
-// last-edited: 2026-06-09
+// last-edited: 2026-06-10
 
 package dedup
 
@@ -94,8 +94,11 @@ func (p *Plugin) lshIndexBuildDef() sdk.OperationDef {
 //  2. For each file with a whole-file fingerprint, derive subprints via
 //     fingerprint.Subprints, then call PutLSHEntries — unless HasLSHIndex
 //     already returns true (incremental skip).
-//  3. Report progress every lshBuildBatchSize files.
-//  4. On completion, set lsh_index_v1_done so T013 can gate on it.
+//  3. Files without a fingerprint are collected by BookID; on completion,
+//     acoustid.fingerprint-rescan is enqueued for those books so the next
+//     lsh-index-build run can pick them up.
+//  4. Report progress every lshBuildBatchSize files.
+//  5. On completion, set lsh_index_v1_done so T013 can gate on it.
 func (p *Plugin) runLSHIndexBuild(ctx context.Context, _ json.RawMessage, reporter sdk.Reporter) error {
 	// Obtain the LSH-capable store via type assertion. The concrete
 	// *PebbleStore satisfies LSHIndexStore; SQLite and mock stores may not.
@@ -124,6 +127,9 @@ func (p *Plugin) runLSHIndexBuild(ctx context.Context, _ json.RawMessage, report
 	prog.Start(fmt.Sprintf("Indexing LSH bands: 0 / %d files", total))
 
 	var indexed, skipped, noFP, errs int
+	// Track unique book IDs whose files lack a fingerprint so we can
+	// enqueue acoustid.fingerprint-rescan for them after the main loop.
+	noFPBookSet := make(map[string]struct{})
 
 	for i, f := range files {
 		// Respect cancellation at each file boundary.
@@ -138,10 +144,10 @@ func (p *Plugin) runLSHIndexBuild(ctx context.Context, _ json.RawMessage, report
 		default:
 		}
 
-		// Skip files without a whole-file fingerprint — they have nothing
-		// to contribute to the LSH index.
+		// Files without a fingerprint are queued for fingerprinting below.
 		if len(f.AcoustIDFingerprint) == 0 {
 			noFP++
+			noFPBookSet[f.BookID] = struct{}{}
 			continue
 		}
 
@@ -165,6 +171,7 @@ func (p *Plugin) runLSHIndexBuild(ctx context.Context, _ json.RawMessage, report
 		if len(subs) == 0 {
 			// Fingerprint too short to sample (< 4 frames after edge trim).
 			noFP++
+			noFPBookSet[f.BookID] = struct{}{}
 			continue
 		}
 
@@ -190,6 +197,33 @@ func (p *Plugin) runLSHIndexBuild(ctx context.Context, _ json.RawMessage, report
 
 	prog.Finalize("writing completion flag…")
 
+	// Enqueue fingerprint-rescan for books that had unfingerprinted files.
+	// A subsequent lsh-index-build run will pick them up once fingerprinted.
+	if len(noFPBookSet) > 0 {
+		noFPBookIDs := make([]string, 0, len(noFPBookSet))
+		for id := range noFPBookSet {
+			noFPBookIDs = append(noFPBookIDs, id)
+		}
+		if p.registry != nil {
+			_, enqErr := p.registry.EnqueueOp(ctx, "acoustid.fingerprint-rescan", map[string]any{
+				"scope":    "books",
+				"book_ids": noFPBookIDs,
+			})
+			if enqErr != nil {
+				reporter.Logger().Warn("lsh-index-build: failed to enqueue fingerprint-rescan",
+					"books", len(noFPBookIDs), "error", enqErr)
+			} else {
+				reporter.Logger().Info("lsh-index-build: queued fingerprint-rescan for unfingerprinted books",
+					"books", len(noFPBookIDs), "files", noFP)
+				slog.Info("lsh-index-build: enqueued fingerprint-rescan",
+					"books", len(noFPBookIDs), "files", noFP)
+			}
+		} else {
+			reporter.Logger().Warn("lsh-index-build: registry unavailable, cannot enqueue fingerprint-rescan",
+				"no_fp_books", len(noFPBookIDs), "no_fp_files", noFP)
+		}
+	}
+
 	// Mark the index as built so T013's probe-collector can enable itself.
 	if flagErr := lshStore.SetLSHIndexBuilt(); flagErr != nil {
 		reporter.Logger().Error("lsh-index-build: failed to set completion flag", "error", flagErr)
@@ -199,11 +233,11 @@ func (p *Plugin) runLSHIndexBuild(ctx context.Context, _ json.RawMessage, report
 	}
 
 	summary := fmt.Sprintf(
-		"LSH index build complete — %d indexed, %d skipped (already indexed), %d no-fingerprint, %d errors (of %d files)",
-		indexed, skipped, noFP, errs, total)
+		"LSH index build complete — %d indexed, %d skipped (already indexed), %d no-fingerprint (%d books queued for rescan), %d errors (of %d files)",
+		indexed, skipped, noFP, len(noFPBookSet), errs, total)
 	prog.Done(summary)
 	slog.Info("lsh-index-build: complete",
 		"indexed", indexed, "skipped", skipped,
-		"no_fp", noFP, "errors", errs, "total", total)
+		"no_fp", noFP, "no_fp_books", len(noFPBookSet), "errors", errs, "total", total)
 	return nil
 }
