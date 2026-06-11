@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.86.0
+// version: 1.87.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-06-10
 
@@ -9131,15 +9131,17 @@ func (s *PebbleStore) LookupAcoustIDCandidates(fp []byte, maxCandidates int) ([]
 	return out, nil
 }
 
-// HasLSHIndex reports whether a BookFile currently has an LSH meta entry.
-// Used by the lsh-backfill op to skip already-indexed rows.
+// HasLSHIndex reports whether a BookFile has an LSH meta entry that matches
+// the current LSHIndexVersion. Returns false for missing entries AND for
+// entries written by an older index version, so the build op rewrites stale
+// rows whenever LSHIndexVersion or LSHBandCount changes.
 func (s *PebbleStore) HasLSHIndex(bookFileID string) bool {
-	_, closer, err := s.db.Get(lshMetaKey(bookFileID))
+	val, closer, err := s.db.Get(lshMetaKey(bookFileID))
 	if err != nil {
 		return false
 	}
-	_ = closer.Close()
-	return true
+	defer closer.Close()
+	return len(val) > 0 && val[0] == fingerprint.LSHIndexVersion
 }
 
 // CreateBookFile stores a new BookFile, generating a ULID if the ID is empty.
