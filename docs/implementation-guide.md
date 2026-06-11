@@ -42,19 +42,19 @@ if artist, ok := metadata["artist"].(string); ok && artist != "" {
 ### Testing
 ```bash
 # 1. Find a book with conflicting composer tag
-curl -sk 'https://172.16.2.30:8484/api/v1/audiobooks?search=counterstrike&limit=1'
+curl -sk 'https://<your-server-ip>:8484/api/v1/audiobooks?search=counterstrike&limit=1'
 
 # 2. Check current tags
 ssh server 'ffprobe -v quiet -print_format json -show_format "/path/to/file.m4b"' | jq '.format.tags'
 
 # 3. Write tags
-curl -sk -X POST 'https://172.16.2.30:8484/api/v1/audiobooks/BOOK_ID/write-back'
+curl -sk -X POST 'https://<your-server-ip>:8484/api/v1/audiobooks/BOOK_ID/write-back'
 
 # 4. Re-check tags — composer should now match artist
 ssh server 'ffprobe -v quiet -print_format json -show_format "/path/to/file.m4b"' | jq '.format.tags'
 
 # 5. Verify extraction reads correct author
-curl -sk 'https://172.16.2.30:8484/api/v1/audiobooks/BOOK_ID/tags' | jq '.tags.author_name'
+curl -sk 'https://<your-server-ip>:8484/api/v1/audiobooks/BOOK_ID/tags' | jq '.tags.author_name'
 ```
 
 ### Acceptance Criteria
@@ -99,14 +99,14 @@ The fix is deployed. Need to verify:
 
 ```bash
 # Find a book without ISBN
-curl -sk 'https://172.16.2.30:8484/api/v1/audiobooks?limit=10' | \
+curl -sk 'https://<your-server-ip>:8484/api/v1/audiobooks?limit=10' | \
   python3 -c "import json,sys; [print(b['id'],b['title']) for b in json.load(sys.stdin)['items'] if not b.get('isbn13')]"
 
 # Trigger fetch metadata
-curl -sk -X POST "https://172.16.2.30:8484/api/v1/audiobooks/BOOK_ID/fetch-metadata"
+curl -sk -X POST "https://<your-server-ip>:8484/api/v1/audiobooks/BOOK_ID/fetch-metadata"
 
 # Wait 10 seconds, then check
-curl -sk "https://172.16.2.30:8484/api/v1/audiobooks/BOOK_ID" | python3 -c "import json,sys; b=json.load(sys.stdin); print(f'ISBN: {b.get(\"isbn13\")}, ASIN: {b.get(\"asin\")}, Title: {b[\"title\"]}')"
+curl -sk "https://<your-server-ip>:8484/api/v1/audiobooks/BOOK_ID" | python3 -c "import json,sys; b=json.load(sys.stdin); print(f'ISBN: {b.get(\"isbn13\")}, ASIN: {b.get(\"asin\")}, Title: {b[\"title\"]}')"
 ```
 
 ### Acceptance Criteria
@@ -125,16 +125,16 @@ curl -sk "https://172.16.2.30:8484/api/v1/audiobooks/BOOK_ID" | python3 -c "impo
 ### Steps
 ```bash
 # 1. Find a multi-file MP3 book
-curl -sk 'https://172.16.2.30:8484/api/v1/audiobooks?limit=20' | \
+curl -sk 'https://<your-server-ip>:8484/api/v1/audiobooks?limit=20' | \
   python3 -c "import json,sys; [print(b['id'],b['title'],b['format']) for b in json.load(sys.stdin)['items'] if b.get('format')=='mp3']"
 
 # 2. Trigger conversion
-curl -sk -X POST "https://172.16.2.30:8484/api/v1/operations/transcode" \
+curl -sk -X POST "https://<your-server-ip>:8484/api/v1/operations/transcode" \
   -H 'Content-Type: application/json' \
   -d '{"book_id": "BOOK_ID"}'
 
 # 3. Monitor operation
-curl -sk "https://172.16.2.30:8484/api/v1/operations/OP_ID"
+curl -sk "https://<your-server-ip>:8484/api/v1/operations/OP_ID"
 
 # 4. Verify:
 #    - M4B file exists at expected path
@@ -212,7 +212,7 @@ Add to the `series_prune` maintenance task: detect and merge duplicate series na
 Or bulk fix via API:
 ```bash
 # Find books with "read by narrator" as title or author
-curl -sk 'https://172.16.2.30:8484/api/v1/audiobooks?search=read+by+narrator&limit=200'
+curl -sk 'https://<your-server-ip>:8484/api/v1/audiobooks?search=read+by+narrator&limit=200'
 # For each, fetch metadata to get the real title/author
 ```
 
@@ -272,7 +272,7 @@ Register a new maintenance task `isbn_enrichment` that:
 ### Steps
 ```bash
 # 1. Write tags to a book
-curl -sk -X POST "https://172.16.2.30:8484/api/v1/audiobooks/BOOK_ID/write-back"
+curl -sk -X POST "https://<your-server-ip>:8484/api/v1/audiobooks/BOOK_ID/write-back"
 
 # 2. Check that .bak file was created as hardlink
 ssh server 'ls -la /path/to/file.m4b*'

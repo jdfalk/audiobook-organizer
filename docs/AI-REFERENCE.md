@@ -16,7 +16,7 @@
 | **Frontend embed** | `//go:embed web/dist` with build tag `embed_frontend` |
 | **Build** | `make build` (full), `make build-api` (backend only), `make deploy` (cross-compile + scp to Linux) |
 | **Test** | `make test` (Go), `make test-all` (Go + frontend), `make test-e2e` (Playwright) |
-| **Production** | Linux (unimatrixzero), `https://172.16.2.30:8484`, self-signed cert, PebbleDB |
+| **Production** | Linux (<your-hostname>), `https://<your-server-ip>:8484`, self-signed cert, PebbleDB |
 | **Config** | Viper-based, persisted to DB. Global: `config.AppConfig` |
 | **Globals** | `database.GlobalStore`, `database.GlobalQueue`, `config.AppConfig` |
 
