@@ -1,11 +1,109 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.16.0 -->
+<!-- version: 3.17.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-06-10 -->
+<!-- last-edited: 2026-06-12 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Added
+
+#### June 9–10, 2026 — Fable 5: unified dedup pipeline (T011–T018)
+
+- **`internal/dedup/unified/`** (NEW, T011): `Signal`, `UnifiedDedupScore`, `ComposeScore`
+  — noisy-OR composite scoring engine. Each signal (LSH acoustid, exact acoustid,
+  metadata-fuzzy, embedding) contributes a 0–100 weight; final score is noisy-OR
+  aggregation over all signals. Includes `band` classification (CERTAIN/HIGH/MEDIUM/REVIEW).
+- **`internal/database/pebble_store.go`** (T012): `fpidx:<subfp>:<bookfile_id>` secondary
+  PebbleDB index written on every `CreateBookFile`/`UpdateBookFile`/delete; `BuildLSHIndex`
+  op populates the index from existing rows and sets flag `lsh_index_v1_done`.
+- **`internal/dedup/collectors/`** (T013): LSH probe collector queries `fpidx:` index to
+  produce O(band×k) candidates instead of O(N) full scan; exact AcoustID collector added.
+  `ACOUSTID_FUZZY_ENABLED` O(N) path retired.
+- **`internal/dedup/engine.go`** (T014): Collector refactor — each collector implements
+  `CandidateCollector` interface; `PairEligibility` pre-filter skips same-book and already-
+  resolved pairs; new metadata-fuzzy collector added (title+author Levenshtein).
+- **`internal/database/embedding_store.go`** (T015): `ScoreBreakdown` JSON field added
+  to candidate rows. `dedup.purge-stale-fingerprints` op removes ~14K rows with 100%
+  legacy scores caused by AQAAAA-poisoned segment fingerprints.
+- **`internal/plugins/dedup/scan_ops.go`** (T018): Embed-scan and async-scan merged into
+  single rationalized op; phase ordering enforced (fingerprint → LSH index → candidate
+  collection → score → dedup). Removes duplicate scan triggers.
+
+#### June 9–10, 2026 — Fable 5: iTunes writeback hardening (T001–T008, T010)
+
+- **`internal/itunes/itl_le.go`** (T001): `walkMsdhTracksLE` now descends into each
+  `mhoh` child block so all track string fields (Name, Album, Artist, Genre, Kind,
+  Location, LocalURL) are populated on LE libraries. Previously every field was empty.
+- **`tools/cmd/itl-audit/`** (T002): `mhoh-corpus-audit` tool reads a golden iTunes
+  library and emits a constants table of every observed encoding-flag byte value per
+  field type. Confirms iTunes always writes `0x00`; our writer was producing `+27 ∈ {1,3}`.
+- **`internal/itunes/safety.go`** (T003): `ITLSafetyContract` — 8 named pre-write guards
+  (magic check, version bounds, mhoh encoding-byte whitelist, location contract,
+  inflate/deflate round-trip, header count coherence, atom alignment, file-in-use check)
+  + 13-test regression suite covering all 4 known corruption vectors.
+- **`internal/itunes/itl_write.go`** (T004): `SafeWriteITL` — atomic write protocol:
+  write to `.tmp`, fsync, rename; header `mhit` count regenerated from actual track
+  list after mutations rather than incremented in-place. Eliminates orphan-ref corruption
+  on crash mid-write.
+- **`internal/itunes/mhoh_encode.go`** (T005): iTunes-conformant mhoh string encoders —
+  encoding-flag byte always `0x00` (matches all 281,790 golden-corpus blocks); removed
+  the `+27` offset that was causing iTunes to reject writes as corrupt.
+- **`internal/itunes/location.go`** (T006): `LocationPair` type wraps Windows path
+  (`0x0D` mhoh) + URL (`0x0B` mhoh) as a unit; writeback enforces that both fields are
+  updated together and that the URL form is a valid `file://` or `itms://` URI.
+- **`tools/cmd/itl-diff/`** + **`tools/cmd/itl-check/`** (T007): Honest diff/check tools
+  — `itl-diff` now inventories `msdh` (library container) atom, reports playlist
+  membership deltas, and calls `AuditITL` to surface any safety-contract violations;
+  `itl-check` exits non-zero on any violation.
+- **`internal/itunes/writeback_batcher.go`** (T008): Diff-before-write — batcher now
+  reads the current ITL, diffs proposed changes against live values, and skips writes
+  where no field changed. Added `library-not-in-use` gate: aborts if iTunes process is
+  running on the host.
+- **`internal/itunes/inflate.go`** (T010): Fail-closed inflate cap — `zlib.NewReader`
+  wrapped with a 256 MB hard limit; inflate errors now return explicit `ErrInflateCap`
+  rather than silently producing a truncated buffer.
+
+#### June 9–10, 2026 — Fable 5: memory & DB optimization (T019–T024)
+
+- **`internal/memdb/strip.go`** (T019): `stripBookFileForMemdb` strips `AcoustIDSeg0..6`
+  from in-memory projections at warm time. Expected RSS savings: 550–900 MB. Seg data
+  is still readable from Pebble via `GetBookFileByID` for the dedup path.
+- **`internal/database/pebble_store.go`** (T021): Float16+zstd embedding encoding —
+  embeddings written as `float16` arrays then zstd-compressed (`emb_f16_v1_done` flag).
+  Dual-read: decodes both legacy float32 and new float16+zstd rows. `re-encode-embeddings`
+  op backfills existing rows. Reduces embedding storage ~75%.
+- **`internal/database/`** (T022): Legacy SQLite backend and CGO dependency removed —
+  ~7.9K lines deleted, `mattn/go-sqlite3` dropped from `go.mod`. All callers migrated
+  to PebbleDB. Build no longer requires a C compiler.
+- **`internal/memdb/telemetry.go`** + **`internal/plugins/core/plugin.go`** (T023):
+  memdb size telemetry — `memdb.SizeMB()` reports live RSS contribution per table;
+  operation-log retention policy (default 30 days, configurable); dead-prefix sweep
+  removes orphaned Pebble key ranges from removed features.
+- **`internal/database/pebble_activity.go`** + **`internal/database/pebble_metrics.go`**
+  (T024): PebbleDB activity and metrics backends with dual-write window — new writes go
+  to both NutsDB (existing) and Pebble (new); reads prefer Pebble when available.
+  `backfill-activity-to-pebble` op migrates historical NutsDB records.
+
+#### June 9–10, 2026 — Fable 5: general fixes (T009, T025–T028)
+
+- **`internal/server/auth_handlers.go`** (T009): `POST /api/v1/auth/accept-invite` —
+  explicit body read + close before `json.Unmarshal` prevents HTTP/2 stream-reset EOF;
+  413 response now includes `{"error":"request body too large","max_bytes":N}`; Gin set
+  to release mode. Resolves pen-test finding MED-5.
+- **`internal/metadata/tag_filter.go`** (T025): `FilterUnchangedTags` now covers all
+  `AUDIOBOOK_ORGANIZER_*` custom tag fields in skip detection; previously only standard
+  fields were checked, causing unnecessary tag writes on every apply.
+- **`internal/database/pebble_store.go`** (T026): `RecomputeBookAggregates` + background
+  op — book `Duration` and `FileSize` are recomputed as sums over `BookFile` rows rather
+  than stored as snapshots. `backfill-book-aggregates` op updates all existing rows.
+- **`internal/server/server.go`** + **`internal/operations/registry/`** (T027): Background
+  goroutines (chromem hydration, scanner, dedup engine) now joined on shutdown via
+  `sync.WaitGroup`; scanner goroutine leak behind CI race condition fixed.
+- **`internal/config/app_config.go`** (T028, bonus): `AppConfig` field reads and writes
+  protected by `sync.RWMutex`; all write sites converted to use `Set*` accessors.
+  Eliminates data races under concurrent scan + metadata-apply.
 
 ### Changed
 
