@@ -1,12 +1,22 @@
 <!-- file: CLAUDE.md -->
-<!-- version: 4.7.0 -->
+<!-- version: 4.8.0 -->
 <!-- guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f -->
-<!-- last-edited: 2026-05-24 -->
+<!-- last-edited: 2026-06-12 -->
 
 # CLAUDE.md
 
 This is an **audiobook organizer** — Go backend + React/TypeScript frontend.
-All AI agent instructions live in `.github/`. This file is the entry point.
+
+## Coding Standards
+
+Org-wide coding standards are in the `.standards/` git submodule (cloned from `https://github.com/falkcorp/.github`).
+Always clone with `git clone --recurse-submodules` so these are available.
+
+Key files:
+- **File headers (MANDATORY):** `.standards/instructions/file-headers.md`
+- **Go rules:** `.standards/instructions/go.md`
+- **TypeScript rules:** `.standards/instructions/typescript.md`
+- **Commit format:** `.standards/instructions/commit-messages.md`
 
 ## Worktree Discipline (MANDATORY)
 
