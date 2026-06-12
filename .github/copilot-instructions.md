@@ -1,47 +1,36 @@
 <!-- file: .github/copilot-instructions.md -->
-<!-- version: 3.0.0 -->
+<!-- version: 4.0.0 -->
 <!-- guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a -->
-<!-- last-edited: 2026-01-31 -->
+<!-- last-edited: 2026-06-12 -->
 
-# Audiobook Organizer - AI Agent Instructions
+# Audiobook Organizer — Additional Copilot Context
 
-Full-stack web application for managing and organizing audiobook collections.
+Org-wide coding standards (file headers, Go/TS rules, commit format) are at
+**https://github.com/falkcorp/.github** and apply automatically to this repo.
 
-## Repository Architecture
+This file contains audiobook-organizer-specific additions only.
+For full project context see **CLAUDE.md** at the repo root.
 
-- **Backend (Go 1.25):** REST API, file operations, metadata extraction, database management
-- **Frontend (React + TypeScript):** Material-UI web interface with real-time updates via SSE
-- **Database:** SQLite for metadata, PebbleDB for key-value storage
-- **Integration:** Open Library API, OpenAI parsing
+## Project overview
 
-### Key Directories
+Go 1.24 backend (Gin) + React 18/TypeScript frontend (Material UI).
+DB: PebbleDB (primary), NutsDB (activity log). SQLite removed Jun 2026.
+Integration: Open Library, AcoustID fingerprinting, OpenAI batch API.
+
+## Key directories
 
 | Directory | Contents |
-|-----------|----------|
+|---|---|
 | `cmd/` | CLI and server entry points |
-| `internal/` | Go backend packages (server, scanner, database, metadata) |
-| `web/` | React frontend application |
-| `docs/` | Documentation |
-| `.github/` | CI/CD workflows, instructions, prompts |
+| `internal/` | Go backend packages |
+| `web/src/` | React frontend |
+| `docs/specs/` | Design specs |
+| `docs/plans/` | Implementation plans |
+| `.github/prompts/` | AI agent prompts |
 
-## Git Operations Policy
+## Critical constraints
 
-1. **MCP GitHub tools** (preferred) — use for all git operations when available.
-2. **Native git** (fallback) — when MCP tools aren't available.
-
-All commits MUST use conventional commit format: `type(scope): description`.
-See `.github/instructions/commit-messages.instructions.md` for full rules.
-
-## File Organization
-
-All files require versioned headers: `<!-- file: path -->`, `<!-- version: x.y.z -->`, `<!-- guid: uuid -->`, `<!-- last-edited: YYYY-MM-DD -->`.
-
-Always increment version numbers on changes (semantic versioning). Update `last-edited` date.
-
-## Instruction Files
-
-- **Coding standards:** `.github/instructions/*.instructions.md`
-- **Specialized prompts:** `.github/prompts/*.prompt.md`
-- **This file:** Primary context for repository architecture and workflow.
-
-For detailed coding rules, see `.github/instructions/general-coding.instructions.md` and the language-specific instruction files.
+- `UpdateBook` does **full column replacement** — always supply all fields.
+- iTunes XML path must **never** be scanned by the file scanner.
+- Production is Linux (`make deploy`). Do not use macOS-specific commands.
+- Worktree discipline: never commit directly to `main`. All changes via PRs.
