@@ -10,5 +10,6 @@
   "repository": "https://github.com/jdfalk/audiobook-organizer",
   "license": "MIT",
   "keywords": ["go", "audiobook", "pebbledb", "pii-scanner", "documentation"],
-  "hooks": "./hooks/hooks.json"
+  "hooks": "./hooks/hooks.json",
+  "mcpServers": "./.claude-plugin/mcp.json"
 }
