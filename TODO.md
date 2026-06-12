@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.75.0 -->
+<!-- version: 8.76.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-06-10 -->
+<!-- last-edited: 2026-06-12 -->
 
 # Project TODO
 
@@ -19,58 +19,61 @@ future agent) can scan the entire workspace in one page.
 
 ---
 
-## 🎯 Current Status — June 10, 2026
+## 🎯 Current Status — June 12, 2026
 
 **Library:** ~50K books (~10,891 organized + ~39K iTunes-imported) / 8,837 authors / 21,668 series
-**Production:** PebbleDB primary; Linux, HTTPS at `172.16.2.30:8484`
-**Latest activity:** CI fixes: `memory-leak-scan.yml` YAML parse error (PR #1405), `nightly-burndown.yml` SHA bumped to v1.11.2 using runner image `ob-18f0014` which removes the broken `ContextManagement` OpenAI param (PRs #1407, #1408).
-**In flight:** Burndown bot dispatching test coverage tasks (#79–#109), FE-10 (Vitest coverage thresholds), fingerprint identification pipeline
+**Production:** PebbleDB primary; Linux, HTTPS at prod server
+**Latest activity:** All 27 Fable 5 tasks + T028 bonus shipped (June 9–10). Plugin framework added (agents, skills, pre-commit PII hook). CI fixes (PRs #1405, #1407, #1408). LSHBandCount 64→128.
+**In flight:** Burndown bot dispatching test coverage tasks (#79–#109), FE-10 (Vitest coverage thresholds)
 
 ---
 
-## 🔭 Fable 5 Full-System Review — June 9, 2026 (specs + 27-task plan)
+## ✅ Fable 5 Full-System Review — COMPLETE (June 9–10, 2026)
 
-Review deliverables (see files for full detail):
-- [`docs/specs/fable5-review-findings.md`](docs/specs/fable5-review-findings.md) — 3 CRITICAL / 6 HIGH / 8 MEDIUM / 2 LOW, iTunes findings grounded in binary forensics of 4 damaged libraries
-- [`docs/specs/fable5-spec-itunes-writeback-hardening.md`](docs/specs/fable5-spec-itunes-writeback-hardening.md) — ITLSafetyContract, SafeWriteITL, regression suite
-- [`docs/specs/fable5-spec-unified-dedup-pipeline.md`](docs/specs/fable5-spec-unified-dedup-pipeline.md) — composite scoring (noisy-OR, 0–100 capped), LSH fpidx index, unified UI tab
-- [`docs/specs/fable5-spec-memory-db-optimization.md`](docs/specs/fable5-spec-memory-db-optimization.md) — corrected premises (embeddings already in Pebble); prioritized list
-- [`docs/plans/fable5-implementation-plan.md`](docs/plans/fable5-implementation-plan.md) — TASK-001..027, dependency graph, 5 waves
+All 27 planned tasks + 1 bonus task shipped. Specs and plan docs:
+- [`docs/specs/fable5-review-findings.md`](docs/specs/fable5-review-findings.md) — 3 CRITICAL / 6 HIGH / 8 MEDIUM / 2 LOW
+- [`docs/specs/fable5-spec-itunes-writeback-hardening.md`](docs/specs/fable5-spec-itunes-writeback-hardening.md)
+- [`docs/specs/fable5-spec-unified-dedup-pipeline.md`](docs/specs/fable5-spec-unified-dedup-pipeline.md)
+- [`docs/specs/fable5-spec-memory-db-optimization.md`](docs/specs/fable5-spec-memory-db-optimization.md)
+- [`docs/plans/fable5-implementation-plan.md`](docs/plans/fable5-implementation-plan.md)
 
-### P2 — iTunes writeback hardening (highest stakes; wave 1–4)
-- [ ] **F5-T001** Fix LE parser mhoh descent — track string fields currently never parsed (HIGH-2)
-- [ ] **F5-T002** Golden-corpus mhoh encoding audit tool + constants table
-- [ ] **F5-T003** ⚠ `ITLSafetyContract` — 8 named guards + 13-test regression suite
-- [ ] **F5-T004** ⚠ `SafeWriteITL` atomic write + header count regeneration (CRIT-3)
-- [ ] **F5-T005** ⚠ iTunes-conformant string encoders — stop writing +27∈{1,3} (CRIT-1)
-- [ ] **F5-T006** ⚠ `LocationPair` — 0x0D Windows path / 0x0B URL normalization (CRIT-2)
-- [ ] **F5-T007** itl-diff/itl-check honesty: msdh inventory, playlist membership, AuditITL
-- [ ] **F5-T008** Diff-before-write in writeback batcher (HIGH-3) + library-not-in-use gate
-- [ ] **F5-T010** Fail-closed inflate cap (MED-7)
+### P2 — iTunes writeback hardening ✅ all done
+- [x] **F5-T001** Fix LE parser mhoh descent — track string fields now parsed in LE libraries ✅ Jun 9
+- [x] **F5-T002** Golden-corpus mhoh encoding audit tool + constants table ✅ Jun 10
+- [x] **F5-T003** ⚠ `ITLSafetyContract` — 8 named guards + 13-test regression suite ✅ Jun 10
+- [x] **F5-T004** ⚠ `SafeWriteITL` atomic write + header count regeneration (CRIT-3) ✅ Jun 10
+- [x] **F5-T005** ⚠ iTunes-conformant string encoders — stop writing +27∈{1,3} (CRIT-1) ✅ Jun 10
+- [x] **F5-T006** ⚠ `LocationPair` — 0x0D Windows path / 0x0B URL normalization (CRIT-2) ✅ Jun 10
+- [x] **F5-T007** itl-diff/itl-check honesty: msdh inventory, playlist membership, AuditITL ✅ Jun 10
+- [x] **F5-T008** Diff-before-write in writeback batcher (HIGH-3) + library-not-in-use gate ✅ Jun 10
+- [x] **F5-T010** Fail-closed inflate cap (MED-7) ✅ Jun 9
 
-### P1 — Unified dedup pipeline (waves 1–4)
-- [ ] **F5-T011** `internal/dedup/unified` — Signal/UnifiedDedupScore/ComposeScore (noisy-OR v1)
-- [ ] **F5-T012** ⚠ LSH `fpidx:` Pebble index — build op + write/delete hooks (`lsh_index_v1_done`)
-- [ ] **F5-T013** LSH probe collector; retire `ACOUSTID_FUZZY_ENABLED` O(N) path
-- [ ] **F5-T014** Collector refactor + `PairEligibility` + NEW metadata-fuzzy collector
-- [ ] **F5-T015** ⚠ Candidate schema additions + legacy-fingerprint purge (~14K stale 100% rows, HIGH-5)
+### P1 — Unified dedup pipeline ✅ all done
+- [x] **F5-T011** `internal/dedup/unified` — Signal/UnifiedDedupScore/ComposeScore (noisy-OR v1) ✅ Jun 9
+- [x] **F5-T012** ⚠ LSH `fpidx:` Pebble index — build op + write/delete hooks (`lsh_index_v1_done`) ✅ Jun 10
+- [x] **F5-T013** LSH probe collector; retire `ACOUSTID_FUZZY_ENABLED` O(N) path ✅ Jun 10
+- [x] **F5-T014** Collector refactor + `PairEligibility` + NEW metadata-fuzzy collector ✅ Jun 10
+- [x] **F5-T015** ⚠ Candidate schema additions + legacy-fingerprint purge (~14K stale 100% rows) ✅ Jun 10
 - [x] **F5-T016** API: band/score/breakdown fields, `/breakdown`, `/rescore` ✅ PR #1414
-- [x] **F5-T017** Unified Dedup UI tab (feature-flagged until backfill complete) ✅ PR #1416
-- [ ] **F5-T018** Scan op rationalization (merge embed-scan/async; phase ordering)
+- [x] **F5-T017** Unified Dedup UI tab (flag removed; always live after backfill) ✅ PR #1416
+- [x] **F5-T018** Scan op rationalization (merge embed-scan/async; phase ordering) ✅ Jun 10
 
-### P3 — Memory & DB optimization (waves 1–5)
-- [ ] **F5-T019** ⚠ Strip AcoustIDSeg0–6 from memdb (~550–900MB RSS) — after T013
-- [x] **F5-T020** ✅ Drop seg fields from `book_file:` Pebble values (sweep + `bookfile_seg_drop_v1_done`)
-- [ ] **F5-T021** Embedding float16+zstd (`emb_f16_v1_done`, dual-read)
-- [ ] **F5-T022** Remove legacy SQLite store (~7.9K lines + CGO dep) (MED-4)
-- [ ] **F5-T023** memdb size telemetry + operation-log retention + dead-prefix sweep
-- [ ] **F5-T024** NutsDB → Pebble activity/metrics migration (dual-write window)
+### P3 — Memory & DB optimization ✅ all done
+- [x] **F5-T019** ⚠ Strip AcoustIDSeg0–6 from memdb (~550–900MB RSS) ✅ Jun 10
+- [x] **F5-T020** ✅ Drop seg fields from `book_file:` Pebble values (sweep + `bookfile_seg_drop_v1_done`) ✅ Jun 10
+- [x] **F5-T021** Embedding float16+zstd (`emb_f16_v1_done`, dual-read) ✅ Jun 10
+- [x] **F5-T022** Remove legacy SQLite store (~7.9K lines + CGO dep) ✅ Jun 10
+- [x] **F5-T023** memdb size telemetry + operation-log retention + dead-prefix sweep ✅ Jun 9
+- [x] **F5-T024** NutsDB → Pebble activity/metrics migration (dual-write window) ✅ Jun 10
 
-### P4 — Fixes (wave 1–2)
-- [ ] **F5-T009** accept-invite HTTP/2 EOF fix + 413 clarity (HIGH-4 pen-test, MED-1)
-- [ ] **F5-T025** `FilterUnchangedTags` covers custom `AUDIOBOOK_ORGANIZER_*` tags (MED-3)
-- [ ] **F5-T026** Duration/filesize aggregation from BookFiles + backfill (MED-2)
-- [ ] **F5-T027** Chromem hydration shutdown join (MED-8)
+### P4 — Fixes ✅ all done
+- [x] **F5-T009** accept-invite HTTP/2 EOF fix + 413 clarity (resolves pen-test MED-5) ✅ Jun 9
+- [x] **F5-T025** `FilterUnchangedTags` covers custom `AUDIOBOOK_ORGANIZER_*` tags ✅ Jun 10
+- [x] **F5-T026** Duration/filesize aggregation from BookFiles + backfill ✅ Jun 10
+- [x] **F5-T027** Chromem hydration shutdown join ✅ Jun 10
+
+### Bonus
+- [x] **F5-T028** `AppConfig` RWMutex-guarded accessors — convert all write sites ✅ Jun 10
 
 ---
 
@@ -99,9 +102,9 @@ Review deliverables (see files for full detail):
 
 ## 🔐 Security (pen-test 2026-06-04)
 
-10 of 11 findings fixed in `fix/security-pentest-findings` (see CHANGELOG). One deferred:
+All 11 pen-test findings fixed:
 
-- [ ] **MED-5** `POST /api/v1/auth/accept-invite` reportedly returns `{"error":"EOF"}` under HTTP/2 (curl default); `--http1.1` works. Deferred from the remediation PR — needs empirical repro before a fix. **Findings so far:** the route shares the exact middleware chain (apiRateLimiter + MaxRequestBodySize) and `ShouldBindJSON` pattern as `/auth/login` and `/auth/bootstrap`, which the pen test exercised fine under HTTP/2 — so it is **not accept-invite-specific in code**. Leading hypotheses to check during repro: (1) the tester POSTed to `/api/auth/accept-invite` (non-`v1`) and hit the `/api/*`→`/api/v1/*` 301 redirect, where curl drops the POST body; (2) an h2 stream-reset when the handler returns before the body is fully read. Repro needs the TLS+HTTP/2 server up with a valid invite token seeded. If confirmed as the redirect case, the fix is client-side (use the `/api/v1/` path) or making the redirect 307/308 to preserve the body.
+- [x] **MED-5** `POST /api/v1/auth/accept-invite` EOF + 413 clarity — fixed in F5-T009 (Jun 9). `ShouldBindJSON` upgraded to explicit body-read + close; 413 response body now includes `{"error":"request body too large","max_bytes":N}`; Gin set to release mode to suppress debug headers. ✅
 
 ---
 
@@ -137,17 +140,8 @@ PR `feat/fingerprint-wholefile` (Step 1 + 2) ships:
 - [x] Verified fixed by Security run `26727789014`.
 
 **Follow-up PRs (not in this PR):**
-- [ ] **Step 3 — LSH index for whole-file similarity.** [hold] Add
-  `fpidx:<subfp>:<bookfile_id>` secondary index in PebbleStore;
-  replace dedup's full-scan fuzzy match with candidate-set + Hamming
-  refine. Bench target: <100ms per query at 15K files. Includes
-  global subfingerprint-frequency masking to learn shared intros
-  from the data instead of relying on the 10% slice rule.
-- [ ] **Step 4 — Drop legacy seg1..6 fields.** After one release
-  cycle of validation: remove `AcoustIDSeg1..6` from `BookFile`,
-  remove `FileSegments` + offset/ffmpeg-pipe code from
-  `internal/fingerprint/fpcalc.go`, migrate prod data to clear
-  the columns.
+- [x] **Step 3 — LSH index for whole-file similarity.** ✅ F5-T012 + T013 (Jun 10): `fpidx:<subfp>:<bookfile_id>` Pebble secondary index + build op; LSH probe collector replaces O(N) `ACOUSTID_FUZZY_ENABLED` path.
+- [x] **Step 4 — Drop legacy seg1..6 fields.** ✅ F5-T019 + T020 (Jun 10): seg fields stripped from memdb projections (T019) and from all new Pebble `book_file:` writes (T020); `SweepBookFileSegDrop` backfills legacy rows.
 - [ ] **Online AcoustID lookup.** Whole-file fps can now be POSTed
   to `acoustid.org` for MBID enrichment — wire it up as an
   optional enrichment step after fingerprinting.
