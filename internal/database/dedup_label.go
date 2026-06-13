@@ -1,5 +1,5 @@
 // file: internal/database/dedup_label.go
-// version: 1.0.2
+// version: 1.0.3
 // guid: 5a0319bd-8bc4-4135-91e6-dfd43628dcc5
 // last-edited: 2026-06-13
 
@@ -44,8 +44,9 @@ type LabeledExample struct {
 	EntityAID   string `json:"entity_a_id"`
 	EntityBID   string `json:"entity_b_id"`
 
-	Layer          string          `json:"layer"`
-	Band           string          `json:"band,omitempty"`
+	Layer string `json:"layer"`
+	Band  string `json:"band,omitempty"`
+	// Score is 0 when no ScoreBreakdown is available; populated from the candidate's UnifiedDedupScore.Score when present.
 	Score          float64         `json:"score"`
 	ScoreBreakdown json.RawMessage `json:"score_breakdown,omitempty"`
 	Similarity     *float64        `json:"similarity,omitempty"`

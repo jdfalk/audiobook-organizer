@@ -1,5 +1,5 @@
 // file: internal/dedup/dataset/builder.go
-// version: 1.1.1
+// version: 1.1.2
 // guid: 4a91c7e0-6d83-4b25-9f10-2c5a8e7d4b31
 // last-edited: 2026-06-13
 
@@ -10,6 +10,7 @@
 package dataset
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
 
@@ -39,6 +40,20 @@ func BuildExample(store BuilderStore, cand database.DedupCandidate) (database.La
 		Layer:       cand.Layer,
 		Band:        cand.Band,
 		Similarity:  cand.Similarity,
+	}
+
+	// Populate Score and ScoreBreakdown snapshot from the candidate's unified
+	// score when present. On current production data these are nil (Experiment 0
+	// found 100% empty) — this is forward-correctness for rows produced by the
+	// T015/T016 unified pipeline. A nil ScoreBreakdown leaves Score at 0 and
+	// ex.ScoreBreakdown nil, which is the safe/zero value.
+	if cand.ScoreBreakdown != nil {
+		ex.Score = cand.ScoreBreakdown.Score
+		if raw, err := json.Marshal(cand.ScoreBreakdown); err == nil {
+			ex.ScoreBreakdown = raw
+		}
+		// On marshal error: Score is still set; ScoreBreakdown is left nil.
+		// BuildExample never fails due to a snapshot marshal error.
 	}
 
 	a, aFiles, err := loadSide(store, cand.EntityAID)

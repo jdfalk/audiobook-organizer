@@ -1,5 +1,5 @@
 // file: internal/database/dedup_label_test.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: 28cfcafd-ac95-4175-8fe7-b0fc46bd05bb
 // last-edited: 2026-06-13
 
@@ -36,7 +36,7 @@ func TestLabeledExample_RoundTripAndFilter(t *testing.T) {
 		Label:             "not_dup",
 		LabelSource:       "rule",
 		LabelReason:       "duration ratio 0.02 — part vs whole",
-		FolderRelation:    "sibling_parts",
+		FolderRelation:    "sibling_parts", // planned value, not yet produced by the builder; exercises round-trip storage of an arbitrary valid string
 		SignatureRelation: "unknown",
 	}
 	if err := es.UpsertLabeledExample(ex); err != nil {
