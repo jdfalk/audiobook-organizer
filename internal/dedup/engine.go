@@ -1,5 +1,5 @@
 // file: internal/dedup/engine.go
-// version: 1.26.1
+// version: 1.26.2
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 // last-edited: 2026-06-13
 
@@ -777,6 +777,11 @@ func (de *Engine) checkExactISBN(book *database.Book) error {
 // share the same metadata_source_hash (sha256 of source:canonical_id) they
 // were applied from the exact same external record and are almost certainly
 // duplicates. Creates a dedup candidate with similarity 0.99.
+//
+// Note: intentionally NOT gated by hasPlausibleAudio. A shared
+// metadata-source hash is a valid duplicate signal even when one side is an
+// unscanned/incomplete file — unlike the title/ISBN emitters, this match is
+// anchored to a concrete external record, not just a name collision.
 func (de *Engine) checkExactMetadataSourceHash(book *database.Book) error {
 	if book.MetadataSourceHash == nil || *book.MetadataSourceHash == "" {
 		return nil

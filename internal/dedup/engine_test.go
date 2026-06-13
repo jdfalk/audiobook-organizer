@@ -1,5 +1,5 @@
 // file: internal/dedup/engine_test.go
-// version: 2.1.0
+// version: 2.1.1
 // guid: 2a7e4d91-c538-4f06-b1d3-9e8c5a6f0d72
 // last-edited: 2026-06-13
 
@@ -1110,6 +1110,7 @@ func TestHasPlausibleAudio(t *testing.T) {
 		{"182-byte stub, no duration", &database.Book{FileSize: sz(182)}, false},
 		{"large unscanned copy (genuine dupe)", &database.Book{FileSize: sz(184_741_714)}, true},
 		{"positive duration, no size", &database.Book{Duration: dur(3600)}, true},
+		{"zero duration pointer (scanned, found nothing)", &database.Book{Duration: dur(0)}, false},
 		{"empty book", &database.Book{}, false},
 	}
 	for _, tc := range cases {
