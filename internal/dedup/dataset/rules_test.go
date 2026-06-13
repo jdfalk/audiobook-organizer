@@ -1,11 +1,12 @@
 // file: internal/dedup/dataset/rules_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: c1d4e8b5-7f23-4a90-9b01-6e2c5d8f3a47
 // last-edited: 2026-06-13
 
 package dataset
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/falkcorp/audiobook-organizer/internal/database"
@@ -107,15 +108,16 @@ func TestClassify_ReasonContainsRatio(t *testing.T) {
 		B:             database.BookFeatures{TotalDurationSec: 1200, FilesExist: true},
 		DurationRatio: 1200.0 / 36000.0,
 	}
-	_, reason, fires := Classify(ex)
+	label, reason, fires := Classify(ex)
 	if !fires {
 		t.Fatal("expected catcher to fire")
 	}
-	if len(reason) == 0 {
-		t.Fatal("expected non-empty reason")
+	// Label assertion: must be not_dup.
+	if label != "not_dup" {
+		t.Fatalf("label = %q, want not_dup", label)
 	}
-	// Reason should mention the ratio numerically (smoke check, not an exact match).
-	if reason == "not_dup" {
-		t.Fatalf("reason should describe the cause, not just repeat the label; got %q", reason)
+	// Reason assertion: must describe the rule, not just echo the label.
+	if !strings.Contains(reason, "part vs whole") {
+		t.Fatalf("reason should describe the rule (want substring %q); got %q", "part vs whole", reason)
 	}
 }
