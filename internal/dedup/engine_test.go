@@ -299,8 +299,9 @@ func TestEngine_ExactMatch_ISBN(t *testing.T) {
 	engine, mock, es := setupTestEngine(t)
 
 	authorID := 1
-	bookA := &database.Book{ID: "BOOK_A", Title: "Title A", AuthorID: &authorID, ISBN13: strPtr("9780134685991")}
-	bookB := &database.Book{ID: "BOOK_B", Title: "Title B", AuthorID: &authorID, ISBN13: strPtr("9780134685991")}
+	sz := func(v int64) *int64 { return &v }
+	bookA := &database.Book{ID: "BOOK_A", Title: "Title A", AuthorID: &authorID, ISBN13: strPtr("9780134685991"), FileSize: sz(300_000_000)}
+	bookB := &database.Book{ID: "BOOK_B", Title: "Title B", AuthorID: &authorID, ISBN13: strPtr("9780134685991"), FileSize: sz(300_000_000)}
 
 	mock.GetBookByIDFunc = func(id string) (*database.Book, error) {
 		if id == "BOOK_A" {
@@ -1020,6 +1021,29 @@ func TestEmbedStatus_String(t *testing.T) {
 		if got := tc.status.String(); got != tc.want {
 			t.Errorf("EmbedStatus(%d).String() = %q, want %q", tc.status, got, tc.want)
 		}
+	}
+}
+
+func TestEngine_ExactISBN_RejectsStubFile(t *testing.T) {
+	engine, mock, es := setupTestEngine(t)
+	sz := func(v int64) *int64 { return &v }
+	isbn := func(v string) *string { return &v }
+
+	real := &database.Book{ID: "r", Title: "X", ISBN13: isbn("9781234567890"), FileSize: sz(120_000_000)}
+	stub := &database.Book{ID: "s", Title: "X", ISBN13: isbn("9781234567890"), FileSize: sz(182)}
+	mock.GetAllBooksFunc = func(limit, offset int) ([]database.Book, error) {
+		if offset == 0 {
+			return []database.Book{*real, *stub}, nil
+		}
+		return nil, nil
+	}
+
+	if err := engine.checkExactISBN(real); err != nil {
+		t.Fatalf("checkExactISBN: %v", err)
+	}
+	cands, _, _ := es.ListCandidates(database.CandidateFilter{Limit: 100})
+	if len(cands) != 0 {
+		t.Fatalf("expected 0 candidates (stub rejected), got %d", len(cands))
 	}
 }
 
