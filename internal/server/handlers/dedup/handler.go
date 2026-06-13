@@ -1,5 +1,5 @@
 // file: internal/server/handlers/dedup/handler.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: d1b9e024-d28c-4d62-8f90-96d7064559c4
 // last-edited: 2026-06-13
 
@@ -236,12 +236,21 @@ func (h *Handler) ListDedupCandidates(c *gin.Context) {
 		bookCache[id] = book
 		return book
 	}
-	// isMetadataMatched reports whether a book has authoritative metadata.
-	// v1: only a human-confirmed match (MetadataReviewStatus == "matched")
-	// counts as matched. To widen the net later, OR in external-ID presence
-	// (e.g. ASIN/ISBN13) here — that is the single intended extension point.
+	// isMetadataMatched reports whether a book has authoritative metadata, so it
+	// does NOT need manual matching. A book counts as matched when EITHER a human
+	// confirmed the match (MetadataReviewStatus == "matched") OR it carries an
+	// external identifier (ASIN / ISBN13 / ISBN10) — having one means it was
+	// matched to a provider record. This is the single intended extension point;
+	// add further "matched" indicators here.
+	nonEmpty := func(s *string) bool { return s != nil && *s != "" }
 	isMetadataMatched := func(b *database.Book) bool {
-		return b != nil && b.MetadataReviewStatus != nil && *b.MetadataReviewStatus == "matched"
+		if b == nil {
+			return false
+		}
+		if b.MetadataReviewStatus != nil && *b.MetadataReviewStatus == "matched" {
+			return true
+		}
+		return nonEmpty(b.ASIN) || nonEmpty(b.ISBN13) || nonEmpty(b.ISBN10)
 	}
 	dropped := 0
 	items := make([]gin.H, 0, len(candidates))

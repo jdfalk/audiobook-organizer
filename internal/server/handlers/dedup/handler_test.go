@@ -1,5 +1,5 @@
 // file: internal/server/handlers/dedup/handler_test.go
-// version: 1.3.1
+// version: 1.3.2
 // guid: 6d8011eb-bed6-430b-959e-2a2b0738ffbc
 // last-edited: 2026-06-12
 
@@ -242,14 +242,19 @@ func TestListDedupCandidates_IncludeBooks(t *testing.T) {
 func TestListDedupCandidates_BothUnmatched(t *testing.T) {
 	h, d := newHandler(t)
 	matched := "matched"
-	insertCandidate(t, d.es, "u1", "u2") // both unmatched → should appear
-	insertCandidate(t, d.es, "u3", "m1") // m1 is matched → pair filtered out
+	asin := "B00ABC1234"
+	insertCandidate(t, d.es, "u1", "u2")    // both unmatched → should appear
+	insertCandidate(t, d.es, "u3", "m1")    // m1 matched (review status) → filtered out
+	insertCandidate(t, d.es, "u4", "asin1") // asin1 matched (external ID) → filtered out
 
 	d.store.EXPECT().GetBookByID("u1").Return(&database.Book{ID: "u1"}, nil).Maybe()
 	d.store.EXPECT().GetBookByID("u2").Return(&database.Book{ID: "u2"}, nil).Maybe()
 	d.store.EXPECT().GetBookByID("u3").Return(&database.Book{ID: "u3"}, nil).Maybe()
+	d.store.EXPECT().GetBookByID("u4").Return(&database.Book{ID: "u4"}, nil).Maybe()
 	d.store.EXPECT().GetBookByID("m1").
 		Return(&database.Book{ID: "m1", MetadataReviewStatus: &matched}, nil).Maybe()
+	d.store.EXPECT().GetBookByID("asin1").
+		Return(&database.Book{ID: "asin1", ASIN: &asin}, nil).Maybe()
 
 	w := doReq(t, h.ListDedupCandidates, http.MethodGet,
 		"/api/v1/dedup/candidates?both_unmatched=true&include_books=true", nil, nil)
@@ -272,7 +277,7 @@ func TestListDedupCandidates_BothUnmatched(t *testing.T) {
 	row := resp.Data.Candidates[0]
 	a, _ := row["entity_a_id"].(string)
 	b, _ := row["entity_b_id"].(string)
-	if a == "m1" || b == "m1" {
+	if a == "m1" || b == "m1" || a == "asin1" || b == "asin1" {
 		t.Fatalf("matched pair leaked through the both_unmatched filter: %v", row)
 	}
 }
