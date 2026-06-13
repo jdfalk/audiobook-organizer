@@ -3,7 +3,7 @@
 > **Purpose**: Complete project reference for AI agents. Read this before making any changes.
 > Keep this file updated with every architectural change.
 
-**Last updated**: 2026-03-12 | **Server version**: 1.116.0 | **Total API routes**: 189
+**Last updated**: 2026-06-13 | **Server version**: 1.117.0 | **Total API routes**: 189
 
 ## Quick Facts
 
@@ -49,6 +49,8 @@ The Go binary embeds the compiled React app. A single process serves both the AP
 ### `internal/database` — Data layer
 - **store.go** — `Store` interface (255 methods), ALL entity struct definitions (Book, Author, Series, Work, Narrator, BookSegment, Operation, etc.)
 - **pebble_store.go** — Primary implementation. Key schema: `book:<ulid>`, `book:path:<filepath>`, `book:hash:<hash>`, `author:<id>`, `series:<id>`, etc.
+- **embedding_store.go** — `EmbeddingStore` wrapping a separate PebbleDB for embeddings + dedup candidates + labeled dataset. Key-space: `emb:v:*`, `emb:c:*`, `dedup:r:*`, `dedup:p:*`, `dedup:seq`, `dedup:label:*`.
+- **dedup_label.go** — Labeled dedup training dataset keyspace (`dedup:label:<candidateID,16hex>`). Types: `LabeledExample` (candidate pair + feature snapshot + label fields), `BookFeatures` (per-book evidence: title, author, path, durations, file count, has_cover, files_exist, recording_ids, itunes_pid_present, whole_book_sig_present), `LabeledExampleFilter`. Methods on `*EmbeddingStore`: `UpsertLabeledExample`, `GetLabeledExample`, `ListLabeledExamples`, `CountLabeledExamples`.
 - **ai_scan_store.go** — Separate PebbleDB (`ai_scans.db`) for AI dedup pipeline
 - **sqlite_store.go** — Alternative SQLite implementation
 - **mock_store.go** — Test mock (generated with mockery patterns)
@@ -97,6 +99,19 @@ The Go binary embeds the compiled React app. A single process serves both the AP
 
 ### `internal/models` — Legacy models
 - **audiobook.go** — `Audiobook` struct (mostly superseded by `database.Book`)
+
+### `internal/dedup` — Book deduplication engine
+- **engine.go** — `Engine` type; per-layer candidate collectors (`checkExactTitle`, `checkExactISBN`, `checkExactAcoustID`, LSH-probe, metadata-fuzzy); `PairEligibility` pre-filter; `hasPlausibleAudio(book) bool` gate (returns true when `Duration > 0` OR `FileSize >= 256 KiB`). The exact-title and exact-ISBN emitters call this gate for both sides before emitting a candidate — prevents stub/unscanned books from creating false-positive pairs.
+- **dataset/** (sub-package) — Pure builder + deterministic catchers for the labeled training dataset. No side effects.
+  - `BuilderStore` interface: `GetBook(id string)`, `GetBookFiles(id string)`
+  - `BuildExample(BuilderStore, DedupCandidate) (LabeledExample, error)` — loads both books, computes `DurationRatio`, `FolderRelation`, `SharesRecordingID`, `SignatureRelation`. Label fields left empty; caller must run `Classify`.
+  - `Classify(LabeledExample) (label, reason string, fires bool)` — three catchers in priority order: `wholeBookSignatureMatch` (→ `true_dup`; both sigs present + similarity ≥ 0.95), `missingFile` (→ `not_dup`), `partVsWhole` (→ `not_dup`; ratio < 0.5 with both durations known). Returns `("","",false)` when no catcher fires.
+  - Note: `BookFeatures.Author` is left empty — author name resolution would require an additional store method not in `BuilderStore`.
+
+### `internal/plugins/dedup` — Dedup plugin operations
+- **dataset_backfill.go** — `dedup.dataset-backfill` UOS op. Iterates all pending candidates, calls `dataset.BuildExample` + `dataset.Classify`, writes `LabeledExample` to `dedup:label:` keyspace. With `apply=true`, dismisses candidates labeled `not_dup` by a catcher. Dry-run by default. Idempotent.
+  - `builderAdapter` bridges `database.Store.GetBookByID` → `BuilderStore.GetBook` (name mismatch bridged without touching either interface).
+  - Known limitation: pairs where one side has `Duration=0` but file records exist are NOT caught by the current catchers — they are left unlabeled for human/ML review. The engine gate stops NEW such pairs from being created; existing residual pairs need a future FileSize-aware catcher.
 
 ---
 
@@ -334,6 +349,19 @@ u:<user_ulid>                  → User JSON
 sess:<session_ulid>            → Session JSON
 ```
 
+### Dedup / Embedding keyspace (separate EmbeddingStore PebbleDB)
+
+```
+emb:v:<entityType>:<entityID>  → embRec JSON          (embedding vector record)
+emb:c:<model>:<textHash>       → raw float32 blob      (embedding cache)
+dedup:r:<id16hex>              → DedupCandidate JSON   (candidate record)
+dedup:p:<type>:<aID>:<bID>     → id16hex               (pair uniqueness index)
+dedup:seq                      → [8]byte LE int64      (auto-increment counter)
+dedup:label:<id16hex>          → LabeledExample JSON   (labeled training dataset)
+```
+
+Key format note: `<id16hex>` is a 16-character lowercase hex string encoding a signed int64 as uint64 (e.g., `fmt.Sprintf("%016x", uint64(candidateID))`). This zero-pads the key so prefix scans return rows in stable order.
+
 ---
 
 ## Critical Implementation Details
@@ -415,7 +443,8 @@ All diagrams are in `docs/diagrams/` in both Mermaid (`.mmd`) and Graphviz DOT (
 | Book Scan Flow | `flow-book-scan.mmd` | Directory scan → metadata extraction → dedup → save |
 | Organize Flow | `flow-organize.mmd` | File moves, renames, tag writing |
 | Metadata Fetch Flow | `flow-metadata-fetch.mmd` | Multi-source search → apply with provenance |
-| AI Dedup Flow | `flow-ai-dedup.mmd` | Multi-model scan → cross-validation → apply |
+| AI Dedup Flow | `flow-ai-dedup.mmd` | Multi-model scan → cross-validation → apply (AUTHOR dedup via OpenAI batch API) |
+| Book Dedup Candidate Lifecycle | `flow-book-dedup.mmd` | Scan → exact/LSH emitters (gated by `hasPlausibleAudio`) → candidate → backfill op → labeled dataset → (future) review UI / JSONL export |
 
 Render Mermaid: `mmdc -i file.mmd -o file.svg`
 Render DOT: `dot -Tsvg file.dot -o file.svg`

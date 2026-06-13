@@ -1,11 +1,64 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.18.0 -->
+<!-- version: 3.19.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-06-12 -->
+<!-- last-edited: 2026-06-13 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Added
+
+#### June 13, 2026 — Dedup tuning dataset: engine gate + labeled store + backfill op
+
+- **`internal/dedup/engine.go`** — `hasPlausibleAudio(book *database.Book) bool` gate added.
+  Returns true when a book has positive duration OR file size >= 256 KiB. The
+  `checkExactTitle` and `checkExactISBN` emitters now call this gate for both sides of
+  a candidate pair before emitting; stub/unscanned books with no audio evidence are
+  blocked from producing new false-positive candidates. `checkExactAcoustID` is
+  intentionally not gated (AcoustID match is its own evidence of audio content).
+
+- **`internal/database/dedup_label.go`** (NEW) — PebbleDB keyspace `dedup:label:` for the
+  labeled dedup training dataset.
+  - `LabeledExample`: stores one candidate pair with computed feature snapshot and
+    label fields (`label`, `label_source`, `label_reason`, `decided_at`,
+    `formula_version`).
+  - `BookFeatures`: per-book evidence snapshot (title, author, primary_path,
+    total_duration_sec, file_count, has_cover, files_exist, recording_ids,
+    itunes_pid_present, whole_book_sig_present).
+  - `LabeledExampleFilter`: narrows list/count queries by label, label_source, band,
+    folder_relation, signature_relation.
+  - Store methods on `*EmbeddingStore`: `UpsertLabeledExample`, `GetLabeledExample`,
+    `ListLabeledExamples`, `CountLabeledExamples`.
+
+- **`internal/dedup/dataset/`** (NEW package) — pure builder + deterministic catchers.
+  - `BuildExample(BuilderStore, DedupCandidate) (LabeledExample, error)`: loads both
+    books, computes duration ratio, folder relation, recording-ID overlap,
+    whole-book signature relation. No side effects; label fields left empty.
+  - `Classify(LabeledExample) (label, reason string, fires bool)`: runs three
+    deterministic catchers in priority order:
+    1. `wholeBookSignatureMatch` → `true_dup` (positive oracle; both sigs present +
+       similarity >= 0.95)
+    2. `missingFile` → `not_dup` (hard negative; never merge a book with no files)
+    3. `partVsWhole` → `not_dup` (duration ratio < 0.5 when both durations known)
+
+- **`internal/plugins/dedup/dataset_backfill.go`** (NEW) — `dedup.dataset-backfill` UOS op.
+  Iterates all pending candidates, builds a LabeledExample per pair, runs catchers, and
+  writes to the `dedup:label:` keyspace. With `apply=true`, any candidate a catcher
+  labels `not_dup` is dismissed (status → `dismissed`). Dry-run by default. Idempotent:
+  re-running is safe; done-flags are unnecessary because `UpsertLabeledExample` overwrites
+  and re-dismissing a dismissed candidate is a no-op.
+
+### Changed
+
+#### June 13, 2026 — M0: legacy false-positive purge applied on production
+
+- Applied `dedup.purge-legacy-fp-candidates` on production: 12,322 candidates with
+  `layer=exact` and `similarity=1.0` promoted from legacy fingerprint-hash equality
+  (pre-unified-pipeline) were moved to `stale-fp` status. Idempotency flag
+  `dedup_fp_purge_v1_done` set. These were never meaningful dedup candidates — they
+  fired on segment-fingerprint equality across parts of the same audiobook series, not
+  actual duplicates. The pending queue is now limited to acoustically meaningful pairs.
 
 ### Fixed
 

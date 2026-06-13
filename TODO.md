@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.77.0 -->
+<!-- version: 8.78.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-06-13 -->
 
@@ -95,6 +95,64 @@ All 27 planned tasks + 1 bonus task shipped. Specs and plan docs:
 
 ### Bonus
 - [x] **F5-T028** `AppConfig` RWMutex-guarded accessors — convert all write sites ✅ Jun 10
+
+---
+
+## ✅ Dedup Tuning Dataset — COMPLETE (June 13, 2026)
+
+Spec: [`docs/specs/2026-06-13-dedup-tuning-dataset-design.md`](docs/specs/2026-06-13-dedup-tuning-dataset-design.md)
+Plan: [`docs/plans/2026-06-13-dedup-exact-gate-and-dataset.md`](docs/plans/2026-06-13-dedup-exact-gate-and-dataset.md)
+
+### M0 — Legacy false-positive purge ✅ applied on production June 13
+- [x] **M0** `dedup.purge-legacy-fp-candidates` applied: 12,322 candidates (`layer=exact`,
+  `similarity=1.0`) → `stale-fp`. Idempotency flag `dedup_fp_purge_v1_done` set. ✅ Jun 13
+
+### Milestone A — Engine gate ✅
+- [x] **A1** `hasPlausibleAudio(book *database.Book) bool` in `internal/dedup/engine.go`:
+  returns true when `Duration > 0` OR `FileSize >= 256 KiB`. ✅ Jun 13
+- [x] **A2** Gate applied to `checkExactTitle` (both sides, before emit). ✅ Jun 13
+- [x] **A3** Gate applied to `checkExactISBN` (both sides, before emit). ✅ Jun 13
+  Note: `checkExactAcoustID` intentionally not gated (AcoustID is its own evidence).
+
+### Milestone B — Dataset store + builder + catchers ✅
+- [x] **B1** `internal/database/dedup_label.go`: `LabeledExample`, `BookFeatures`,
+  `LabeledExampleFilter`; PebbleDB keyspace `dedup:label:<id16hex>`. ✅ Jun 13
+- [x] **B2** `*EmbeddingStore` methods: `UpsertLabeledExample`, `GetLabeledExample`,
+  `ListLabeledExamples`, `CountLabeledExamples`. ✅ Jun 13
+- [x] **B3** `internal/dedup/dataset/builder.go`: `BuildExample` (pure; computes duration
+  ratio, folder relation, recording-ID overlap, signature relation). ✅ Jun 13
+- [x] **B4** `internal/dedup/dataset/rules.go`: `Classify` — three catchers in priority
+  order: `wholeBookSignatureMatch` → `true_dup`; `missingFile` → `not_dup`;
+  `partVsWhole` (ratio < 0.5) → `not_dup`. ✅ Jun 13
+
+### Milestone C — Backfill op ✅
+- [x] **C1–C4** `internal/plugins/dedup/dataset_backfill.go`: `dedup.dataset-backfill` UOS
+  op. Dry-run by default; `apply=true` writes and suppresses rule-labeled `not_dup`
+  candidates. Idempotent. ✅ Jun 13
+
+### Deferred follow-ups (open)
+- [ ] **C5-gate** FileSize-aware catcher for residual stub pairs: when both sides have
+  `FileSize > 0` but `Duration == 0`, compare file sizes. Currently these pairs are
+  unlabeled (left for human/ML review) because `DurationRatio == 0` does not fire
+  `partVsWhole`. A separate `fileSizeMismatch` catcher would catch the dominant residual
+  class (0-second stubs vs. real books with large file sizes).
+- [ ] **C5-sig** Offset/subsequence containment: `signatureRelation` currently returns only
+  `match`, `disjoint`, or `unknown`. The `a_contains_b` / `b_contains_a` values in the
+  spec require comparing signature subsequences — deferred to a future milestone.
+- [ ] **C5-folder** `sibling_parts` folder relation: `folderRelation` currently returns only
+  `unrelated`, `same_dir`, `a_ancestor_of_b`, `b_ancestor_of_a`. The `sibling_parts`
+  value (same parent, different child dirs matching a series pattern) is planned but not
+  yet implemented.
+- [ ] **C5** Live-capture: wire `BuildExample` + `Classify` into the candidate-upsert path
+  so each new candidate automatically gets a feature snapshot + deterministic label on
+  creation (no separate backfill needed going forward).
+- [ ] **C6** Review UI: web panel listing `dedup:label:` examples filterable by label,
+  label_source, band; human can override label and set `label_source=human`.
+- [ ] **C7** JSONL export: admin endpoint or CLI tool to export labeled examples as JSONL
+  for offline ML training; include `formula_version` for dataset versioning.
+- [ ] **C8** Auto-bug-filing: after backfill, emit a GitHub issue per `not_dup` cluster
+  where rule-suppressed count exceeds a threshold (surfacing systematic false-positive
+  sources for human review).
 
 ---
 

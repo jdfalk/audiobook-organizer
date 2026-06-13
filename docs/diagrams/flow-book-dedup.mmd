@@ -1,0 +1,56 @@
+flowchart TD
+    %% file: docs/diagrams/flow-book-dedup.mmd
+    %% version: 1.0.0
+    %% guid: 7c3e9a21-4f6b-4d08-b1a2-8e5d0c7f3b92
+    %% Book Dedup Candidate Lifecycle
+
+    Scan([Book scan / rescan]) --> Fingerprint["Fingerprint files\n(fpcalc → AcoustIDFingerprintDurationSec)"]
+    Fingerprint --> LSH["Build LSH index\n(dedup.lsh-index-build op)\nfpidx:&lt;subfp&gt;:&lt;bookfile_id&gt;"]
+
+    LSH --> Collectors["Candidate collectors\n(engine.go)"]
+    Collectors --> ExactTitle["checkExactTitle\nexact title+author match"]
+    Collectors --> ExactISBN["checkExactISBN\nexact ISBN match"]
+    Collectors --> ExactAcoustID["checkExactAcoustID\nAcoustID hash match"]
+    Collectors --> LSHProbe["LSH probe collector\nO(band×k) fingerprint candidates"]
+    Collectors --> MetaFuzzy["Metadata-fuzzy collector\nLevenshtein title+author"]
+
+    ExactTitle --> Gate1{hasPlausibleAudio?\nDuration > 0 OR\nFileSize >= 256 KiB}
+    ExactISBN --> Gate2{hasPlausibleAudio?\nboth sides}
+    Gate1 -->|both sides pass| Emit["Emit DedupCandidate\ndedup:r:&lt;id16hex&gt;\ndedup:p: pair index"]
+    Gate2 -->|both sides pass| Emit
+    Gate1 -->|either side fails| Drop1[Drop — stub/unscanned book]
+    Gate2 -->|either side fails| Drop1
+    ExactAcoustID -->|not gated| Emit
+    LSHProbe --> Emit
+    MetaFuzzy --> Emit
+
+    Emit --> Score["Compose unified score\n(noisy-OR: LSH+AcoustID+meta+embed)\nband: CERTAIN/HIGH/MEDIUM/REVIEW"]
+    Score --> CandStore[("PebbleDB\ndedup:r:&lt;id16hex&gt;\nstatus=pending")]
+
+    CandStore --> Backfill["dedup.dataset-backfill op\n(dry-run or apply=true)"]
+    Backfill --> BuildEx["dataset.BuildExample\n(load books+files; compute features)"]
+    BuildEx --> Classify["dataset.Classify\n(deterministic catchers)"]
+
+    Classify --> SigMatch{"wholeBookSignatureMatch?\nboth sigs + similarity >= 0.95"}
+    SigMatch -->|yes| LabelDup["label=true_dup\nlabel_source=rule"]
+    SigMatch -->|no| MissingFile{"missingFile?\neither side FilesExist=false"}
+    MissingFile -->|yes| LabelNotDup["label=not_dup\nlabel_source=rule"]
+    MissingFile -->|no| PartWhole{"partVsWhole?\nDurationRatio < 0.5\nwith both durations known"}
+    PartWhole -->|yes| LabelNotDup
+    PartWhole -->|no| LabelUnlabeled["label=empty\n(unlabeled — features only\nfor human or ML review)"]
+
+    LabelDup --> WriteLabel[("dedup:label:&lt;id16hex&gt;\nLabeledExample JSON")]
+    LabelNotDup --> WriteLabel
+    LabelUnlabeled --> WriteLabel
+
+    LabelNotDup -->|apply=true| Suppress["UpdateCandidateStatus\n→ dismissed"]
+    LabelDup -->|apply=true, human review| Merge["Merge books\n(future: review UI)"]
+
+    WriteLabel --> FutureExport["(future)\nJSONL export / review UI\n/ ML training pipeline"]
+
+    style Drop1 fill:#fdd,stroke:#c33
+    style LabelDup fill:#dfd,stroke:#3a3
+    style LabelNotDup fill:#ffd,stroke:#aa3
+    style LabelUnlabeled fill:#ddf,stroke:#33a
+    style FutureExport fill:#f5f5f5,stroke:#aaa,stroke-dasharray:5 5
+    style Merge fill:#f5f5f5,stroke:#aaa,stroke-dasharray:5 5
