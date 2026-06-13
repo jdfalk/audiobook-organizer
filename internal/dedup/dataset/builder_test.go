@@ -1,15 +1,30 @@
 // file: internal/dedup/dataset/builder_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b3e7f2a1-9c45-4d80-8e62-5f1a3d6c7b90
 // last-edited: 2026-06-13
 
 package dataset
 
 import (
+	"encoding/base64"
+	"encoding/binary"
 	"testing"
 
 	"github.com/falkcorp/audiobook-organizer/internal/database"
 )
+
+// makeTestSig builds a valid BookSigV1 string: 4096 uint32 words encoded as
+// little-endian bytes then base64. All words are set to the given seed value
+// so two sigs with the same seed are identical (sim=1.0) and two with different
+// seeds are fully dissimilar (sim=0.0 when seed bits are all-1 vs all-0).
+func makeTestSig(seed uint32) string {
+	const n = 4096
+	buf := make([]byte, n*4)
+	for i := 0; i < n; i++ {
+		binary.LittleEndian.PutUint32(buf[i*4:], seed)
+	}
+	return base64.StdEncoding.EncodeToString(buf)
+}
 
 // fakeStore implements BuilderStore for tests.
 type fakeStore struct {
@@ -109,6 +124,67 @@ func TestBuildExample_HasCover(t *testing.T) {
 	}
 	if ex.B.HasCover {
 		t.Fatal("expected B.HasCover=false")
+	}
+}
+
+func TestBuildExample_SignatureRelation_Match(t *testing.T) {
+	// Two books with identical 4096-uint32 sigs → sim=1.0 → "match"
+	sig := makeTestSig(0xDEADBEEF)
+	bkA := &database.Book{ID: "a", Title: "Same Book", BookSigV1: &sig}
+	bkB := &database.Book{ID: "b", Title: "Same Book", BookSigV1: &sig}
+	fs := &fakeStore{
+		books: map[string]*database.Book{"a": bkA, "b": bkB},
+		files: map[string][]database.BookFile{},
+	}
+	cand := database.DedupCandidate{ID: 10, EntityAID: "a", EntityBID: "b", Layer: "lsh"}
+
+	ex, err := BuildExample(fs, cand)
+	if err != nil {
+		t.Fatalf("BuildExample: %v", err)
+	}
+	if ex.SignatureRelation != "match" {
+		t.Fatalf("SignatureRelation = %q, want match (identical sigs)", ex.SignatureRelation)
+	}
+}
+
+func TestBuildExample_SignatureRelation_Disjoint(t *testing.T) {
+	// seed=0x00000000 gives all-zero words; seed=0xFFFFFFFF gives all-one words.
+	// XOR of these is all-ones → every bit differs → sim=0.0 → "disjoint"
+	sigA := makeTestSig(0x00000000)
+	sigB := makeTestSig(0xFFFFFFFF)
+	bkA := &database.Book{ID: "a", Title: "Book A", BookSigV1: &sigA}
+	bkB := &database.Book{ID: "b", Title: "Book B", BookSigV1: &sigB}
+	fs := &fakeStore{
+		books: map[string]*database.Book{"a": bkA, "b": bkB},
+		files: map[string][]database.BookFile{},
+	}
+	cand := database.DedupCandidate{ID: 11, EntityAID: "a", EntityBID: "b", Layer: "lsh"}
+
+	ex, err := BuildExample(fs, cand)
+	if err != nil {
+		t.Fatalf("BuildExample: %v", err)
+	}
+	if ex.SignatureRelation != "disjoint" {
+		t.Fatalf("SignatureRelation = %q, want disjoint (fully dissimilar sigs)", ex.SignatureRelation)
+	}
+}
+
+func TestBuildExample_SignatureRelation_Unknown_NoSig(t *testing.T) {
+	// Book with no BookSigV1 → "unknown"
+	bkA := &database.Book{ID: "a", Title: "No Sig"}
+	bkB := &database.Book{ID: "b", Title: "No Sig"}
+	fs := &fakeStore{
+		books: map[string]*database.Book{"a": bkA, "b": bkB},
+		files: map[string][]database.BookFile{},
+	}
+	cand := database.DedupCandidate{ID: 12, EntityAID: "a", EntityBID: "b", Layer: "lsh"}
+
+	ex, err := BuildExample(fs, cand)
+	if err != nil {
+		t.Fatalf("BuildExample: %v", err)
+	}
+	if ex.SignatureRelation != "unknown" {
+		t.Fatalf("SignatureRelation = %q, want unknown (no sigs)", ex.SignatureRelation)
 	}
 }
 

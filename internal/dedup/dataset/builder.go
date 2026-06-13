@@ -1,5 +1,5 @@
 // file: internal/dedup/dataset/builder.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 4a91c7e0-6d83-4b25-9f10-2c5a8e7d4b31
 // last-edited: 2026-06-13
 
@@ -14,7 +14,12 @@ import (
 	"strings"
 
 	"github.com/falkcorp/audiobook-organizer/internal/database"
+	"github.com/falkcorp/audiobook-organizer/internal/fingerprint"
 )
+
+// sigMatchThreshold is the BookSignatureSimilarity score at/above which two
+// whole-book signatures are treated as a content match (spec: 0.95).
+const sigMatchThreshold = 0.95
 
 // BuilderStore is the narrow store surface BuildExample needs.
 type BuilderStore interface {
@@ -156,9 +161,11 @@ func sharesAny(a, b []string) bool {
 }
 
 // signatureRelation reports the whole-book-signature relationship between two books.
-// Task 5 (M1 initial): uses raw byte equality as a definite match; sim-threshold
-// comparison is wired in Task 6 via fingerprint.BookSignatureSimilarity.
+// Uses fingerprint.BookSignatureSimilarity with a 0.95 threshold for "match".
 // Returns one of: match, disjoint, unknown.
+// "unknown" is returned when either signature is absent or the comparator errors
+// (e.g. corrupt/short base64). Offset/subsequence containment (a_contains_b /
+// b_contains_a) is deferred to a later spec milestone.
 func signatureRelation(a, b *database.Book) string {
 	if a == nil || b == nil {
 		return "unknown"
@@ -166,10 +173,12 @@ func signatureRelation(a, b *database.Book) string {
 	if a.BookSigV1 == nil || *a.BookSigV1 == "" || b.BookSigV1 == nil || *b.BookSigV1 == "" {
 		return "unknown"
 	}
-	// Exact string equality is a definite match. Task 6 replaces this with the
-	// real similarity comparison so near-identical sigs also return "match".
-	if *a.BookSigV1 == *b.BookSigV1 {
+	sim, err := fingerprint.BookSignatureSimilarity(*a.BookSigV1, *b.BookSigV1)
+	if err != nil {
+		return "unknown"
+	}
+	if sim >= sigMatchThreshold {
 		return "match"
 	}
-	return "unknown"
+	return "disjoint"
 }
