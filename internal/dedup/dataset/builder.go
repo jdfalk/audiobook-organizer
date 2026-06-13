@@ -1,5 +1,5 @@
 // file: internal/dedup/dataset/builder.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: 4a91c7e0-6d83-4b25-9f10-2c5a8e7d4b31
 // last-edited: 2026-06-13
 
@@ -123,6 +123,7 @@ func durationRatio(a, b float64) float64 {
 
 // folderRelation classifies how two primary file paths sit relative to each other.
 // Returns one of: unrelated, same_dir, a_ancestor_of_b, b_ancestor_of_a.
+// Note: currently produces only these four values; sibling_parts is planned but not yet returned.
 func folderRelation(a, b string) string {
 	if a == "" || b == "" {
 		return "unrelated"

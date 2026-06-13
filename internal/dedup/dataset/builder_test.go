@@ -1,5 +1,5 @@
 // file: internal/dedup/dataset/builder_test.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: b3e7f2a1-9c45-4d80-8e62-5f1a3d6c7b90
 // last-edited: 2026-06-13
 
@@ -206,5 +206,72 @@ func TestBuildExample_FolderRelation_Ancestor(t *testing.T) {
 	}
 	if ex.FolderRelation != "a_ancestor_of_b" {
 		t.Fatalf("folder relation = %q, want a_ancestor_of_b", ex.FolderRelation)
+	}
+}
+
+func TestBuildExample_FolderRelation_BAncestorOfA(t *testing.T) {
+	// B's directory is an ancestor of A's path → b_ancestor_of_a.
+	bkA := &database.Book{ID: "a", Title: "Child"}
+	bkB := &database.Book{ID: "b", Title: "Parent"}
+	fs := &fakeStore{
+		books: map[string]*database.Book{"a": bkA, "b": bkB},
+		files: map[string][]database.BookFile{
+			"a": {{BookID: "a", FilePath: "/lib/Series/Part1/part.m4b", Duration: 3600}},
+			"b": {{BookID: "b", FilePath: "/lib/Series/whole.m4b", Duration: 36000}},
+		},
+	}
+	cand := database.DedupCandidate{ID: 3, EntityAID: "a", EntityBID: "b", Layer: "lsh"}
+
+	ex, err := BuildExample(fs, cand)
+	if err != nil {
+		t.Fatalf("BuildExample: %v", err)
+	}
+	if ex.FolderRelation != "b_ancestor_of_a" {
+		t.Fatalf("folder relation = %q, want b_ancestor_of_a", ex.FolderRelation)
+	}
+}
+
+func TestBuildExample_FolderRelation_Unrelated(t *testing.T) {
+	// Two completely disjoint directories → unrelated.
+	bkA := &database.Book{ID: "a", Title: "Book A"}
+	bkB := &database.Book{ID: "b", Title: "Book B"}
+	fs := &fakeStore{
+		books: map[string]*database.Book{"a": bkA, "b": bkB},
+		files: map[string][]database.BookFile{
+			"a": {{BookID: "a", FilePath: "/lib/AuthorOne/book.m4b", Duration: 3600}},
+			"b": {{BookID: "b", FilePath: "/lib/AuthorTwo/book.m4b", Duration: 3600}},
+		},
+	}
+	cand := database.DedupCandidate{ID: 4, EntityAID: "a", EntityBID: "b", Layer: "lsh"}
+
+	ex, err := BuildExample(fs, cand)
+	if err != nil {
+		t.Fatalf("BuildExample: %v", err)
+	}
+	if ex.FolderRelation != "unrelated" {
+		t.Fatalf("folder relation = %q, want unrelated", ex.FolderRelation)
+	}
+}
+
+func TestBuildExample_FolderRelation_PrefixNotAncestor(t *testing.T) {
+	// /lib/Series is NOT an ancestor of /lib/Series-Extra — the trailing-slash
+	// guard in isAncestor must prevent a false positive here.
+	bkA := &database.Book{ID: "a", Title: "Book"}
+	bkB := &database.Book{ID: "b", Title: "Book Extra"}
+	fs := &fakeStore{
+		books: map[string]*database.Book{"a": bkA, "b": bkB},
+		files: map[string][]database.BookFile{
+			"a": {{BookID: "a", FilePath: "/lib/Series/book.m4b", Duration: 3600}},
+			"b": {{BookID: "b", FilePath: "/lib/Series-Extra/book.m4b", Duration: 3600}},
+		},
+	}
+	cand := database.DedupCandidate{ID: 5, EntityAID: "a", EntityBID: "b", Layer: "lsh"}
+
+	ex, err := BuildExample(fs, cand)
+	if err != nil {
+		t.Fatalf("BuildExample: %v", err)
+	}
+	if ex.FolderRelation != "unrelated" {
+		t.Fatalf("folder relation = %q, want unrelated (Series is not an ancestor of Series-Extra)", ex.FolderRelation)
 	}
 }

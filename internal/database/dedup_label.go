@@ -1,5 +1,5 @@
 // file: internal/database/dedup_label.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: 5a0319bd-8bc4-4135-91e6-dfd43628dcc5
 // last-edited: 2026-06-13
 
@@ -54,7 +54,7 @@ type LabeledExample struct {
 	B BookFeatures `json:"b"`
 
 	DurationRatio     float64 `json:"duration_ratio"`
-	FolderRelation    string  `json:"folder_relation"` // unrelated|same_dir|a_ancestor_of_b|b_ancestor_of_a|sibling_parts
+	FolderRelation    string  `json:"folder_relation"` // unrelated|same_dir|a_ancestor_of_b|b_ancestor_of_a (sibling_parts: planned, not yet produced)
 	SharesRecordingID bool    `json:"shares_recording_id"`
 	SignatureRelation string  `json:"signature_relation"` // unknown|match|disjoint|a_contains_b|b_contains_a
 

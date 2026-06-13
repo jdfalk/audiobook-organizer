@@ -1,5 +1,5 @@
 // file: internal/dedup/dataset/rules.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 9e2b4c71-3a85-4d60-8f29-1b7c6a4e5d02
 // last-edited: 2026-06-13
 
@@ -63,6 +63,12 @@ func missingFile(ex database.LabeledExample) (string, string, bool) {
 // partVsWhole fires when both durations are known and the min/max ratio is below
 // partVsWholeRatioMax, indicating the shorter entry is a chapter or excerpt of
 // the longer one rather than a full duplicate.
+//
+// Note: when either side has TotalDurationSec == 0 (unknown duration),
+// BuildExample sets DurationRatio = 0, so this catcher deliberately does
+// not fire — the pair is left unlabeled for human/ML review (do not "fix"
+// this by classifying zero-duration pairs as not_dup; size cannot prove a
+// part-vs-whole relationship).
 func partVsWhole(ex database.LabeledExample) (string, string, bool) {
 	if ex.A.TotalDurationSec > 0 && ex.B.TotalDurationSec > 0 &&
 		ex.DurationRatio > 0 && ex.DurationRatio < partVsWholeRatioMax {
