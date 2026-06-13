@@ -1,5 +1,5 @@
 <!-- file: .github/copilot-instructions.md -->
-<!-- version: 4.1.0 -->
+<!-- version: 4.1.1 -->
 <!-- guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a -->
 <!-- last-edited: 2026-06-13 -->
 
@@ -47,8 +47,9 @@ sides** of a pair before emitting a `DedupCandidate`. This prevents stub or
 unscanned books (zero duration, zero file size) from being emitted as candidates
 and flooding the review queue with false positives.
 
-`checkExactAcoustID` is **intentionally NOT gated** — an AcoustID match is
-itself sufficient evidence of audio content.
+The AcoustID collector `CollectExactAcoustID` (`internal/dedup/collectors_acoustid.go`)
+is **intentionally NOT gated** — an AcoustID match is itself sufficient evidence of
+audio content.
 
 ### Labeled training dataset
 

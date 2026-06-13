@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.19.0 -->
+<!-- version: 3.19.1 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-06-13 -->
 
@@ -15,8 +15,9 @@
   Returns true when a book has positive duration OR file size >= 256 KiB. The
   `checkExactTitle` and `checkExactISBN` emitters now call this gate for both sides of
   a candidate pair before emitting; stub/unscanned books with no audio evidence are
-  blocked from producing new false-positive candidates. `checkExactAcoustID` is
-  intentionally not gated (AcoustID match is its own evidence of audio content).
+  blocked from producing new false-positive candidates. The AcoustID collector
+  `CollectExactAcoustID` (`internal/dedup/collectors_acoustid.go`) is intentionally
+  not gated (an AcoustID match is its own evidence of audio content).
 
 - **`internal/database/dedup_label.go`** (NEW) — PebbleDB keyspace `dedup:label:` for the
   labeled dedup training dataset.

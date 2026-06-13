@@ -1,6 +1,6 @@
 flowchart TD
     %% file: docs/diagrams/flow-book-dedup.mmd
-    %% version: 1.0.0
+    %% version: 1.0.1
     %% guid: 7c3e9a21-4f6b-4d08-b1a2-8e5d0c7f3b92
     %% Book Dedup Candidate Lifecycle
 
@@ -10,7 +10,7 @@ flowchart TD
     LSH --> Collectors["Candidate collectors\n(engine.go)"]
     Collectors --> ExactTitle["checkExactTitle\nexact title+author match"]
     Collectors --> ExactISBN["checkExactISBN\nexact ISBN match"]
-    Collectors --> ExactAcoustID["checkExactAcoustID\nAcoustID hash match"]
+    Collectors --> ExactAcoustID["CollectExactAcoustID\n(collectors_acoustid.go)"]
     Collectors --> LSHProbe["LSH probe collector\nO(band×k) fingerprint candidates"]
     Collectors --> MetaFuzzy["Metadata-fuzzy collector\nLevenshtein title+author"]
 
