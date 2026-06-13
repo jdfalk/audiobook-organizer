@@ -717,6 +717,9 @@ func (de *Engine) checkExactISBN(book *database.Book) error {
 	if bookISBN10 == "" && bookISBN13 == "" && bookASIN == "" {
 		return nil
 	}
+	if !hasPlausibleAudio(book) {
+		return nil // stub / unscanned shell — never anchor an exact-ISBN match
+	}
 
 	const batchSize = 500
 	offset := 0
@@ -733,6 +736,9 @@ func (de *Engine) checkExactISBN(book *database.Book) error {
 			other := &batch[i]
 			if other.ID == book.ID {
 				continue
+			}
+			if !hasPlausibleAudio(other) {
+				continue // stub / unscanned shell on the other side
 			}
 			matched := false
 			if bookISBN10 != "" && derefStr(other.ISBN10) == bookISBN10 {
