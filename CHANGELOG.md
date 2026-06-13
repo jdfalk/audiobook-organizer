@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.19.1 -->
+<!-- version: 3.20.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-06-13 -->
 
@@ -8,6 +8,22 @@
 ## [Unreleased]
 
 ### Added
+
+#### June 13, 2026 — Dedup: FileSize-aware residual catcher
+
+- **`internal/dedup/dataset/rules.go`** — new `implausibleAudio` catcher: a pair is
+  labeled `not_dup` when either side has no plausible audio (zero/unknown duration
+  **and** a largest file below the 256 KiB stub floor). This is the dataset
+  counterpart to the engine emission gate and catches the post-cutover stub /
+  unscanned-placeholder residual that `missingFile` (file records exist) and
+  `partVsWhole` (zero duration → ratio 0) both miss. A genuine unscanned copy
+  (large file, zero duration) is **not** suppressed.
+- **`internal/database/dedup_label.go`** — `BookFeatures.FileSizeBytes` (largest known
+  file size per book) added to carry the size signal.
+- **`internal/dedup/dataset/builder.go`** — populates `FileSizeBytes` (max over the
+  book's files, at least the book-level size).
+- Running `dedup.dataset-backfill --apply` now suppresses the existing stub residual
+  (the ~3,154 post-cutover false positives) in addition to part-vs-whole pairs.
 
 #### June 13, 2026 — Dedup tuning dataset: engine gate + labeled store + backfill op
 

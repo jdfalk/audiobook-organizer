@@ -1,5 +1,5 @@
 // file: internal/dedup/dataset/builder.go
-// version: 1.1.2
+// version: 1.1.3
 // guid: 4a91c7e0-6d83-4b25-9f10-2c5a8e7d4b31
 // last-edited: 2026-06-13
 
@@ -100,12 +100,21 @@ func buildFeatures(bk *database.Book, files []database.BookFile) database.BookFe
 		if bk.CoverURL != nil && *bk.CoverURL != "" {
 			f.HasCover = true
 		}
+		// Book-level size as a baseline; the per-file max below can exceed it.
+		if bk.FileSize != nil && *bk.FileSize > f.FileSizeBytes {
+			f.FileSizeBytes = *bk.FileSize
+		}
 	}
 	var total float64
 	for i := range files {
 		fl := &files[i]
 		if f.PrimaryPath == "" && fl.FilePath != "" {
 			f.PrimaryPath = fl.FilePath
+		}
+		// Largest file size across the book's files — the signal for "has real
+		// audio" vs a stub. A genuine unscanned copy keeps a large size here.
+		if fl.FileSize > f.FileSizeBytes {
+			f.FileSizeBytes = fl.FileSize
 		}
 		// Prefer fpcalc-measured duration; fall back to container duration (int seconds).
 		if fl.AcoustIDFingerprintDurationSec > 0 {
