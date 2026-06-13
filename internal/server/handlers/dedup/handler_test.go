@@ -1,5 +1,5 @@
 // file: internal/server/handlers/dedup/handler_test.go
-// version: 1.3.0
+// version: 1.3.1
 // guid: 6d8011eb-bed6-430b-959e-2a2b0738ffbc
 // last-edited: 2026-06-12
 
@@ -236,6 +236,44 @@ func TestListDedupCandidates_IncludeBooks(t *testing.T) {
 	}
 	if _, ok := on[0]["book_b"].(map[string]any); !ok {
 		t.Fatalf("book_b should be present with include_books; got %v", on[0])
+	}
+}
+
+func TestListDedupCandidates_BothUnmatched(t *testing.T) {
+	h, d := newHandler(t)
+	matched := "matched"
+	insertCandidate(t, d.es, "u1", "u2") // both unmatched → should appear
+	insertCandidate(t, d.es, "u3", "m1") // m1 is matched → pair filtered out
+
+	d.store.EXPECT().GetBookByID("u1").Return(&database.Book{ID: "u1"}, nil).Maybe()
+	d.store.EXPECT().GetBookByID("u2").Return(&database.Book{ID: "u2"}, nil).Maybe()
+	d.store.EXPECT().GetBookByID("u3").Return(&database.Book{ID: "u3"}, nil).Maybe()
+	d.store.EXPECT().GetBookByID("m1").
+		Return(&database.Book{ID: "m1", MetadataReviewStatus: &matched}, nil).Maybe()
+
+	w := doReq(t, h.ListDedupCandidates, http.MethodGet,
+		"/api/v1/dedup/candidates?both_unmatched=true&include_books=true", nil, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d want 200; body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Data struct {
+			Candidates []map[string]any `json:"candidates"`
+			Total      int              `json:"total"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v; body=%s", err, w.Body.String())
+	}
+	if resp.Data.Total != 1 || len(resp.Data.Candidates) != 1 {
+		t.Fatalf("want exactly 1 both-unmatched pair; got total=%d len=%d body=%s",
+			resp.Data.Total, len(resp.Data.Candidates), w.Body.String())
+	}
+	row := resp.Data.Candidates[0]
+	a, _ := row["entity_a_id"].(string)
+	b, _ := row["entity_b_id"].(string)
+	if a == "m1" || b == "m1" {
+		t.Fatalf("matched pair leaked through the both_unmatched filter: %v", row)
 	}
 }
 
