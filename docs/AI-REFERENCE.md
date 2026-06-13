@@ -101,7 +101,7 @@ The Go binary embeds the compiled React app. A single process serves both the AP
 - **audiobook.go** — `Audiobook` struct (mostly superseded by `database.Book`)
 
 ### `internal/dedup` — Book deduplication engine
-- **engine.go** — `Engine` type; per-layer candidate collectors (`checkExactTitle`, `checkExactISBN`, `checkExactAcoustID`, LSH-probe, metadata-fuzzy); `PairEligibility` pre-filter; `hasPlausibleAudio(book) bool` gate (returns true when `Duration > 0` OR `FileSize >= 256 KiB`). The exact-title and exact-ISBN emitters call this gate for both sides before emitting a candidate — prevents stub/unscanned books from creating false-positive pairs.
+- **engine.go** — `Engine` type; per-layer candidate emitters (`checkExactTitle`, `checkExactISBN`, `checkExactFileHash`, `checkExactMetadataSourceHash`, `checkDurationMatch`; the AcoustID/LSH/embedding/metadata-fuzzy collectors live in `collectors_*.go`); `PairEligibility` pre-filter; `hasPlausibleAudio(book) bool` gate (returns true when `Duration > 0` OR `FileSize >= 256 KiB`). The exact-title and exact-ISBN emitters call this gate for both sides before emitting a candidate — prevents stub/unscanned books from creating false-positive pairs.
 - **dataset/** (sub-package) — Pure builder + deterministic catchers for the labeled training dataset. No side effects.
   - `BuilderStore` interface: `GetBook(id string)`, `GetBookFiles(id string)`
   - `BuildExample(BuilderStore, DedupCandidate) (LabeledExample, error)` — loads both books, computes `DurationRatio`, `FolderRelation`, `SharesRecordingID`, `SignatureRelation`. Label fields left empty; caller must run `Classify`.
@@ -425,7 +425,7 @@ Background operations run with configurable timeout (default 30min, currently se
 All files require versioned headers. Bump version on every change:
 ```go
 // file: internal/server/itunes.go
-// version: 2.11.0
+// version: 2.11.1
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 ```
 
