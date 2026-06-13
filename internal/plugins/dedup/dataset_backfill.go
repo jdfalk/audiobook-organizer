@@ -1,5 +1,5 @@
 // file: internal/plugins/dedup/dataset_backfill.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 2d6f8a13-7c40-4e92-8b15-9a3e5c7d2f64
 // last-edited: 2026-06-13
 
@@ -11,7 +11,9 @@
 // "not_dup" is suppressed (status → "dismissed") so residual part-vs-whole /
 // missing-file false positives leave the review queue.
 //
-// Dry-run by default: reports counts, writes nothing.
+// Dry-run by default: reports counts, writes nothing. The apply path is
+// idempotent — UpsertLabeledExample overwrites and re-dismissing an already-
+// dismissed candidate is a no-op, so re-running is safe (no done-flag needed).
 //
 // NOTE on suppression counts: in practice, the dominant residual class (stub /
 // unscanned-file pairs with one side duration=0) is NOT caught by the
