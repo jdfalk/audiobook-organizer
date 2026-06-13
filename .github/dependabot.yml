@@ -1,5 +1,5 @@
 # Dependabot Configuration
-# version: 1.0.0
+# version: 1.1.0
 # guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 version: 2
@@ -46,15 +46,28 @@ updates:
     labels:
       - tech:go
 
-  # Npm
+  # Npm — the manifest lives in /web (root manifests were removed in the
+  # "consolidate root npm deps into web" cleanup), so this MUST target /web or
+  # none of the ignore rules below apply to the real package.json.
   - package-ecosystem: npm
-    directory: /
+    directory: /web
     patterns: ["*"]
     multi-ecosystem-group: dependencies
     labels:
       - tech:nodejs
     ignore:
+      # Block all major version updates (scheduled version updates only).
       - dependency-name: "*"
         update-types:
           - version-update:semver-major
+      # Hard-pin the build toolchain. vite 8 (rolldown bundler) is incompatible
+      # with this React 18 + MUI v5 + emotion app — it crashed every page with
+      # React error #130 (see CHANGELOG 2026-06-12). These use `versions` ranges
+      # (not update-types) so they ALSO block dependabot SECURITY updates from
+      # jumping the major, which is how the vite 8 bump slipped in originally.
+      # Remove once the rolldown #130 incompatibility is resolved.
+      - dependency-name: "vite"
+        versions: [">=8.0.0"]
+      - dependency-name: "@vitejs/plugin-react"
+        versions: [">=5.0.0"]
 
