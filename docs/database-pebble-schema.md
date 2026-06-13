@@ -1,7 +1,7 @@
 <!-- file: docs/database-pebble-schema.md -->
-<!-- version: 1.1.0 -->
+<!-- version: 1.2.0 -->
 <!-- guid: 8f6e2c1b-7d4a-4f86-9f2a-5a6b7c8d9e0f -->
-<!-- last-edited: 2026-01-19 -->
+<!-- last-edited: 2026-06-13 -->
 
 # PebbleDB Keyspace Schema and Data Model
 
@@ -557,6 +557,45 @@ number
 - Segments for book: scan `bfi:<bookID>:` then fetch `bf:<segmentID>`
 - Recent playback events: reverse-iterate `playe:<userID>:<bookID>:`
 - Recent operations: scan `op:` (ULID provides time order)
+
+## Dedup / Embedding store (separate PebbleDB instance)
+
+The dedup and embedding data lives in a separate `EmbeddingStore` PebbleDB
+(not the main audiobooks.pebble). This separation keeps LSH/candidate churn
+from amplifying compaction on book records.
+
+### Embedding keyspace
+
+| Key pattern | Value | Notes |
+|-------------|-------|-------|
+| `emb:v:<entityType>:<entityID>` | `embRec` JSON | Embedding vector record |
+| `emb:c:<model>:<textHash>` | raw float32 blob | Embedding cache (no JSON overhead) |
+
+### Dedup candidate keyspace
+
+| Key pattern | Value | Notes |
+|-------------|-------|-------|
+| `dedup:r:<id16hex>` | `DedupCandidate` JSON | Candidate record; primary row |
+| `dedup:p:<type>:<aID>:<bID>` | `<id16hex>` | Pair uniqueness index (prevents re-emission) |
+| `dedup:seq` | `[8]byte` little-endian int64 | Auto-increment counter for candidate IDs |
+
+### Labeled dataset keyspace
+
+| Key pattern | Value | Notes |
+|-------------|-------|-------|
+| `dedup:label:<id16hex>` | `LabeledExample` JSON | One labeled (or unlabeled) candidate pair with feature snapshot |
+
+`<id16hex>` is `fmt.Sprintf("%016x", uint64(candidateID))` — zero-padded
+16-char lowercase hex encoding the candidate's int64 ID. Zero-padding ensures
+fixed-width keys so prefix scans return rows in stable integer order.
+
+`LabeledExample` key fields: `candidate_id`, `entity_a_id`, `entity_b_id`,
+`layer`, `band`, `score`, `score_breakdown`; `a`/`b` `BookFeatures` snapshots
+(title, author, primary_path, total_duration_sec, file_count, has_cover,
+files_exist, recording_ids, itunes_pid_present, whole_book_sig_present);
+`duration_ratio`, `folder_relation`, `shares_recording_id`,
+`signature_relation`; `label`, `label_source`, `label_reason`, `decided_at`,
+`formula_version`. Empty `label` = unlabeled, features only.
 
 ## Write patterns & atomicity
 

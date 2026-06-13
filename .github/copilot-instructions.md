@@ -1,7 +1,7 @@
 <!-- file: .github/copilot-instructions.md -->
-<!-- version: 4.0.0 -->
+<!-- version: 4.1.0 -->
 <!-- guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a -->
-<!-- last-edited: 2026-06-12 -->
+<!-- last-edited: 2026-06-13 -->
 
 # Audiobook Organizer — Additional Copilot Context
 
@@ -34,3 +34,46 @@ Integration: Open Library, AcoustID fingerprinting, OpenAI batch API.
 - iTunes XML path must **never** be scanned by the file scanner.
 - Production is Linux (`make deploy`). Do not use macOS-specific commands.
 - Worktree discipline: never commit directly to `main`. All changes via PRs.
+
+## Dedup architecture
+
+### Candidate emission gate (`hasPlausibleAudio`)
+
+`internal/dedup/engine.go` — `hasPlausibleAudio(book *database.Book) bool`
+returns true when `Duration > 0` OR `FileSize >= 256 KiB` (256 × 1024 bytes).
+
+The `checkExactTitle` and `checkExactISBN` emitters call this gate for **both
+sides** of a pair before emitting a `DedupCandidate`. This prevents stub or
+unscanned books (zero duration, zero file size) from being emitted as candidates
+and flooding the review queue with false positives.
+
+`checkExactAcoustID` is **intentionally NOT gated** — an AcoustID match is
+itself sufficient evidence of audio content.
+
+### Labeled training dataset
+
+The dataset subsystem lives in two packages:
+
+- **`internal/database/dedup_label.go`** — PebbleDB keyspace `dedup:label:`.
+  Stores `LabeledExample` records: candidate pair + per-book feature snapshots
+  (`BookFeatures`) + label fields (`label`, `label_source`, `label_reason`,
+  `decided_at`). Empty `label` means unlabeled (features only, for future ML).
+
+- **`internal/dedup/dataset/`** — pure package; no DB side effects.
+  - `BuildExample` computes: duration ratio, folder relation (unrelated /
+    same_dir / a_ancestor_of_b / b_ancestor_of_a), recording-ID overlap,
+    whole-book signature relation (unknown / match / disjoint).
+  - `Classify` runs three deterministic catchers in priority order:
+    1. `wholeBookSignatureMatch` → `true_dup` (positive oracle; similarity ≥ 0.95)
+    2. `missingFile` → `not_dup` (never merge a book with no files)
+    3. `partVsWhole` → `not_dup` (duration ratio < 0.5 with both durations known)
+
+### Backfill op
+
+`internal/plugins/dedup/dataset_backfill.go` — `dedup.dataset-backfill` UOS op.
+Dry-run by default; `apply=true` writes labeled examples and dismisses
+rule-confirmed `not_dup` candidates (status → `dismissed`). Idempotent.
+
+Known gap: pairs where one side has `Duration=0` but file records exist are NOT
+caught by the current catchers; they remain unlabeled. The engine gate stops NEW
+such pairs; a future FileSize-aware catcher will handle the existing residual.
