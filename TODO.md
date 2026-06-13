@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.76.0 -->
+<!-- version: 8.77.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-06-12 -->
+<!-- last-edited: 2026-06-13 -->
 
 # Project TODO
 
@@ -25,6 +25,27 @@ future agent) can scan the entire workspace in one page.
 **Production:** PebbleDB primary; Linux, HTTPS at prod server
 **Latest activity:** All 27 Fable 5 tasks + T028 bonus shipped (June 9–10). Plugin framework added (agents, skills, pre-commit PII hook). CI fixes (PRs #1405, #1407, #1408). LSHBandCount 64→128.
 **In flight:** Burndown bot dispatching test coverage tasks (#79–#109), FE-10 (Vitest coverage thresholds)
+
+---
+
+## 🔮 Needs Serious Planning — Open Audiobook Acoustic-Fingerprint Index (a community-owned "AcoustID for audiobooks")
+
+> Captured 2026-06-13. **Not yet specced — needs a dedicated brainstorming → spec session.**
+> Related: [`docs/specs/2026-06-13-dedup-tuning-dataset-design.md`](docs/specs/2026-06-13-dedup-tuning-dataset-design.md)
+
+**Vision.** MusicBrainz/AcoustID model audiobooks poorly (their DB is song/recording-based; a 9-hour book is not a "recording"). Build our own, better, **community-usable** index of audiobook acoustic fingerprints + verified identity (title/author/series/narrator/edition). It should be good enough that submitting back to AcoustID becomes unnecessary.
+
+**Why a Git repo as the store (the constraint that shapes everything).** No public server, no hosting budget. A **GitHub repository + GitHub Actions is free, durable, and world-pullable**:
+- **Disaster recovery:** if our prod data is wiped, the organizer rehydrates its identity layer by pulling the repo — the index lives outside our box.
+- **Distribution:** anyone can clone it and skip the manual fingerprint/identify work we do today.
+- **Provenance:** every record change is a reviewable commit/PR — human-verified records are auditable.
+
+**Open design questions for the planning session:**
+- **Format** — a sane, diffable, version-controlled on-disk layout (sharded JSON/JSONL by fingerprint-prefix? Parquet? a checked-in SQLite/Pebble snapshot artifact?). Must stay mergeable (avoid giant single files that conflict). Possibly a parallel **AI-queryable representation** (embeddings / structured docs) so the index can be asked natural-language questions.
+- **The PR-bot loop** — a process that emits **PRs of new human-verified records**, and **CI workflows that validate (schema, dedup, no-regression) and apply** them to the canonical index. Bounded batch sizes, signed/attributed records, conflict resolution rules.
+- **Identity unit** — what a "record" keys on (whole-book signature from `internal/fingerprint/book_signature.go` + part fingerprints + metadata), and how editions/abridgements/re-narrations are represented.
+- **Trust & governance** — who can merge, how bad records are challenged/reverted, license (so the world can actually use it).
+- **Relationship to AcoustID submission** — likely **supersedes** it; keep submission as an optional downstream export, not a dependency.
 
 ---
 

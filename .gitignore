@@ -329,3 +329,6 @@ delete-*.py
 
 # Backup tarballs
 backups/
+
+# dedup-dataset-audit CLI build artifact (run from tools/cmd/dedup-dataset-audit)
+/dedup-dataset-audit
