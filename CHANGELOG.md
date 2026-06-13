@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.21.0 -->
+<!-- version: 3.21.1 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-06-13 -->
 
@@ -13,11 +13,12 @@
 
 - **`GET /api/v1/dedup/candidates?both_unmatched=true`** — server-side filter that
   returns only pairs where NEITHER book has matched metadata (a triage view for
-  duplicates that both need manual matching). v1 defines "matched" as
-  `MetadataReviewStatus == "matched"` (human-confirmed); the handler has a single
-  documented extension point to later OR in external-ID presence (ASIN/ISBN13).
-  When set, the handler fetches the full status/layer-filtered set, filters on
-  book metadata, and paginates the filtered result (accurate totals).
+  duplicates that both need manual matching). "matched" = `MetadataReviewStatus
+  == "matched"` (human-confirmed) **OR** the book carries an external identifier
+  (ASIN / ISBN13 / ISBN10 — having one means it was matched to a provider). The
+  `isMetadataMatched()` helper is the single extension point for further
+  indicators. When set, the handler fetches the full status/layer-filtered set,
+  filters on book metadata, and paginates the filtered result (accurate totals).
 - **Unified Dedup UI** — a "Both need manual matching" checkbox in the candidate
   toolbar wires `both_unmatched` through and resets pagination.
 
