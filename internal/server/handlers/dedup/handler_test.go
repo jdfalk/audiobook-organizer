@@ -1,7 +1,7 @@
 // file: internal/server/handlers/dedup/handler_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 6d8011eb-bed6-430b-959e-2a2b0738ffbc
-// last-edited: 2026-06-10
+// last-edited: 2026-06-12
 
 // Tests for the dedup-domain handlers. The embedding store is exercised through
 // a REAL pebble-backed *database.EmbeddingStore (it is a concrete db type the
@@ -183,6 +183,59 @@ func TestListDedupCandidates(t *testing.T) {
 	w := doReq(t, h.ListDedupCandidates, http.MethodGet, "/api/v1/dedup/candidates", nil, nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d want 200; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestListDedupCandidates_IncludeBooks(t *testing.T) {
+	h, d := newHandler(t)
+	insertCandidate(t, d.es, "book-a", "book-b")
+	d.store.EXPECT().GetBookByID(mock.Anything).
+		Return(&database.Book{ID: "x", Title: "Enriched Title"}, nil).Maybe()
+
+	decode := func(w *httptest.ResponseRecorder) []map[string]any {
+		t.Helper()
+		var resp struct {
+			Data struct {
+				Candidates []map[string]any `json:"candidates"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode body: %v; body=%s", err, w.Body.String())
+		}
+		return resp.Data.Candidates
+	}
+
+	// Without include_books: rows carry no book_a/book_b.
+	wOff := doReq(t, h.ListDedupCandidates, http.MethodGet, "/api/v1/dedup/candidates", nil, nil)
+	if wOff.Code != http.StatusOK {
+		t.Fatalf("status=%d want 200; body=%s", wOff.Code, wOff.Body.String())
+	}
+	off := decode(wOff)
+	if len(off) == 0 {
+		t.Fatalf("expected at least one candidate row")
+	}
+	if _, ok := off[0]["book_a"]; ok {
+		t.Fatalf("book_a should be absent without include_books; got %v", off[0])
+	}
+
+	// With include_books=true: rows carry enriched book objects.
+	wOn := doReq(t, h.ListDedupCandidates, http.MethodGet, "/api/v1/dedup/candidates?include_books=true", nil, nil)
+	if wOn.Code != http.StatusOK {
+		t.Fatalf("status=%d want 200; body=%s", wOn.Code, wOn.Body.String())
+	}
+	on := decode(wOn)
+	if len(on) == 0 {
+		t.Fatalf("expected at least one candidate row")
+	}
+	bookA, ok := on[0]["book_a"].(map[string]any)
+	if !ok {
+		t.Fatalf("book_a should be present with include_books; got %v", on[0])
+	}
+	if bookA["title"] != "Enriched Title" {
+		t.Fatalf("book_a.title=%v want %q", bookA["title"], "Enriched Title")
+	}
+	if _, ok := on[0]["book_b"].(map[string]any); !ok {
+		t.Fatalf("book_b should be present with include_books; got %v", on[0])
 	}
 }
 
@@ -631,9 +684,9 @@ func insertCandidateWithBand(t *testing.T, es *database.EmbeddingStore, aID, bID
 		Status:     "pending",
 		Band:       band,
 		ScoreBreakdown: &unifiedpkg.UnifiedDedupScore{
-			Score:  score,
-			Band:   band,
-			Pair:   [2]string{aID, bID},
+			Score:   score,
+			Band:    band,
+			Pair:    [2]string{aID, bID},
 			Formula: unifiedpkg.FormulaVersion,
 			Signals: []unifiedpkg.Signal{
 				{Kind: unifiedpkg.SigEmbedHigh, Raw: 0.95, Confidence: 0.90, Evidence: "test"},
