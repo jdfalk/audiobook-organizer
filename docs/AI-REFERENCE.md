@@ -349,7 +349,7 @@ u:<user_ulid>                  → User JSON
 sess:<session_ulid>            → Session JSON
 ```
 
-### Dedup / Embedding keyspace (separate EmbeddingStore PebbleDB)
+### Dedup / Embedding keyspace (within the main audiobooks.pebble DB)
 
 ```
 emb:v:<entityType>:<entityID>  → embRec JSON          (embedding vector record)

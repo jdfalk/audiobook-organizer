@@ -1,5 +1,5 @@
 <!-- file: docs/database-pebble-schema.md -->
-<!-- version: 1.2.0 -->
+<!-- version: 1.2.1 -->
 <!-- guid: 8f6e2c1b-7d4a-4f86-9f2a-5a6b7c8d9e0f -->
 <!-- last-edited: 2026-06-13 -->
 
@@ -558,11 +558,13 @@ number
 - Recent playback events: reverse-iterate `playe:<userID>:<bookID>:`
 - Recent operations: scan `op:` (ULID provides time order)
 
-## Dedup / Embedding store (separate PebbleDB instance)
+## Dedup / Embedding store (within the main audiobooks.pebble DB)
 
-The dedup and embedding data lives in a separate `EmbeddingStore` PebbleDB
-(not the main audiobooks.pebble). This separation keeps LSH/candidate churn
-from amplifying compaction on book records.
+The dedup and embedding data lives in the same `audiobooks.pebble` PebbleDB as
+the main book store. `EmbeddingStore` receives a `*pebble.DB` reference from the
+main store via `NewEmbeddingStore(db *pebble.DB)` with `owned: false`, so no
+separate file or process is opened. Keyspace isolation is achieved purely by
+prefix: `emb:` for embeddings, `dedup:` for candidates and labels.
 
 ### Embedding keyspace
 
