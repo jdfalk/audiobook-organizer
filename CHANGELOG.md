@@ -1,11 +1,31 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.17.0 -->
+<!-- version: 3.18.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-06-12 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Fixed
+
+#### June 12, 2026 — Revert vite 7→8 bump that crashed the entire web UI
+
+- **`web/package.json`**: Pin `vite` back to `^7.2.2` and `@vitejs/plugin-react`
+  to `^4.2.1`. A dependabot commit (`93d695ff`, mislabeled "bump esbuild")
+  silently force-upgraded vite to `^8.0.16` and plugin-react to `^6.0.2`. Vite 8's
+  rolldown bundler is incompatible with this React 18 + MUI v5 + emotion app: a
+  CJS/ESM interop bug resolved an MUI/emotion import to a namespace object,
+  crashing **every** page (MUI `Popover` / `Dialog` / menus) with React error
+  `#130` ("Element type is invalid … got: object"). Confirmed app-wide via
+  `vite preview` + Playwright, and confirmed fixed by the revert.
+- **`web/vite.config.ts`**: Restore the original object-form
+  `build.rollupOptions.output.manualChunks` (valid on rollup / vite 7).
+- The esbuild advisories dependabot was chasing are dev-server / Deno-module
+  only (no esbuild or vite dev server runs in production — the Go binary serves
+  embedded static assets), so the revert introduces no production-exploitable
+  vulnerability. The vite 8 bump must not be reapplied until the rolldown #130
+  incompatibility is resolved.
 
 ### Added
 
