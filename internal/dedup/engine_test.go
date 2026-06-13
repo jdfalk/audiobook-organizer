@@ -1023,6 +1023,55 @@ func TestEmbedStatus_String(t *testing.T) {
 	}
 }
 
+func TestEngine_ExactTitle_RejectsStubFile(t *testing.T) {
+	engine, mock, es := setupTestEngine(t)
+	authorID := 1
+	sz := func(v int64) *int64 { return &v }
+
+	real := &database.Book{ID: "book-real", Title: "Iron and Blood", AuthorID: &authorID, FileSize: sz(254_192_471)}
+	stub := &database.Book{ID: "book-stub", Title: "Iron and Blood", AuthorID: &authorID, FileSize: sz(32)}
+	mock.GetBooksByAuthorIDFunc = func(id int) ([]database.Book, error) {
+		return []database.Book{*real, *stub}, nil
+	}
+
+	if err := engine.checkExactTitle(real, "Joshua Dalzelle"); err != nil {
+		t.Fatalf("checkExactTitle: %v", err)
+	}
+
+	cands, _, err := es.ListCandidates(database.CandidateFilter{Limit: 100})
+	if err != nil {
+		t.Fatalf("list candidates: %v", err)
+	}
+	if len(cands) != 0 {
+		t.Fatalf("expected 0 candidates (stub side must be rejected), got %d", len(cands))
+	}
+}
+
+func TestEngine_ExactTitle_KeepsGenuineLargePair(t *testing.T) {
+	engine, mock, es := setupTestEngine(t)
+	authorID := 2
+	sz := func(v int64) *int64 { return &v }
+
+	a := &database.Book{ID: "book-a", Title: "Departure from the Script", AuthorID: &authorID, FileSize: sz(184_741_714)}
+	// Genuine same-file copy in another folder: large size, not yet scanned.
+	b := &database.Book{ID: "book-b", Title: "Departure from the Script", AuthorID: &authorID, FileSize: sz(184_741_714)}
+	mock.GetBooksByAuthorIDFunc = func(id int) ([]database.Book, error) {
+		return []database.Book{*a, *b}, nil
+	}
+
+	if err := engine.checkExactTitle(a, "Jae"); err != nil {
+		t.Fatalf("checkExactTitle: %v", err)
+	}
+
+	cands, _, err := es.ListCandidates(database.CandidateFilter{Limit: 100})
+	if err != nil {
+		t.Fatalf("list candidates: %v", err)
+	}
+	if len(cands) != 1 {
+		t.Fatalf("expected 1 candidate (genuine large dupe kept), got %d", len(cands))
+	}
+}
+
 func TestHasPlausibleAudio(t *testing.T) {
 	dur := func(v int) *int { return &v }
 	sz := func(v int64) *int64 { return &v }

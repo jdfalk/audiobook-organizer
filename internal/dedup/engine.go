@@ -819,6 +819,9 @@ func (de *Engine) checkExactTitle(book *database.Book, authorName string) error 
 	if !hasUsableTitle(book.Title) {
 		return nil
 	}
+	if !hasPlausibleAudio(book) {
+		return nil // stub / unscanned shell — never anchor an exact-title match
+	}
 
 	others, err := de.bookStore.GetBooksByAuthorID(*book.AuthorID)
 	if err != nil {
@@ -834,6 +837,9 @@ func (de *Engine) checkExactTitle(book *database.Book, authorName string) error 
 		}
 		if !hasUsableTitle(other.Title) {
 			continue
+		}
+		if !hasPlausibleAudio(other) {
+			continue // stub / unscanned shell on the other side
 		}
 		otherForms := de.allNormalizedTitleForms(other)
 		// Closest-form distance: a match exists if ANY form of book is
