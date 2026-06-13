@@ -1,5 +1,5 @@
 // file: internal/database/dedup_label.go
-// version: 1.0.3
+// version: 1.0.4
 // guid: 5a0319bd-8bc4-4135-91e6-dfd43628dcc5
 // last-edited: 2026-06-13
 
@@ -35,6 +35,11 @@ type BookFeatures struct {
 	RecordingIDs        []string `json:"recording_ids,omitempty"`
 	ITunesPIDPresent    bool     `json:"itunes_pid_present"`
 	WholeBookSigPresent bool     `json:"whole_book_sig_present"`
+	// FileSizeBytes is the largest known file size for the book (max over its
+	// BookFiles, falling back to the book-level size). Mirrors the engine's
+	// hasPlausibleAudio signal so the dataset can tell a genuine but unscanned
+	// copy (large file, zero duration) from a stub/placeholder (tiny file).
+	FileSizeBytes int64 `json:"file_size_bytes"`
 }
 
 // LabeledExample is one labeled dedup candidate pair plus the features behind

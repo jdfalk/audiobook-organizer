@@ -1,5 +1,5 @@
 // file: internal/dedup/dataset/rules_test.go
-// version: 1.0.1
+// version: 1.1.0
 // guid: c1d4e8b5-7f23-4a90-9b01-6e2c5d8f3a47
 // last-edited: 2026-06-13
 
@@ -87,6 +87,38 @@ func TestCatchers(t *testing.T) {
 				SignatureRelation: "disjoint",
 			},
 			wantFires: false,
+		},
+		{
+			// stub side (no duration, tiny file) is implausible audio → not_dup.
+			// This is the post-cutover residual class missingFile + partVsWhole miss:
+			// file records exist (FilesExist true) and duration=0 makes the ratio 0.
+			name: "stub side (32 bytes, no duration) => not_dup",
+			ex: database.LabeledExample{
+				A: database.BookFeatures{FilesExist: true, TotalDurationSec: 36000, FileSizeBytes: 184_741_714},
+				B: database.BookFeatures{FilesExist: true, TotalDurationSec: 0, FileSizeBytes: 32},
+			},
+			wantFires: true, wantLabel: "not_dup",
+		},
+		{
+			// genuine unscanned copy: large file, zero duration → NOT suppressed.
+			// This is the false-positive the catcher must avoid (a real duplicate
+			// awaiting a scan). No catcher fires; left unlabeled.
+			name: "genuine unscanned-large copy is not suppressed",
+			ex: database.LabeledExample{
+				A:                 database.BookFeatures{FilesExist: true, TotalDurationSec: 36000, FileSizeBytes: 184_741_714},
+				B:                 database.BookFeatures{FilesExist: true, TotalDurationSec: 0, FileSizeBytes: 184_741_714},
+				SignatureRelation: "unknown",
+			},
+			wantFires: false,
+		},
+		{
+			// both sides are tiny placeholders matched by title → not_dup.
+			name: "both stubs (182 bytes each) => not_dup",
+			ex: database.LabeledExample{
+				A: database.BookFeatures{FilesExist: true, TotalDurationSec: 0, FileSizeBytes: 182},
+				B: database.BookFeatures{FilesExist: true, TotalDurationSec: 0, FileSizeBytes: 182},
+			},
+			wantFires: true, wantLabel: "not_dup",
 		},
 	}
 	for _, tc := range cases {

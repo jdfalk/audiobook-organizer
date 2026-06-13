@@ -1,5 +1,5 @@
 // file: internal/dedup/dataset/rules.go
-// version: 1.0.1
+// version: 1.1.0
 // guid: 9e2b4c71-3a85-4d60-8f29-1b7c6a4e5d02
 // last-edited: 2026-06-13
 
@@ -16,6 +16,11 @@ import (
 // A ratio below 0.5 means the shorter side is less than half the longer side.
 const partVsWholeRatioMax = 0.5
 
+// minPlausibleAudioBytes mirrors the engine-side hasPlausibleAudio floor
+// (internal/dedup/engine.go). A book with no positive duration AND a largest
+// file below this size is a stub/placeholder, not real audio.
+const minPlausibleAudioBytes = 256 * 1024 // 256 KiB
+
 // Classify runs the deterministic catchers in priority order and returns the
 // first firing rule's (label, reason, fires=true). If no rule fires, it returns
 // ("", "", false). The caller (backfill op) uses fires=false as "unsure" and
@@ -24,12 +29,16 @@ const partVsWholeRatioMax = 0.5
 // Priority order (highest first):
 //  1. wholeBookSignatureMatch → true_dup  (strong positive oracle)
 //  2. missingFile             → not_dup  (hard negative: never merge a ghost)
-//  3. partVsWhole             → not_dup  (hard negative: duration mismatch)
+//  3. implausibleAudio        → not_dup  (hard negative: stub/placeholder side)
+//  4. partVsWhole             → not_dup  (hard negative: duration mismatch)
 func Classify(ex database.LabeledExample) (label, reason string, fires bool) {
 	if l, r, ok := wholeBookSignatureMatch(ex); ok {
 		return l, r, true
 	}
 	if l, r, ok := missingFile(ex); ok {
+		return l, r, true
+	}
+	if l, r, ok := implausibleAudio(ex); ok {
 		return l, r, true
 	}
 	if l, r, ok := partVsWhole(ex); ok {
@@ -58,6 +67,31 @@ func missingFile(ex database.LabeledExample) (string, string, bool) {
 		return "not_dup", "side B has no resolvable files", true
 	}
 	return "", "", false
+}
+
+// implausibleAudio fires not_dup when either side has no plausible audio — no
+// positive duration AND a largest file below the stub floor. This is the dataset
+// counterpart to the engine emission gate (hasPlausibleAudio) and catches the
+// residual stub / unscanned-placeholder pairs that missingFile (file records
+// exist) and partVsWhole (zero duration → ratio 0) both miss.
+//
+// A genuine unscanned copy (large file, zero duration) has FileSizeBytes at or
+// above the floor and is deliberately NOT suppressed — it is a real duplicate
+// awaiting a scan, left unlabeled for the signature/duration catchers later.
+func implausibleAudio(ex database.LabeledExample) (string, string, bool) {
+	if sideImplausibleAudio(ex.A) {
+		return "not_dup", "side A is a stub/placeholder (no duration, file < 256 KiB)", true
+	}
+	if sideImplausibleAudio(ex.B) {
+		return "not_dup", "side B is a stub/placeholder (no duration, file < 256 KiB)", true
+	}
+	return "", "", false
+}
+
+// sideImplausibleAudio reports whether a book side has no evidence of real audio
+// content: zero/unknown duration AND a largest file below the plausible floor.
+func sideImplausibleAudio(f database.BookFeatures) bool {
+	return f.TotalDurationSec <= 0 && f.FileSizeBytes < minPlausibleAudioBytes
 }
 
 // partVsWhole fires when both durations are known and the min/max ratio is below

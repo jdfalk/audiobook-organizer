@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.78.0 -->
+<!-- version: 8.79.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-06-13 -->
 
@@ -131,11 +131,12 @@ Plan: [`docs/plans/2026-06-13-dedup-exact-gate-and-dataset.md`](docs/plans/2026-
   candidates. Idempotent. ✅ Jun 13
 
 ### Deferred follow-ups (open)
-- [ ] **C5-gate** FileSize-aware catcher for residual stub pairs: when both sides have
-  `FileSize > 0` but `Duration == 0`, compare file sizes. Currently these pairs are
-  unlabeled (left for human/ML review) because `DurationRatio == 0` does not fire
-  `partVsWhole`. A separate `fileSizeMismatch` catcher would catch the dominant residual
-  class (0-second stubs vs. real books with large file sizes).
+- [x] **C5-gate** FileSize-aware catcher for residual stub pairs ✅ Jun 13 — `implausibleAudio`
+  catcher (`internal/dedup/dataset/rules.go`): labels `not_dup` when a side has zero/unknown
+  duration AND a largest file below the 256 KiB stub floor; `BookFeatures.FileSizeBytes` added
+  + populated. Catches the dominant residual class (0-second stubs) that `partVsWhole`
+  (`DurationRatio == 0`) and `missingFile` (file records exist) miss; genuine unscanned-large
+  copies are not suppressed. Run `dedup.dataset-backfill --apply` to clear the existing ~3,154.
 - [ ] **C5-sig** Offset/subsequence containment: `signatureRelation` currently returns only
   `match`, `disjoint`, or `unknown`. The `a_contains_b` / `b_contains_a` values in the
   spec require comparing signature subsequences — deferred to a future milestone.

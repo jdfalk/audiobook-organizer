@@ -1,5 +1,5 @@
 // file: internal/dedup/dataset/builder_test.go
-// version: 1.1.1
+// version: 1.1.2
 // guid: b3e7f2a1-9c45-4d80-8e62-5f1a3d6c7b90
 // last-edited: 2026-06-13
 
@@ -273,5 +273,36 @@ func TestBuildExample_FolderRelation_PrefixNotAncestor(t *testing.T) {
 	}
 	if ex.FolderRelation != "unrelated" {
 		t.Fatalf("folder relation = %q, want unrelated (Series is not an ancestor of Series-Extra)", ex.FolderRelation)
+	}
+}
+
+func TestBuildExample_FileSizeBytes(t *testing.T) {
+	// FileSizeBytes is the largest known size: max over BookFiles, and at least
+	// the book-level FileSize. A genuine large file must win over a tiny one so
+	// the implausibleAudio catcher does not suppress a real (multi-file) book.
+	bookSize := int64(1000)
+	bkA := &database.Book{ID: "a", Title: "Big", FileSize: &bookSize}
+	bkB := &database.Book{ID: "b", Title: "Stub"}
+	fs := &fakeStore{
+		books: map[string]*database.Book{"a": bkA, "b": bkB},
+		files: map[string][]database.BookFile{
+			"a": {
+				{BookID: "a", FilePath: "/lib/a/part1.m4b", FileSize: 100},
+				{BookID: "a", FilePath: "/lib/a/part2.m4b", FileSize: 184_741_714},
+			},
+			"b": {{BookID: "b", FilePath: "/lib/b/stub", FileSize: 32}},
+		},
+	}
+	cand := database.DedupCandidate{ID: 20, EntityAID: "a", EntityBID: "b", Layer: "exact"}
+
+	ex, err := BuildExample(fs, cand)
+	if err != nil {
+		t.Fatalf("BuildExample: %v", err)
+	}
+	if ex.A.FileSizeBytes != 184_741_714 {
+		t.Fatalf("A.FileSizeBytes = %d, want 184741714 (max over files)", ex.A.FileSizeBytes)
+	}
+	if ex.B.FileSizeBytes != 32 {
+		t.Fatalf("B.FileSizeBytes = %d, want 32 (stub)", ex.B.FileSizeBytes)
 	}
 }
