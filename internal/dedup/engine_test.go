@@ -1,6 +1,7 @@
 // file: internal/dedup/engine_test.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 2a7e4d91-c538-4f06-b1d3-9e8c5a6f0d72
+// last-edited: 2026-06-13
 
 package dedup
 
@@ -1019,5 +1020,30 @@ func TestEmbedStatus_String(t *testing.T) {
 		if got := tc.status.String(); got != tc.want {
 			t.Errorf("EmbedStatus(%d).String() = %q, want %q", tc.status, got, tc.want)
 		}
+	}
+}
+
+func TestHasPlausibleAudio(t *testing.T) {
+	dur := func(v int) *int { return &v }
+	sz := func(v int64) *int64 { return &v }
+
+	cases := []struct {
+		name string
+		book *database.Book
+		want bool
+	}{
+		{"nil book", nil, false},
+		{"32-byte stub, no duration", &database.Book{FileSize: sz(32)}, false},
+		{"182-byte stub, no duration", &database.Book{FileSize: sz(182)}, false},
+		{"large unscanned copy (genuine dupe)", &database.Book{FileSize: sz(184_741_714)}, true},
+		{"positive duration, no size", &database.Book{Duration: dur(3600)}, true},
+		{"empty book", &database.Book{}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := hasPlausibleAudio(tc.book); got != tc.want {
+				t.Fatalf("hasPlausibleAudio(%s) = %v, want %v", tc.name, got, tc.want)
+			}
+		})
 	}
 }

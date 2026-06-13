@@ -1,7 +1,7 @@
 // file: internal/dedup/engine.go
-// version: 1.26.0
+// version: 1.26.1
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
-// last-edited: 2026-06-10
+// last-edited: 2026-06-13
 
 package dedup
 
@@ -1050,6 +1050,31 @@ func (de *Engine) checkDurationMatch(book *database.Book) error {
 func hasUsableTitle(title string) bool {
 	trimmed := strings.TrimSpace(title)
 	return len([]rune(trimmed)) > 2
+}
+
+// minPlausibleAudioBytes is the smallest file size we treat as a real audio
+// file. Anything smaller is a placeholder/stub (a 32-byte .url shortcut, a
+// 182-byte broken download) that must never anchor an exact-duplicate match.
+const minPlausibleAudioBytes = 256 * 1024 // 256 KiB
+
+// hasPlausibleAudio reports whether a book references real audio content rather
+// than a stub or a never-scanned placeholder. A book qualifies if it has a
+// positive duration OR a file size at/above the plausible-audio floor. This is
+// the engine-side counterpart to the dataset missingFile catcher: it stops the
+// exact-title / ISBN emitters from flagging "100% duplicate" when one side is a
+// 32-byte stub or an unscanned shell. A large unscanned copy (real size, zero
+// duration) still qualifies — it is a genuine duplicate, not garbage.
+func hasPlausibleAudio(book *database.Book) bool {
+	if book == nil {
+		return false
+	}
+	if book.Duration != nil && *book.Duration > 0 {
+		return true
+	}
+	if book.FileSize != nil && *book.FileSize >= minPlausibleAudioBytes {
+		return true
+	}
+	return false
 }
 
 // seriesNumberOf returns a stable string representation of a book's
