@@ -1,6 +1,6 @@
 // file: internal/database/embedding_store.go
-// version: 2.3.0
-// last-edited: 2026-06-10
+// version: 2.3.1
+// last-edited: 2026-06-13
 // guid: 7c4a9b2e-d831-4f5c-a07e-3b8d6e1f9c42
 
 package database
@@ -27,22 +27,23 @@ import (
 // The vector blob stored in embRec.Vector carries a 1-byte version header so
 // old and new code can coexist during a rolling upgrade and after rollback.
 //
-//   v0 (absent/legacy): raw little-endian float32 — no header byte.
-//     Encoded as:  [f32_0 LE][f32_1 LE]…  (4N bytes for N-dim vector)
+//	v0 (absent/legacy): raw little-endian float32 — no header byte.
+//	  Encoded as:  [f32_0 LE][f32_1 LE]…  (4N bytes for N-dim vector)
 //
-//   v1 (T021, SPEC 3 §3): float16 + zstd block compression.
-//     Encoded as:  [0x01][zstd_compressed( [f16_0 LE][f16_1 LE]… )]
-//     (1 + zstd_len bytes — typically ~3.5–4× smaller than v0 for 3072-dim)
+//	v1 (T021, SPEC 3 §3): float16 + zstd block compression.
+//	  Encoded as:  [0x01][zstd_compressed( [f16_0 LE][f16_1 LE]… )]
+//	  (1 + zstd_len bytes — typically ~3.5–4× smaller than v0 for 3072-dim)
 //
 // Why float16 is safe at our threshold regime (0.85/0.95):
-//   For OpenAI text-embedding-3-large (3072 dims) the vectors are L2-normalised
-//   before storage.  Float16 has 10 bits of mantissa → ~0.1% relative error per
-//   element.  Over 3072 dims these errors average out (central-limit tendency),
-//   and the resulting cosine-drift is empirically |Δcos| < 1e-3 across random
-//   unit-vector pairs (see TestEncodeDecodeV1_CosineDrift).  Our accept threshold
-//   is 0.85 and our high-confidence threshold is 0.95; a drift of <0.001 is
-//   well inside the guard band on either side and cannot flip a genuine
-//   accept/reject decision.
+//
+//	For OpenAI text-embedding-3-large (3072 dims) the vectors are L2-normalised
+//	before storage.  Float16 has 10 bits of mantissa → ~0.1% relative error per
+//	element.  Over 3072 dims these errors average out (central-limit tendency),
+//	and the resulting cosine-drift is empirically |Δcos| < 1e-3 across random
+//	unit-vector pairs (see TestEncodeDecodeV1_CosineDrift).  Our accept threshold
+//	is 0.85 and our high-confidence threshold is 0.95; a drift of <0.001 is
+//	well inside the guard band on either side and cannot flip a genuine
+//	accept/reject decision.
 const (
 	embVecVersion0 = byte(0x00) // sentinel (not written; any blob without header is v0)
 	embVecVersion1 = byte(0x01) // float16 + zstd (T021)
@@ -76,6 +77,7 @@ func init() {
 //	dedup:r:<id16hex>               → candRec JSON      (dedup candidate)
 //	dedup:p:<type>:<aID>:<bID>      → id16hex           (pair uniqueness index)
 //	dedup:seq                       → [8]byte LE int64  (auto-increment counter)
+//	dedup:label:<id16hex>           → LabeledExample JSON   (dataset labels)
 const (
 	embVecPfx    = "emb:v:"
 	embCachePfx  = "emb:c:"
@@ -1095,7 +1097,8 @@ func CosineSimilarity(a, b []float32) float32 {
 }
 
 // encodeVector serialises a float32 slice to the v1 wire format:
-//   [0x01][zstd_compressed( [f16_0 LE][f16_1 LE]… )]
+//
+//	[0x01][zstd_compressed( [f16_0 LE][f16_1 LE]… )]
 //
 // All new writes use v1.  See the version-constant block at the top of this
 // file for the rationale behind float16 being safe at our scoring thresholds.
@@ -1119,9 +1122,12 @@ func encodeVector(v []float32) []byte {
 // decodeVector deserialises a vector blob produced by encodeVector (v0 or v1).
 //
 // v0 (no header byte / header byte != 0x01): raw little-endian float32 — kept
-//   forever for backward compatibility with blobs written before T021.
+//
+//	forever for backward compatibility with blobs written before T021.
+//
 // v1 (header byte 0x01): float16 + zstd.  Decompresses then dequantises back
-//   to float32 for use in the in-memory cosine engine (chromem hydration path).
+//
+//	to float32 for use in the in-memory cosine engine (chromem hydration path).
 func decodeVector(b []byte) []float32 {
 	if len(b) == 0 {
 		return nil
@@ -1276,4 +1282,3 @@ func vectorEncodeRatio(v []float32) float64 {
 	}
 	return float64(len(v0)) / float64(len(v1))
 }
-
