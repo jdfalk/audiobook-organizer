@@ -1,5 +1,5 @@
 // file: internal/plugins/dedup/dataset_backfill.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: 2d6f8a13-7c40-4e92-8b15-9a3e5c7d2f64
 // last-edited: 2026-06-13
 
@@ -132,6 +132,11 @@ func (p *Plugin) runDatasetBackfill(ctx context.Context, rawParams json.RawMessa
 		c := cands[i]
 		examined++
 
+		// Periodic progress update so the op doesn't appear frozen on large sets.
+		if examined%1000 == 0 {
+			_ = reporter.UpdateProgress(1, 2, fmt.Sprintf("Processed %d/%d candidates…", examined, len(cands)))
+		}
+
 		// Build feature vector for the candidate pair.
 		ex, err := dataset.BuildExample(adapter, c)
 		if err != nil {
@@ -149,6 +154,7 @@ func (p *Plugin) runDatasetBackfill(ctx context.Context, rawParams json.RawMessa
 			ex.Label = label
 			ex.LabelSource = "rule"
 			ex.LabelReason = reason
+			ex.DecidedAt = time.Now().UTC().Format(time.RFC3339)
 			switch label {
 			case "not_dup":
 				notDup++

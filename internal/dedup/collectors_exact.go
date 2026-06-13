@@ -1,7 +1,7 @@
 // file: internal/dedup/collectors_exact.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: c9d0e1f2-a3b4-4c5d-8e6f-7a8b9c0d1e2f
-// last-edited: 2026-06-10
+// last-edited: 2026-06-13
 
 // Package dedup — exact-tier collector family (fable5 T014).
 //
@@ -69,6 +69,12 @@ type MetaSrcHashStore interface {
 //
 // Logic unchanged from checkExactFileHash (engine.go:276-333); emission shape
 // only.
+//
+// Note on gate omission: this collector runs over the unified SCORING pipeline
+// (re-scoring pre-existing candidates), NOT the emission path. The
+// hasPlausibleAudio gate — which lives on checkExactTitle/checkExactISBN in
+// engine.go — is intentionally not applied here; it is an emission-time guard
+// and does not belong on a scoring-only collector.
 func CollectExactFileHash(
 	store ExactFileHashStore,
 	book *database.Book,
@@ -133,6 +139,12 @@ func CollectExactFileHash(
 // IDs are skipped immediately.
 //
 // Logic unchanged from checkExactISBN (engine.go:350-426); emission shape only.
+//
+// Note on gate omission: this collector runs over the unified SCORING pipeline
+// (re-scoring pre-existing candidates), NOT the emission path. The
+// hasPlausibleAudio gate — which lives on checkExactISBN in engine.go — is
+// intentionally not applied here; it is an emission-time guard and does not
+// belong on a scoring-only collector.
 func CollectISBNASIN(
 	store ISBNASINStore,
 	book *database.Book,
