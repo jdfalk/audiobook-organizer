@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.38.0
+// version: 2.39.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-06-12
 
@@ -21,7 +21,7 @@ const API_BASE = '/api/v1';
  */
 function wrapTrigger<T extends { id?: string; operation_id?: string }>(
   opName: string,
-  fn: () => Promise<T>,
+  fn: () => Promise<T>
 ): Promise<T> {
   return withOptimisticOperation(opName, fn, (r) => r?.id ?? r?.operation_id ?? null);
 }
@@ -44,10 +44,7 @@ export interface DeleteBookResponse {
   soft_delete?: boolean;
 }
 
-const buildApiError = async (
-  response: Response,
-  fallbackMessage: string
-) => {
+const buildApiError = async (response: Response, fallbackMessage: string) => {
   const data = await response.json().catch(() => ({}));
   const message =
     typeof (data as { error?: string }).error === 'string'
@@ -430,7 +427,14 @@ export interface OperationV2 {
   def_id: string;
   plugin: string;
   display_name: string;
-  status: 'queued' | 'running' | 'completed' | 'failed' | 'canceled' | 'interrupted_dropped' | 'interrupted_restart';
+  status:
+    | 'queued'
+    | 'running'
+    | 'completed'
+    | 'failed'
+    | 'canceled'
+    | 'interrupted_dropped'
+    | 'interrupted_restart';
   priority: number;
   /** 0 = alert (bell + activity), 1 = activity only */
   notify_level: number;
@@ -466,7 +470,12 @@ export async function getOperationTimeline(sinceMinutes = 15): Promise<Operation
 }
 
 // SSE event types emitted by the operations EventHub (UOS-06).
-export type OperationSSEEventName = 'op.created' | 'op.updated' | 'op.log' | 'op.terminal' | 'op.current_item';
+export type OperationSSEEventName =
+  | 'op.created'
+  | 'op.updated'
+  | 'op.log'
+  | 'op.terminal'
+  | 'op.current_item';
 
 export interface OperationSSEHandler {
   onEvent: (name: OperationSSEEventName, payload: unknown) => void;
@@ -485,7 +494,13 @@ export function openOperationsSSE(handler: OperationSSEHandler): EventSource {
   const url = `${API_BASE}/operations/events`;
   const es = new EventSource(url);
 
-  const eventNames: OperationSSEEventName[] = ['op.created', 'op.updated', 'op.log', 'op.terminal', 'op.current_item'];
+  const eventNames: OperationSSEEventName[] = [
+    'op.created',
+    'op.updated',
+    'op.log',
+    'op.terminal',
+    'op.current_item',
+  ];
   for (const name of eventNames) {
     es.addEventListener(name, (e: MessageEvent) => {
       try {
@@ -727,7 +742,7 @@ export async function getBooks(
     filters?: string;
     showFailed?: boolean;
     hasFileErrors?: boolean;
-    fingerprintStatus?: "complete" | "partial" | "none";
+    fingerprintStatus?: 'complete' | 'partial' | 'none';
     coveragePercentMin?: number;
     coveragePercentMax?: number;
   }
@@ -749,8 +764,10 @@ export async function getBooks(
   if (options?.showFailed) params.set('show_quarantined', 'true');
   if (options?.hasFileErrors) params.set('has_file_errors', 'true');
   if (options?.fingerprintStatus) params.set('fingerprint_status', options.fingerprintStatus);
-  if (options?.coveragePercentMin !== undefined) params.set('coverage_percent_min', String(options.coveragePercentMin));
-  if (options?.coveragePercentMax !== undefined) params.set('coverage_percent_max', String(options.coveragePercentMax));
+  if (options?.coveragePercentMin !== undefined)
+    params.set('coverage_percent_min', String(options.coveragePercentMin));
+  if (options?.coveragePercentMax !== undefined)
+    params.set('coverage_percent_max', String(options.coveragePercentMax));
   params.set('is_primary_version', 'true');
 
   const response = await fetch(`${API_BASE}/audiobooks?${params}`);
@@ -791,11 +808,7 @@ export async function getBook(id: string): Promise<Book> {
   return body.data;
 }
 
-export async function searchBooks(
-  query: string,
-  limit = 50,
-  showFailed = false
-): Promise<Book[]> {
+export async function searchBooks(query: string, limit = 50, showFailed = false): Promise<Book[]> {
   let url = `${API_BASE}/audiobooks?search=${encodeURIComponent(query)}&limit=${limit}&is_primary_version=true`;
   if (showFailed) url += '&show_quarantined=true';
   const response = await fetch(url);
@@ -831,15 +844,13 @@ export async function searchBooksPage(
 export async function countBooks(): Promise<number> {
   const response = await fetch(`${API_BASE}/audiobooks/count`);
   if (!response.ok) {
-    throw await buildApiError(response, "Failed to count books");
+    throw await buildApiError(response, 'Failed to count books');
   }
   const body = await response.json();
   return body.data?.count || 0;
 }
 
-export async function countBooksFiltered(options: {
-  libraryState?: string;
-}): Promise<number> {
+export async function countBooksFiltered(options: { libraryState?: string }): Promise<number> {
   const params = new URLSearchParams({ limit: '1', offset: '0' });
   if (options.libraryState) params.set('library_state', options.libraryState);
   const response = await fetch(`${API_BASE}/audiobooks?${params}`);
@@ -862,9 +873,7 @@ export async function getSoftDeletedBooks(
   if (olderThanDays && olderThanDays > 0) {
     params.set('older_than_days', String(olderThanDays));
   }
-  const response = await fetch(
-    `${API_BASE}/audiobooks/soft-deleted?${params.toString()}`
-  );
+  const response = await fetch(`${API_BASE}/audiobooks/soft-deleted?${params.toString()}`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch soft-deleted books');
   }
@@ -891,12 +900,9 @@ export async function purgeSoftDeletedBooks(
   if (olderThanDays && olderThanDays > 0) {
     params.set('older_than_days', String(olderThanDays));
   }
-  const response = await fetch(
-    `${API_BASE}/audiobooks/purge-soft-deleted?${params.toString()}`,
-    {
-      method: 'DELETE',
-    }
-  );
+  const response = await fetch(`${API_BASE}/audiobooks/purge-soft-deleted?${params.toString()}`, {
+    method: 'DELETE',
+  });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to purge soft-deleted books');
   }
@@ -1017,10 +1023,7 @@ export interface RatingPatchBody {
 
 // patchAudiobookRating sends a partial rating update for a single book.
 // Only fields present in body are touched; omitted fields are unchanged.
-export async function patchAudiobookRating(
-  bookId: string,
-  body: RatingPatchBody
-): Promise<Book> {
+export async function patchAudiobookRating(bookId: string, body: RatingPatchBody): Promise<Book> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/rating`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -1107,8 +1110,7 @@ export async function getBookFiles(
   const qs = params.toString();
   const url = `${API_BASE}/audiobooks/${bookId}/files${qs ? '?' + qs : ''}`;
   const response = await fetch(url, { signal: options?.signal });
-  if (!response.ok)
-    throw new Error(`Failed to fetch book files: ${response.status}`);
+  if (!response.ok) throw new Error(`Failed to fetch book files: ${response.status}`);
   const body = await response.json();
   return body.data;
 }
@@ -1129,13 +1131,8 @@ export async function patchBookFile(
   return response.json();
 }
 
-export async function getSegmentTags(
-  bookId: string,
-  segmentId: string
-): Promise<SegmentTags> {
-  const response = await fetch(
-    `${API_BASE}/audiobooks/${bookId}/segments/${segmentId}/tags`
-  );
+export async function getSegmentTags(bookId: string, segmentId: string): Promise<SegmentTags> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/segments/${segmentId}/tags`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch segment tags');
   }
@@ -1192,7 +1189,10 @@ export interface MergeAuthorsResult {
   errors: string[];
 }
 
-export async function getAuthorDuplicates(): Promise<{ groups: AuthorDedupGroup[]; needs_refresh?: boolean }> {
+export async function getAuthorDuplicates(): Promise<{
+  groups: AuthorDedupGroup[];
+  needs_refresh?: boolean;
+}> {
   const response = await fetch(`${API_BASE}/authors/duplicates`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch author duplicates');
@@ -1247,7 +1247,11 @@ export async function getAuthorAliases(authorId: number): Promise<AuthorAlias[]>
   return data.aliases || [];
 }
 
-export async function createAuthorAlias(authorId: number, aliasName: string, aliasType: string = 'alias'): Promise<AuthorAlias> {
+export async function createAuthorAlias(
+  authorId: number,
+  aliasName: string,
+  aliasType: string = 'alias'
+): Promise<AuthorAlias> {
   const response = await fetch(`${API_BASE}/authors/${authorId}/aliases`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1348,7 +1352,9 @@ export async function scanBookDuplicates(): Promise<Operation> {
   return body.data;
 }
 
-export async function mergeBookDuplicatesAsVersions(bookIds: string[]): Promise<{ message: string; version_group_id: string; primary_id: string }> {
+export async function mergeBookDuplicatesAsVersions(
+  bookIds: string[]
+): Promise<{ message: string; version_group_id: string; primary_id: string }> {
   const response = await fetch(`${API_BASE}/audiobooks/duplicates/merge`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1416,7 +1422,10 @@ export async function renameSeries(seriesId: number, name: string): Promise<void
   }
 }
 
-export async function splitSeries(seriesId: number, bookIds: string[]): Promise<{ new_series_id: number; books_moved: number }> {
+export async function splitSeries(
+  seriesId: number,
+  bookIds: string[]
+): Promise<{ new_series_id: number; books_moved: number }> {
   const response = await fetch(`${API_BASE}/series/${seriesId}/split`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1467,7 +1476,9 @@ export async function deleteAuthor(authorId: number): Promise<void> {
   }
 }
 
-export async function bulkDeleteAuthors(ids: number[]): Promise<{ deleted: number; skipped: number; errors: string[]; total: number }> {
+export async function bulkDeleteAuthors(
+  ids: number[]
+): Promise<{ deleted: number; skipped: number; errors: string[]; total: number }> {
   const response = await fetch(`${API_BASE}/authors/bulk-delete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1480,7 +1491,9 @@ export async function bulkDeleteAuthors(ids: number[]): Promise<{ deleted: numbe
   return body.data;
 }
 
-export async function bulkDeleteSeries(ids: number[]): Promise<{ deleted: number; skipped: number; errors: string[]; total: number }> {
+export async function bulkDeleteSeries(
+  ids: number[]
+): Promise<{ deleted: number; skipped: number; errors: string[]; total: number }> {
   const response = await fetch(`${API_BASE}/series/bulk-delete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1515,10 +1528,7 @@ export async function getImportPaths(): Promise<ImportPath[]> {
   return data.importPaths || [];
 }
 
-export async function addImportPath(
-  path: string,
-  name: string
-): Promise<ImportPath> {
+export async function addImportPath(path: string, name: string): Promise<ImportPath> {
   const response = await fetch(`${API_BASE}/import-paths`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1705,13 +1715,8 @@ export async function getOperationLogs(id: string): Promise<OperationLog[]> {
   return data.items || data.logs || [];
 }
 
-export async function getOperationLogsTail(
-  id: string,
-  tail: number
-): Promise<OperationLog[]> {
-  const response = await fetch(
-    `${API_BASE}/operations/${id}/logs?tail=${tail}`
-  );
+export async function getOperationLogsTail(id: string, tail: number): Promise<OperationLog[]> {
+  const response = await fetch(`${API_BASE}/operations/${id}/logs?tail=${tail}`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch operation logs tail');
   }
@@ -1739,7 +1744,10 @@ export async function clearStaleOperations(): Promise<{ cleared: number }> {
   return body.data;
 }
 
-export async function listOperations(limit = 50, offset = 0): Promise<{ items: Operation[]; total: number; limit: number; offset: number }> {
+export async function listOperations(
+  limit = 50,
+  offset = 0
+): Promise<{ items: Operation[]; total: number; limit: number; offset: number }> {
   const response = await fetch(`${API_BASE}/operations?limit=${limit}&offset=${offset}`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch operations');
@@ -1748,9 +1756,7 @@ export async function listOperations(limit = 50, offset = 0): Promise<{ items: O
   return body.data;
 }
 
-export async function deleteOperationHistory(
-  status: string
-): Promise<{ deleted: number }> {
+export async function deleteOperationHistory(status: string): Promise<{ deleted: number }> {
   const response = await fetch(
     `${API_BASE}/operations/history?status=${encodeURIComponent(status)}`,
     { method: 'DELETE' }
@@ -2069,10 +2075,7 @@ export async function getBookVersions(bookId: string): Promise<Book[]> {
   return body.data?.versions || [];
 }
 
-export async function linkBookVersion(
-  bookId: string,
-  otherBookId: string
-): Promise<void> {
+export async function linkBookVersion(bookId: string, otherBookId: string): Promise<void> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/versions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2083,10 +2086,7 @@ export async function linkBookVersion(
   }
 }
 
-export async function unlinkBookVersion(
-  bookId: string,
-  otherBookId: string
-): Promise<void> {
+export async function unlinkBookVersion(bookId: string, otherBookId: string): Promise<void> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/versions`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
@@ -2131,7 +2131,10 @@ export async function splitVersion(bookId: string, segmentIds: string[]): Promis
 
 // Split selected segments into independent new books (one per segment).
 // Unlike splitVersion, new books are NOT version-linked to the source.
-export async function splitSegmentsToBooks(bookId: string, segmentIds: string[]): Promise<{ created_books: Book[]; count: number }> {
+export async function splitSegmentsToBooks(
+  bookId: string,
+  segmentIds: string[]
+): Promise<{ created_books: Book[]; count: number }> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/split-to-books`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2145,7 +2148,11 @@ export async function splitSegmentsToBooks(bookId: string, segmentIds: string[])
 }
 
 // Move segments from one book to another (must be in same version group)
-export async function moveSegments(bookId: string, segmentIds: string[], targetBookId: string): Promise<void> {
+export async function moveSegments(
+  bookId: string,
+  segmentIds: string[],
+  targetBookId: string
+): Promise<void> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/move-segments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2157,10 +2164,7 @@ export async function moveSegments(bookId: string, segmentIds: string[], targetB
 }
 
 // File Import
-export async function importFile(
-  filePath: string,
-  organize = false
-): Promise<Book> {
+export async function importFile(filePath: string, organize = false): Promise<Book> {
   const response = await fetch(`${API_BASE}/import/file`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2316,9 +2320,7 @@ export async function startITunesSync(
   });
 }
 
-export async function getITunesLibraryStatus(
-  path: string
-): Promise<ITunesLibraryStatus> {
+export async function getITunesLibraryStatus(path: string): Promise<ITunesLibraryStatus> {
   const response = await fetch(
     `${API_BASE}/itunes/library-status?path=${encodeURIComponent(path)}`
   );
@@ -2329,12 +2331,8 @@ export async function getITunesLibraryStatus(
   return body.data;
 }
 
-export async function getITunesImportStatus(
-  operationId: string
-): Promise<ITunesImportStatus> {
-  const response = await fetch(
-    `${API_BASE}/itunes/import-status/${operationId}`
-  );
+export async function getITunesImportStatus(operationId: string): Promise<ITunesImportStatus> {
+  const response = await fetch(`${API_BASE}/itunes/import-status/${operationId}`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch iTunes import status');
   }
@@ -2377,7 +2375,12 @@ export interface SeriesDupGroup {
   match_type?: string;
 }
 
-export async function getSeriesDuplicates(): Promise<{ groups: SeriesDupGroup[]; count: number; total_series: number; needs_refresh?: boolean }> {
+export async function getSeriesDuplicates(): Promise<{
+  groups: SeriesDupGroup[];
+  count: number;
+  total_series: number;
+  needs_refresh?: boolean;
+}> {
   const response = await fetch(`${API_BASE}/series/duplicates`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch series duplicates');
@@ -2406,7 +2409,10 @@ export interface ValidationResult {
   isbn?: string;
 }
 
-export async function validateDedupEntry(query: string, type: 'series' | 'author' | 'book' = 'series'): Promise<{ results: ValidationResult[]; query: string; type: string }> {
+export async function validateDedupEntry(
+  query: string,
+  type: 'series' | 'author' | 'book' = 'series'
+): Promise<{ results: ValidationResult[]; query: string; type: string }> {
   const response = await fetch(`${API_BASE}/dedup/validate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2436,7 +2442,11 @@ export async function deduplicateSeries(): Promise<Operation> {
   return body.data;
 }
 
-export async function mergeSeriesGroup(keepId: number, mergeIds: number[], customName?: string): Promise<Operation> {
+export async function mergeSeriesGroup(
+  keepId: number,
+  mergeIds: number[],
+  customName?: string
+): Promise<Operation> {
   const body: Record<string, unknown> = { keep_id: keepId, merge_ids: mergeIds };
   if (customName) body.custom_name = customName;
   const response = await fetch(`${API_BASE}/series/merge`, {
@@ -2560,9 +2570,7 @@ export async function searchMetadata(
   const params = new URLSearchParams({ title });
   if (author) params.append('author', author);
 
-  const response = await fetch(
-    `${API_BASE}/metadata/search?${params.toString()}`
-  );
+  const response = await fetch(`${API_BASE}/metadata/search?${params.toString()}`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to search metadata');
   }
@@ -2573,12 +2581,9 @@ export async function searchMetadata(
 export async function fetchBookMetadata(
   bookId: string
 ): Promise<{ message: string; book: Book; source: string }> {
-  const response = await fetch(
-    `${API_BASE}/audiobooks/${bookId}/fetch-metadata`,
-    {
-      method: 'POST',
-    }
-  );
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/fetch-metadata`, {
+    method: 'POST',
+  });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch metadata');
   }
@@ -2595,7 +2600,7 @@ export async function searchMetadataForBook(
   useRerank?: boolean,
   // METADATA-CACHED-MATCHER: pass refresh=true to bypass the persistent
   // cache and force a fresh fetch chain. Default false (use cache).
-  refresh?: boolean,
+  refresh?: boolean
 ): Promise<SearchMetadataResponse> {
   const body: {
     query: string;
@@ -2636,14 +2641,11 @@ export async function applyMetadataCandidate(
   if (writeBack !== undefined) {
     payload.write_back = writeBack;
   }
-  const response = await fetch(
-    `${API_BASE}/audiobooks/${bookId}/apply-metadata`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }
-  );
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/apply-metadata`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to apply metadata');
   }
@@ -2652,12 +2654,9 @@ export async function applyMetadataCandidate(
 }
 
 export async function markNoMatch(bookId: string): Promise<void> {
-  const response = await fetch(
-    `${API_BASE}/audiobooks/${bookId}/mark-no-match`,
-    {
-      method: 'POST',
-    }
-  );
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/mark-no-match`, {
+    method: 'POST',
+  });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to mark as no match');
   }
@@ -2694,10 +2693,7 @@ export async function writeBackMetadata(
     options.headers = { 'Content-Type': 'application/json' };
     options.body = JSON.stringify({ segment_ids: segmentIds });
   }
-  const response = await fetch(
-    `${API_BASE}/audiobooks/${bookId}/write-back`,
-    options
-  );
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/write-back`, options);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to write metadata to files');
   }
@@ -2765,13 +2761,10 @@ export interface ExtractTrackInfoResponse {
   segments: BookSegment[];
 }
 
-export async function extractTrackInfo(
-  bookId: string
-): Promise<ExtractTrackInfoResponse> {
-  const response = await fetch(
-    `${API_BASE}/audiobooks/${bookId}/extract-track-info`,
-    { method: 'POST' }
-  );
+export async function extractTrackInfo(bookId: string): Promise<ExtractTrackInfoResponse> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/extract-track-info`, {
+    method: 'POST',
+  });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to extract track info');
   }
@@ -2795,14 +2788,11 @@ export async function relocateBookFiles(
   bookId: string,
   req: RelocateRequest
 ): Promise<RelocateResult> {
-  const response = await fetch(
-    `${API_BASE}/audiobooks/${bookId}/relocate`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req),
-    }
-  );
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/relocate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to relocate files');
   }
@@ -2854,9 +2844,7 @@ export interface AIParseResult {
   confidence: 'high' | 'medium' | 'low';
 }
 
-export async function parseFilenameWithAI(
-  filename: string
-): Promise<{ metadata: AIParseResult }> {
+export async function parseFilenameWithAI(filename: string): Promise<{ metadata: AIParseResult }> {
   const response = await fetch(`${API_BASE}/ai/parse-filename`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2905,12 +2893,9 @@ export async function testAIConnection(
 export async function parseAudiobookWithAI(
   bookId: string
 ): Promise<{ message: string; book: Book; confidence: string }> {
-  const response = await fetch(
-    `${API_BASE}/audiobooks/${bookId}/parse-with-ai`,
-    {
-      method: 'POST',
-    }
-  );
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/parse-with-ai`, {
+    method: 'POST',
+  });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to parse audiobook with AI');
   }
@@ -2942,12 +2927,8 @@ export interface FilesystemBrowseResult {
   };
 }
 
-export async function browseFilesystem(
-  path: string
-): Promise<FilesystemBrowseResult> {
-  const response = await fetch(
-    `${API_BASE}/filesystem/browse?path=${encodeURIComponent(path)}`
-  );
+export async function browseFilesystem(path: string): Promise<FilesystemBrowseResult> {
+  const response = await fetch(`${API_BASE}/filesystem/browse?path=${encodeURIComponent(path)}`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to browse filesystem');
   }
@@ -3013,9 +2994,7 @@ export async function createBackup(maxBackups?: number): Promise<BackupInfo> {
   const response = await fetch(`${API_BASE}/backup/create`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(
-      typeof maxBackups === 'number' ? { max_backups: maxBackups } : {}
-    ),
+    body: JSON.stringify(typeof maxBackups === 'number' ? { max_backups: maxBackups } : {}),
   });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to create backup');
@@ -3033,10 +3012,7 @@ export async function listBackups(): Promise<BackupListResponse> {
   return body.data;
 }
 
-export async function restoreBackup(
-  filename: string,
-  verify = true
-): Promise<{ message: string }> {
+export async function restoreBackup(filename: string, verify = true): Promise<{ message: string }> {
   const response = await fetch(`${API_BASE}/backup/restore`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -3095,9 +3071,7 @@ export async function addBlockedHash(
   return body.data;
 }
 
-export async function removeBlockedHash(
-  hash: string
-): Promise<{ message: string; hash: string }> {
+export async function removeBlockedHash(hash: string): Promise<{ message: string; hash: string }> {
   const response = await fetch(`${API_BASE}/blocked-hashes/${hash}`, {
     method: 'DELETE',
   });
@@ -3127,21 +3101,33 @@ export async function getBookMetadataHistory(bookId: string): Promise<MetadataCh
   return data.history || [];
 }
 
-export async function getFieldMetadataHistory(bookId: string, field: string): Promise<MetadataChangeRecord[]> {
+export async function getFieldMetadataHistory(
+  bookId: string,
+  field: string
+): Promise<MetadataChangeRecord[]> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/metadata-history/${field}`);
   if (!response.ok) throw await buildApiError(response, 'Failed to fetch field history');
   const data = await response.json();
   return data.history || [];
 }
 
-export async function undoLastApply(bookId: string): Promise<{ message: string; undone_fields: string[] }> {
-  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/undo-last-apply`, { method: 'POST' });
+export async function undoLastApply(
+  bookId: string
+): Promise<{ message: string; undone_fields: string[] }> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/undo-last-apply`, {
+    method: 'POST',
+  });
   if (!response.ok) throw await buildApiError(response, 'Failed to undo last apply');
   return response.json();
 }
 
-export async function undoMetadataChange(bookId: string, field: string): Promise<{ message: string }> {
-  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/metadata-history/${field}/undo`, { method: 'POST' });
+export async function undoMetadataChange(
+  bookId: string,
+  field: string
+): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/metadata-history/${field}/undo`, {
+    method: 'POST',
+  });
   if (!response.ok) throw await buildApiError(response, 'Failed to undo change');
   return response.json();
 }
@@ -3200,7 +3186,9 @@ export interface BatchFetchRequest {
   only_unmatched?: boolean;
 }
 
-export async function batchFetchCandidates(req: BatchFetchRequest): Promise<{ operation_id: string; book_count?: number; message?: string }> {
+export async function batchFetchCandidates(
+  req: BatchFetchRequest
+): Promise<{ operation_id: string; book_count?: number; message?: string }> {
   const response = await fetch(`${API_BASE}/metadata/batch-fetch-candidates`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -3213,7 +3201,7 @@ export async function batchFetchCandidates(req: BatchFetchRequest): Promise<{ op
 export async function getOperationResults(
   operationId: string,
   limit = 100,
-  offset = 0,
+  offset = 0
 ): Promise<BatchFetchResponse> {
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   const response = await fetch(`${API_BASE}/operations/${operationId}/results?${params}`);
@@ -3249,7 +3237,11 @@ export async function getRecentMetadataFetches(): Promise<MetadataFetchSummary[]
   return data.operations || [];
 }
 
-export async function getPendingReview(): Promise<{ operation_id: string; total_books: number; message: string }> {
+export async function getPendingReview(): Promise<{
+  operation_id: string;
+  total_books: number;
+  message: string;
+}> {
   const response = await fetch(`${API_BASE}/metadata/pending-review`, { method: 'POST' });
   if (!response.ok) throw await buildApiError(response, 'Failed to get pending review');
   return response.json();
@@ -3272,7 +3264,7 @@ export interface CachedMetadataEntry {
 // metadata-candidate set, optionally filtered by review status.
 // METADATA-CACHED-MATCHER replacement for the legacy getPendingReview.
 export async function listCachedCandidates(
-  status?: 'pending' | 'matched',
+  status?: 'pending' | 'matched'
 ): Promise<{ entries: CachedMetadataEntry[]; total: number }> {
   const qs = status ? `?status=${status}` : '';
   const response = await fetch(`${API_BASE}/audiobooks/metadata/cached${qs}`);
@@ -3287,7 +3279,7 @@ export async function listCachedCandidates(
 // "no_match" (user rejected), "applied" (already applied).
 export async function getCachedReviewResults(
   limit: number,
-  offset: number,
+  offset: number
 ): Promise<{
   results: CandidateResult[];
   total_count: number;
@@ -3297,7 +3289,7 @@ export async function getCachedReviewResults(
   total_applied?: number;
 }> {
   const response = await fetch(
-    `${API_BASE}/audiobooks/metadata/cache/review?limit=${limit}&offset=${offset}`,
+    `${API_BASE}/audiobooks/metadata/cache/review?limit=${limit}&offset=${offset}`
   );
   if (!response.ok) throw await buildApiError(response, 'Failed to load cached review results');
   const data = await response.json();
@@ -3355,12 +3347,14 @@ export interface MetadataResultsResponse {
 // Review button used to surface. Pass no status filter to see every
 // book that has been fetched. Pass includeUnfetched=true to also include
 // books that have never been queried.
-export async function getMetadataResults(opts: {
-  status?: ('matched' | 'no_match' | 'applied' | 'rejected' | 'error' | 'unfetched')[];
-  limit?: number;
-  offset?: number;
-  includeUnfetched?: boolean;
-} = {}): Promise<MetadataResultsResponse> {
+export async function getMetadataResults(
+  opts: {
+    status?: ('matched' | 'no_match' | 'applied' | 'rejected' | 'error' | 'unfetched')[];
+    limit?: number;
+    offset?: number;
+    includeUnfetched?: boolean;
+  } = {}
+): Promise<MetadataResultsResponse> {
   const params = new URLSearchParams();
   for (const s of opts.status ?? []) params.append('status', s);
   if (opts.limit !== undefined) params.set('limit', String(opts.limit));
@@ -3376,7 +3370,10 @@ export async function getMetadataResults(opts: {
   return data.data ?? data;
 }
 
-export async function batchApplyCandidates(operationId: string, bookIds: string[]): Promise<{ applied: number }> {
+export async function batchApplyCandidates(
+  operationId: string,
+  bookIds: string[]
+): Promise<{ applied: number }> {
   const response = await fetch(`${API_BASE}/metadata/batch-apply-candidates`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -3386,7 +3383,10 @@ export async function batchApplyCandidates(operationId: string, bookIds: string[
   return response.json();
 }
 
-export async function batchRejectCandidates(operationId: string, bookIds: string[]): Promise<{ rejected: number }> {
+export async function batchRejectCandidates(
+  operationId: string,
+  bookIds: string[]
+): Promise<{ rejected: number }> {
   const response = await fetch(`${API_BASE}/metadata/batch-reject-candidates`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -3396,7 +3396,10 @@ export async function batchRejectCandidates(operationId: string, bookIds: string
   return response.json();
 }
 
-export async function batchUnrejectCandidates(operationId: string, bookIds: string[]): Promise<{ unrejected: number }> {
+export async function batchUnrejectCandidates(
+  operationId: string,
+  bookIds: string[]
+): Promise<{ unrejected: number }> {
   const response = await fetch(`${API_BASE}/metadata/batch-unreject-candidates`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -3406,7 +3409,10 @@ export async function batchUnrejectCandidates(operationId: string, bookIds: stri
   return response.json();
 }
 
-export async function revertToSnapshot(bookId: string, timestamp: string): Promise<{ message: string; book: Book }> {
+export async function revertToSnapshot(
+  bookId: string,
+  timestamp: string
+): Promise<{ message: string; book: Book }> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/revert-metadata`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -3422,7 +3428,10 @@ export interface BookVersionEntry {
   data: string;
 }
 
-export async function getBookCOWVersions(bookId: string, limit?: number): Promise<BookVersionEntry[]> {
+export async function getBookCOWVersions(
+  bookId: string,
+  limit?: number
+): Promise<BookVersionEntry[]> {
   const params = limit ? `?limit=${limit}` : '';
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/cow-versions${params}`);
   if (!response.ok) throw await buildApiError(response, 'Failed to fetch book versions');
@@ -3430,7 +3439,10 @@ export async function getBookCOWVersions(bookId: string, limit?: number): Promis
   return data.versions || [];
 }
 
-export async function pruneBookVersions(bookId: string, keepCount: number): Promise<{ pruned: number }> {
+export async function pruneBookVersions(
+  bookId: string,
+  keepCount: number
+): Promise<{ pruned: number }> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/cow-versions/prune`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -3556,11 +3568,13 @@ export async function uploadOLDump(
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${API_BASE}/openlibrary/upload`);
 
-    const progressHandler = onProgress ? (e: ProgressEvent) => {
-      if (e.lengthComputable) {
-        onProgress(Math.round((e.loaded / e.total) * 100));
-      }
-    } : null;
+    const progressHandler = onProgress
+      ? (e: ProgressEvent) => {
+          if (e.lengthComputable) {
+            onProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        }
+      : null;
 
     if (progressHandler) {
       xhr.upload.addEventListener('progress', progressHandler);
@@ -3577,7 +3591,9 @@ export async function uploadOLDump(
         try {
           const body = JSON.parse(xhr.responseText);
           if (body.error) msg = body.error;
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
         reject(new Error(msg));
       }
     };
@@ -3640,7 +3656,10 @@ export async function applyUpdate(): Promise<void> {
   }
 }
 
-export async function splitCompositeAuthor(authorId: number, names?: string[]): Promise<{ authors: { id: number; name: string }[]; books_updated: number }> {
+export async function splitCompositeAuthor(
+  authorId: number,
+  names?: string[]
+): Promise<{ authors: { id: number; name: string }[]; books_updated: number }> {
   const response = await fetch(`${API_BASE}/authors/${authorId}/split`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -3653,7 +3672,10 @@ export async function splitCompositeAuthor(authorId: number, names?: string[]): 
   return body.data;
 }
 
-export async function renameAuthor(authorId: number, name: string): Promise<{ id: number; name: string }> {
+export async function renameAuthor(
+  authorId: number,
+  name: string
+): Promise<{ id: number; name: string }> {
   const response = await fetch(`${API_BASE}/authors/${authorId}/name`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -3666,8 +3688,12 @@ export async function renameAuthor(authorId: number, name: string): Promise<{ id
   return body.data;
 }
 
-export async function reclassifyAuthorAsNarrator(authorId: number): Promise<{ narrator_id: number; books_updated: number }> {
-  const response = await fetch(`${API_BASE}/authors/${authorId}/reclassify-as-narrator`, { method: 'POST' });
+export async function reclassifyAuthorAsNarrator(
+  authorId: number
+): Promise<{ narrator_id: number; books_updated: number }> {
+  const response = await fetch(`${API_BASE}/authors/${authorId}/reclassify-as-narrator`, {
+    method: 'POST',
+  });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to reclassify author as narrator');
   }
@@ -3715,7 +3741,12 @@ export async function runMaintenanceWindow(): Promise<void> {
 
 export async function updateTaskConfig(
   name: string,
-  updates: { enabled?: boolean; interval_minutes?: number; run_on_startup?: boolean; run_in_maintenance_window?: boolean }
+  updates: {
+    enabled?: boolean;
+    interval_minutes?: number;
+    run_on_startup?: boolean;
+    run_in_maintenance_window?: boolean;
+  }
 ): Promise<void> {
   const response = await fetch(`${API_BASE}/tasks/${name}`, {
     method: 'PUT',
@@ -3744,7 +3775,8 @@ export interface MaintenanceWindowConfig {
 
 export async function getMaintenanceWindowStatus(): Promise<MaintenanceWindowStatus> {
   const response = await fetch(`${API_BASE}/maintenance-window/status`);
-  if (!response.ok) throw await buildApiError(response, 'Failed to fetch maintenance window status');
+  if (!response.ok)
+    throw await buildApiError(response, 'Failed to fetch maintenance window status');
   return response.json();
 }
 
@@ -3754,7 +3786,8 @@ export async function updateMaintenanceWindowConfig(cfg: MaintenanceWindowConfig
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(cfg),
   });
-  if (!response.ok) throw await buildApiError(response, 'Failed to update maintenance window config');
+  if (!response.ok)
+    throw await buildApiError(response, 'Failed to update maintenance window config');
 }
 
 // AI Author Review
@@ -3781,9 +3814,7 @@ export async function getOperationResult(id: string): Promise<{ result_data: unk
   return response.json();
 }
 
-export async function applyAIAuthorReview(
-  suggestions: ApplyAISuggestion[]
-): Promise<Operation> {
+export async function applyAIAuthorReview(suggestions: ApplyAISuggestion[]): Promise<Operation> {
   const response = await fetch(`${API_BASE}/authors/duplicates/ai-review/apply`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -3800,7 +3831,14 @@ export async function applyAIAuthorReview(
 
 export interface AIScan {
   id: number;
-  status: 'pending' | 'scanning' | 'enriching' | 'cross_validating' | 'complete' | 'failed' | 'canceled';
+  status:
+    | 'pending'
+    | 'scanning'
+    | 'enriching'
+    | 'cross_validating'
+    | 'complete'
+    | 'failed'
+    | 'canceled';
   mode: 'batch' | 'realtime';
   models: { groups: string; full: string };
   author_count: number;
@@ -3891,7 +3929,10 @@ export async function getAIScanResults(id: number, agreement?: string): Promise<
   return data.results || [];
 }
 
-export async function applyAIScanResults(scanID: number, resultIDs: number[]): Promise<{ applied: number; errors: string[] }> {
+export async function applyAIScanResults(
+  scanID: number,
+  resultIDs: number[]
+): Promise<{ applied: number; errors: string[] }> {
   const response = await fetch(`${API_BASE}/ai/scans/${scanID}/apply`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -3951,10 +3992,9 @@ export interface RenameApplyResult {
 }
 
 export async function previewRename(bookId: string): Promise<RenamePreview> {
-  const response = await fetch(
-    `${API_BASE}/audiobooks/${bookId}/rename/preview`,
-    { method: 'POST' }
-  );
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/rename/preview`, {
+    method: 'POST',
+  });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to preview rename');
   }
@@ -3963,10 +4003,7 @@ export async function previewRename(bookId: string): Promise<RenamePreview> {
 }
 
 export async function applyRename(bookId: string): Promise<RenameApplyResult> {
-  const response = await fetch(
-    `${API_BASE}/audiobooks/${bookId}/rename/apply`,
-    { method: 'POST' }
-  );
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/rename/apply`, { method: 'POST' });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to apply rename');
   }
@@ -4008,9 +4045,7 @@ export interface OrganizeResult {
 }
 
 export async function previewOrganize(bookId: string): Promise<OrganizePreviewResponse> {
-  const response = await fetch(
-    `${API_BASE}/audiobooks/${bookId}/preview-organize`
-  );
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/preview-organize`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to preview organize');
   }
@@ -4019,10 +4054,7 @@ export async function previewOrganize(bookId: string): Promise<OrganizePreviewRe
 }
 
 export async function organizeBook(bookId: string): Promise<OrganizeResult> {
-  const response = await fetch(
-    `${API_BASE}/audiobooks/${bookId}/organize`,
-    { method: 'POST' }
-  );
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/organize`, { method: 'POST' });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to organize book');
   }
@@ -4243,9 +4275,7 @@ export async function listAIJobs(params?: {
   if (params?.status) qs.set('status', params.status);
   if (params?.limit) qs.set('limit', String(params.limit));
   if (params?.offset) qs.set('offset', String(params.offset));
-  const url = qs.toString()
-    ? `${API_BASE}/ai-jobs?${qs}`
-    : `${API_BASE}/ai-jobs`;
+  const url = qs.toString() ? `${API_BASE}/ai-jobs?${qs}` : `${API_BASE}/ai-jobs`;
   const response = await fetch(url);
   if (!response.ok) throw await buildApiError(response, 'Failed to fetch AI jobs');
   const body = await response.json();
@@ -4286,10 +4316,7 @@ export async function getBookUserTags(bookId: string): Promise<string[]> {
   return data.tags;
 }
 
-export async function setBookUserTags(
-  bookId: string,
-  tags: string[]
-): Promise<string[]> {
+export async function setBookUserTags(bookId: string, tags: string[]): Promise<string[]> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/user-tags`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -4302,10 +4329,7 @@ export async function setBookUserTags(
   return data.tags;
 }
 
-export async function addBookUserTag(
-  bookId: string,
-  tag: string
-): Promise<string[]> {
+export async function addBookUserTag(bookId: string, tag: string): Promise<string[]> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/user-tags`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -4318,10 +4342,7 @@ export async function addBookUserTag(
   return data.tags;
 }
 
-export async function removeBookUserTag(
-  bookId: string,
-  tag: string
-): Promise<string[]> {
+export async function removeBookUserTag(bookId: string, tag: string): Promise<string[]> {
   const response = await fetch(
     `${API_BASE}/audiobooks/${bookId}/user-tags/${encodeURIComponent(tag)}`,
     { method: 'DELETE' }
@@ -4348,12 +4369,8 @@ export interface DetailedBookTag {
 // tags differently. System tags follow the namespace from
 // migrations 47/48 — dedup:*, metadata:source:*, metadata:language:*,
 // etc. — and are the result of automatic server-side actions.
-export async function getBookTagsDetailed(
-  bookId: string
-): Promise<DetailedBookTag[]> {
-  const response = await fetch(
-    `${API_BASE}/audiobooks/${bookId}/tags-detailed`
-  );
+export async function getBookTagsDetailed(bookId: string): Promise<DetailedBookTag[]> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/tags-detailed`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to get detailed tags');
   }
@@ -4382,9 +4399,7 @@ export async function bulkUpdateTags(
   return data.updated;
 }
 
-export async function listAllUserTags(): Promise<
-  Array<{ tag: string; count: number }>
-> {
+export async function listAllUserTags(): Promise<Array<{ tag: string; count: number }>> {
   const response = await fetch(`${API_BASE}/tags`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to list tags');
@@ -4404,9 +4419,7 @@ export interface ColumnConfig {
 const COLUMN_CONFIG_KEY = 'library_column_config';
 
 export async function getUserColumnConfig(): Promise<ColumnConfig | null> {
-  const response = await fetch(
-    `${API_BASE}/preferences/${COLUMN_CONFIG_KEY}`
-  );
+  const response = await fetch(`${API_BASE}/preferences/${COLUMN_CONFIG_KEY}`);
   if (!response.ok) return null;
   const data = await response.json();
   if (!data.value) return null;
@@ -4417,27 +4430,21 @@ export async function getUserColumnConfig(): Promise<ColumnConfig | null> {
   }
 }
 
-export async function saveUserColumnConfig(
-  config: ColumnConfig
-): Promise<void> {
-  const response = await fetch(
-    `${API_BASE}/preferences/${COLUMN_CONFIG_KEY}`,
-    {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value: JSON.stringify(config) }),
-    }
-  );
+export async function saveUserColumnConfig(config: ColumnConfig): Promise<void> {
+  const response = await fetch(`${API_BASE}/preferences/${COLUMN_CONFIG_KEY}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value: JSON.stringify(config) }),
+  });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to save column config');
   }
 }
 
 export async function deleteUserColumnConfig(): Promise<void> {
-  const response = await fetch(
-    `${API_BASE}/preferences/${COLUMN_CONFIG_KEY}`,
-    { method: 'DELETE' }
-  );
+  const response = await fetch(`${API_BASE}/preferences/${COLUMN_CONFIG_KEY}`, {
+    method: 'DELETE',
+  });
   // Ignore 404 — config may not exist
   if (!response.ok && response.status !== 404) {
     throw await buildApiError(response, 'Failed to delete column config');
@@ -4451,20 +4458,20 @@ export type DedupBand = 'CERTAIN' | 'HIGH' | 'MEDIUM' | 'REVIEW';
 
 // T016: single evidence signal stored in ScoreBreakdown.
 export interface DedupSignal {
-  kind: string;        // e.g. "exact_file", "embedding_high", "duration"
-  value: number;       // raw signal value 0–1
-  weight: number;      // calibration weight
-  evidence: string;    // human-readable description for UI
-  primary: boolean;    // whether this signal alone can indicate a duplicate
+  kind: string; // e.g. "exact_file", "embedding_high", "duration"
+  value: number; // raw signal value 0–1
+  weight: number; // calibration weight
+  evidence: string; // human-readable description for UI
+  primary: boolean; // whether this signal alone can indicate a duplicate
 }
 
 // T016: composite score breakdown stored on each candidate.
 export interface DedupScoreBreakdown {
-  score: number;       // 0–100 composite
-  band: string;        // CERTAIN | HIGH | MEDIUM | REVIEW
+  score: number; // 0–100 composite
+  band: string; // CERTAIN | HIGH | MEDIUM | REVIEW
   signals: DedupSignal[];
   skipped_reason?: string;
-  formula: string;     // scoring algorithm version tag
+  formula: string; // scoring algorithm version tag
 }
 
 export interface DedupCandidate {
@@ -4516,21 +4523,22 @@ export async function getDedupCandidates(params?: {
   include_breakdown?: boolean;
   // When true, each candidate row carries inline book_a/book_b objects.
   include_books?: boolean;
+  // When true, only pairs where NEITHER book has matched metadata are returned
+  // (both low-quality, need manual matching).
+  both_unmatched?: boolean;
 }): Promise<DedupCandidatesResponse> {
   const qs = new URLSearchParams();
   if (params?.entity_type) qs.set('entity_type', params.entity_type);
   if (params?.status) qs.set('status', params.status);
   if (params?.layer) qs.set('layer', params.layer);
-  if (params?.min_similarity != null)
-    qs.set('min_similarity', String(params.min_similarity));
+  if (params?.min_similarity != null) qs.set('min_similarity', String(params.min_similarity));
   if (params?.band) qs.set('band', params.band);
   if (params?.include_breakdown) qs.set('include_breakdown', 'true');
   if (params?.include_books) qs.set('include_books', 'true');
+  if (params?.both_unmatched) qs.set('both_unmatched', 'true');
   if (params?.limit != null) qs.set('limit', String(params.limit));
   if (params?.offset != null) qs.set('offset', String(params.offset));
-  const url = qs.toString()
-    ? `${API_BASE}/dedup/candidates?${qs}`
-    : `${API_BASE}/dedup/candidates`;
+  const url = qs.toString() ? `${API_BASE}/dedup/candidates?${qs}` : `${API_BASE}/dedup/candidates`;
   const response = await fetch(url);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch dedup candidates');
@@ -4671,7 +4679,9 @@ export async function mergeDedupCandidateSeries(seriesId: number): Promise<Serie
   return responseData.data;
 }
 
-export async function dismissDedupCluster(bookIds: string[]): Promise<{ status: string; dismissed: number }> {
+export async function dismissDedupCluster(
+  bookIds: string[]
+): Promise<{ status: string; dismissed: number }> {
   const response = await fetch(`${API_BASE}/dedup/candidates/dismiss-cluster`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -4832,14 +4842,17 @@ export async function triggerAcoustIDOnlineLookup(force = false): Promise<Operat
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ def_id: 'acoustid.lookup-online', params: { force } }),
     });
-    if (!response.ok) throw await buildApiError(response, 'Failed to trigger AcoustID online lookup');
+    if (!response.ok)
+      throw await buildApiError(response, 'Failed to trigger AcoustID online lookup');
     const raw = await response.json();
     const opID = raw.op_id ?? raw.data?.op_id ?? raw.data?.id ?? '';
     return { id: opID, type: 'acoustid.lookup-online' } as Operation;
   });
 }
 
-export async function triggerFingerprintBackfill(scope: 'missing' | 'all' = 'missing'): Promise<Operation> {
+export async function triggerFingerprintBackfill(
+  scope: 'missing' | 'all' = 'missing'
+): Promise<Operation> {
   return wrapTrigger('acoustid.fingerprint-rescan', async () => {
     const response = await fetch(`${API_BASE}/dedup/fingerprint-rescan`, {
       method: 'POST',
@@ -4866,10 +4879,13 @@ export interface AcoustIDCompareResponse {
   segment_scores: AcoustIDSegmentComparison[];
 }
 
-export async function compareAcoustID(bookAID: string, bookBID: string): Promise<AcoustIDCompareResponse> {
+export async function compareAcoustID(
+  bookAID: string,
+  bookBID: string
+): Promise<AcoustIDCompareResponse> {
   const response = await fetch(
     `${API_BASE}/audiobooks/${encodeURIComponent(bookAID)}/compare-acoustid?other=${encodeURIComponent(bookBID)}`,
-    { method: 'POST' },
+    { method: 'POST' }
   );
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to compare AcoustID fingerprints');
@@ -4910,7 +4926,10 @@ export async function triggerEmbedScan(): Promise<Operation> {
 // Enqueues acoustid.reset-all followed by a forced acoustid.fingerprint-rescan.
 // Both ops share the "acoustid.fingerprint" concurrency key so the rescan
 // queues behind the reset and runs sequentially.
-export async function resetAcoustIDFingerprints(): Promise<{ reset_op_id: string; rescan_op_id: string }> {
+export async function resetAcoustIDFingerprints(): Promise<{
+  reset_op_id: string;
+  rescan_op_id: string;
+}> {
   return wrapTrigger('acoustid.reset-all', async () => {
     const response = await fetch(`${API_BASE}/dedup/reset-acoustid`, { method: 'POST' });
     if (!response.ok) throw await buildApiError(response, 'Failed to reset AcoustID fingerprints');
@@ -4995,7 +5014,10 @@ export async function getAPIKey(id: string): Promise<APIKey> {
   return body_data.data;
 }
 
-export async function updateAPIKeyStatus(id: string, status: 'active' | 'inactive'): Promise<APIKey> {
+export async function updateAPIKeyStatus(
+  id: string,
+  status: 'active' | 'inactive'
+): Promise<APIKey> {
   const response = await fetch(`${API_BASE}/auth/api-keys/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -5084,7 +5106,8 @@ export async function scanChapterGroups(params?: {
 }): Promise<ChapterGroupsResult> {
   const q = new URLSearchParams();
   if (params?.min_files != null) q.set('min_files', String(params.min_files));
-  if (params?.max_per_file_duration != null) q.set('max_per_file_duration', String(params.max_per_file_duration));
+  if (params?.max_per_file_duration != null)
+    q.set('max_per_file_duration', String(params.max_per_file_duration));
   if (params?.path_prefix) q.set('path_prefix', params.path_prefix);
   const url = `${API_BASE}/maintenance/chapter-groups${q.toString() ? `?${q}` : ''}`;
   const response = await fetch(url);
@@ -5103,7 +5126,8 @@ export async function mergeChapterGroups(params?: {
   const q = new URLSearchParams();
   if (params?.dry_run != null) q.set('dry_run', String(params.dry_run));
   if (params?.min_files != null) q.set('min_files', String(params.min_files));
-  if (params?.max_per_file_duration != null) q.set('max_per_file_duration', String(params.max_per_file_duration));
+  if (params?.max_per_file_duration != null)
+    q.set('max_per_file_duration', String(params.max_per_file_duration));
   const url = `${API_BASE}/maintenance/merge-chapter-groups${q.toString() ? `?${q}` : ''}`;
   const response = await fetch(url, { method: 'POST' });
   if (!response.ok) {
@@ -5215,11 +5239,14 @@ export interface BackfillHashesResult {
 }
 
 export async function backfillFileHashes(dryRun = false): Promise<{ operation_id: string }> {
-  const response = await fetch(`${API_BASE}/maintenance/jobs/${encodeURIComponent('backfill-file-hashes')}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dry_run: dryRun }),
-  });
+  const response = await fetch(
+    `${API_BASE}/maintenance/jobs/${encodeURIComponent('backfill-file-hashes')}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dry_run: dryRun }),
+    }
+  );
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to start backfill file hashes job');
   }
@@ -5269,17 +5296,19 @@ export async function getAcoustIDStats(): Promise<AcoustIDStats> {
 }
 
 export async function backfillMetadataHashes(dryRun = false): Promise<{ operation_id: string }> {
-  const response = await fetch(`${API_BASE}/maintenance/jobs/${encodeURIComponent('backfill-metadata-source-hash')}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dry_run: dryRun }),
-  });
+  const response = await fetch(
+    `${API_BASE}/maintenance/jobs/${encodeURIComponent('backfill-metadata-source-hash')}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dry_run: dryRun }),
+    }
+  );
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to start backfill metadata job');
   }
   return response.json();
 }
-
 
 // ── Unified Maintenance Jobs ──────────────────────────────────────────────────
 
@@ -5302,7 +5331,10 @@ export async function listMaintenanceJobs(): Promise<MaintenanceJobDef[]> {
   return (body as MaintenanceJobsResult).jobs ?? [];
 }
 
-export async function runMaintenanceJob(jobId: string, dryRun = false): Promise<{ operation_id: string }> {
+export async function runMaintenanceJob(
+  jobId: string,
+  dryRun = false
+): Promise<{ operation_id: string }> {
   const response = await fetch(`${API_BASE}/maintenance/jobs/${encodeURIComponent(jobId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -5339,7 +5371,7 @@ export async function getQuickQueries(): Promise<QuickQueryItem[]> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to load quick queries');
   }
-  const data = await response.json() as { queries: QuickQueryItem[] };
+  const data = (await response.json()) as { queries: QuickQueryItem[] };
   return data.queries ?? [];
 }
 
@@ -5399,9 +5431,7 @@ export interface DedupRescoreResult {
 
 // Re-run unified.ComposeScore over stored signal sets of all pending candidates.
 // Pass apply=false for a dry-run (returns counts without persisting).
-export async function rescoreDedupCandidates(
-  apply = false
-): Promise<DedupRescoreResult> {
+export async function rescoreDedupCandidates(apply = false): Promise<DedupRescoreResult> {
   const response = await fetch(`${API_BASE}/dedup/rescore`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

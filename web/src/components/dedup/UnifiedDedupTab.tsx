@@ -1,5 +1,5 @@
 // file: web/src/components/dedup/UnifiedDedupTab.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: c8b9d0e1-f2a3-4567-bcde-cb8901234567
 // last-edited: 2026-06-12
 
@@ -35,6 +35,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   Link,
   Paper,
@@ -95,8 +96,10 @@ function metadataQuality(book: Book | null | undefined): number {
 }
 
 function qualityChip(score: number) {
-  if (score >= 6) return <Chip label="Rich metadata" size="small" color="success" variant="outlined" />;
-  if (score >= 3) return <Chip label="Partial metadata" size="small" color="warning" variant="outlined" />;
+  if (score >= 6)
+    return <Chip label="Rich metadata" size="small" color="success" variant="outlined" />;
+  if (score >= 3)
+    return <Chip label="Partial metadata" size="small" color="warning" variant="outlined" />;
   return <Chip label="Poor metadata" size="small" color="error" variant="outlined" />;
 }
 
@@ -182,6 +185,9 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
   const [bandFilter, setBandFilter] = useState<DedupBand | null>(bandFromURL);
   const [statusFilter] = useState<string>('pending');
   const [searchQuery, setSearchQuery] = useState('');
+  // When true, only show pairs where NEITHER book has matched metadata
+  // (both low-quality, need manual matching) — server-side filter.
+  const [bothUnmatched, setBothUnmatched] = useState(false);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
 
@@ -263,6 +269,7 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
       include_books: true,
     };
     if (bandFilter) params.band = bandFilter;
+    if (bothUnmatched) params.both_unmatched = true;
 
     // Use fetch directly to pass the signal (api.getDedupCandidates doesn't accept AbortSignal yet).
     const qs = new URLSearchParams();
@@ -272,6 +279,8 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
     // include_books surfaces title/author/path/metadata inline per row so the
     // cards render without a per-book getBook() fan-out (handled server-side).
     if (params.include_books) qs.set('include_books', 'true');
+    // both_unmatched: server returns only pairs where neither book is matched.
+    if (params.both_unmatched) qs.set('both_unmatched', 'true');
     qs.set('limit', String(params.limit));
     qs.set('offset', String(params.offset ?? 0));
 
@@ -292,7 +301,7 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
       .finally(() => {
         if (!ctrl.signal.aborted) setLoading(false);
       });
-  }, [bandFilter, statusFilter, page, rowsPerPage]);
+  }, [bandFilter, statusFilter, page, rowsPerPage, bothUnmatched]);
 
   useEffect(() => {
     loadStats();
@@ -312,9 +321,7 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
   const filteredCandidates = useMemo(() => {
     let result = candidates;
     if (bookFromURL) {
-      result = result.filter(
-        (c) => c.entity_a_id === bookFromURL || c.entity_b_id === bookFromURL
-      );
+      result = result.filter((c) => c.entity_a_id === bookFromURL || c.entity_b_id === bookFromURL);
     }
     if (searchQuery.trim()) {
       // Client-side search over the loaded page. With include_books the rows
@@ -553,9 +560,7 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
     },
   ];
 
-  const handleForceRescan = async (
-    opt: (typeof RESCAN_OPTIONS)[number]
-  ) => {
+  const handleForceRescan = async (opt: (typeof RESCAN_OPTIONS)[number]) => {
     setRescanOpen(false);
     setBulkBusy(true);
     try {
@@ -580,7 +585,14 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
           1. Find Duplicates  — incremental scan for new dupes
           2. Rescore          — recompute scores from stored signals (no re-scan)
           3. Force Full Rescan — opens a modal to re-run a specific detection layer */}
-      <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center" flexWrap="wrap" useFlexGap>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ mb: 2 }}
+        alignItems="center"
+        flexWrap="wrap"
+        useFlexGap
+      >
         <Tooltip title="Scan for new duplicate candidates (embed + exact + similarity matching)">
           <span>
             <Button
@@ -654,8 +666,16 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
         </Alert>
       )}
 
-      {/* Search */}
-      <Box sx={{ mb: 2 }}>
+      {/* Search + filters */}
+      <Box
+        sx={{
+          mb: 2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+          flexWrap: 'wrap',
+        }}
+      >
         <TextField
           size="small"
           placeholder="Search by book ID, layer, band…"
@@ -664,16 +684,27 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
           sx={{ minWidth: 280 }}
           InputProps={{
             endAdornment: searchQuery ? (
-              <IconButton
-                size="small"
-                onClick={() => setSearchQuery('')}
-                aria-label="clear search"
-              >
+              <IconButton size="small" onClick={() => setSearchQuery('')} aria-label="clear search">
                 <ClearIcon fontSize="small" />
               </IconButton>
             ) : null,
           }}
         />
+        <Tooltip title="Show only pairs where NEITHER book has matched metadata — both are low-quality and need manual matching.">
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={bothUnmatched}
+                onChange={(e) => {
+                  setBothUnmatched(e.target.checked);
+                  setPage(0);
+                }}
+              />
+            }
+            label="Both need manual matching"
+          />
+        </Tooltip>
       </Box>
 
       {error && (
@@ -702,12 +733,9 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
                   <TableCell padding="checkbox">
                     <Checkbox
                       size="small"
-                      indeterminate={
-                        selected.size > 0 && selected.size < filteredCandidates.length
-                      }
+                      indeterminate={selected.size > 0 && selected.size < filteredCandidates.length}
                       checked={
-                        filteredCandidates.length > 0 &&
-                        selected.size === filteredCandidates.length
+                        filteredCandidates.length > 0 && selected.size === filteredCandidates.length
                       }
                       onChange={(e) => (e.target.checked ? selectAll() : clearSelection())}
                     />
@@ -782,8 +810,8 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
                             c.status === 'merged'
                               ? 'success'
                               : c.status === 'dismissed'
-                              ? 'default'
-                              : 'warning'
+                                ? 'default'
+                                : 'warning'
                           }
                           variant="outlined"
                         />
@@ -897,9 +925,9 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
         <DialogTitle>Force full rescan</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Pick which detection layer to re-run from scratch. These are heavier than
-            the incremental “Find Duplicates” scan — each rebuilds a whole layer of
-            candidates and runs in the background (watch the bell for progress).
+            Pick which detection layer to re-run from scratch. These are heavier than the
+            incremental “Find Duplicates” scan — each rebuilds a whole layer of candidates and runs
+            in the background (watch the bell for progress).
           </DialogContentText>
           <Stack spacing={1}>
             {RESCAN_OPTIONS.map((opt) => (
@@ -939,10 +967,9 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
         <DialogTitle>Rescore dedup candidates</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Re-runs the unified scoring formula over stored signal sets for all pending
-            candidates. No re-embedding or re-collection is performed — only candidates
-            that already have stored signals (T015+) will be updated. Pre-T015 rows are
-            counted as skipped.
+            Re-runs the unified scoring formula over stored signal sets for all pending candidates.
+            No re-embedding or re-collection is performed — only candidates that already have stored
+            signals (T015+) will be updated. Pre-T015 rows are counted as skipped.
           </DialogContentText>
         </DialogContent>
         <DialogActions>

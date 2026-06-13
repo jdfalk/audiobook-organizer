@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.20.0 -->
+<!-- version: 3.21.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-06-13 -->
 
@@ -8,6 +8,18 @@
 ## [Unreleased]
 
 ### Added
+
+#### June 13, 2026 — Dedup: "both unmatched metadata" candidate filter
+
+- **`GET /api/v1/dedup/candidates?both_unmatched=true`** — server-side filter that
+  returns only pairs where NEITHER book has matched metadata (a triage view for
+  duplicates that both need manual matching). v1 defines "matched" as
+  `MetadataReviewStatus == "matched"` (human-confirmed); the handler has a single
+  documented extension point to later OR in external-ID presence (ASIN/ISBN13).
+  When set, the handler fetches the full status/layer-filtered set, filters on
+  book metadata, and paginates the filtered result (accurate totals).
+- **Unified Dedup UI** — a "Both need manual matching" checkbox in the candidate
+  toolbar wires `both_unmatched` through and resets pagination.
 
 #### June 13, 2026 — Dedup: FileSize-aware residual catcher
 

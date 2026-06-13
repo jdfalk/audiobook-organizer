@@ -1,7 +1,7 @@
 // file: internal/server/handlers/dedup/handler.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: d1b9e024-d28c-4d62-8f90-96d7064559c4
-// last-edited: 2026-06-12
+// last-edited: 2026-06-13
 
 // Package deduphandler hosts the dedup-domain HTTP handlers extracted from the
 // server package: dedup candidate / cluster / series listing, merge / dismiss /
@@ -185,11 +185,24 @@ func (h *Handler) ListDedupCandidates(c *gin.Context) {
 	// without an N+2 per-book getBook() fan-out. The book lookups already happen
 	// below for the dead-row existence filter, so this is nearly free.
 	includeBooks := c.Query("include_books") == "true"
+	// both_unmatched surfaces only pairs where NEITHER book has matched
+	// metadata — the "both low-quality, need manual matching" triage view.
+	// The match signal lives on the Book, not the candidate, so the store
+	// cannot pre-filter it: when set, we fetch the full status/layer-filtered
+	// candidate set and filter + paginate in-handler below.
+	bothUnmatched := c.Query("both_unmatched") == "true"
 
 	p := httputil.ParsePaginationParams(c)
 	limit, offset := p.Limit, p.Offset
-	filter.Limit = limit
-	filter.Offset = offset
+	if bothUnmatched {
+		// Fetch everything matching the base filter; the store scans the whole
+		// candidate table regardless, so this only widens the returned slice.
+		filter.Limit = 1_000_000
+		filter.Offset = 0
+	} else {
+		filter.Limit = limit
+		filter.Offset = offset
+	}
 
 	candidates, total, err := es.ListCandidates(filter)
 	if err != nil {
@@ -223,17 +236,30 @@ func (h *Handler) ListDedupCandidates(c *gin.Context) {
 		bookCache[id] = book
 		return book
 	}
-	bookExists := func(id string) bool {
-		return lookupBook(id) != nil
+	// isMetadataMatched reports whether a book has authoritative metadata.
+	// v1: only a human-confirmed match (MetadataReviewStatus == "matched")
+	// counts as matched. To widen the net later, OR in external-ID presence
+	// (e.g. ASIN/ISBN13) here — that is the single intended extension point.
+	isMetadataMatched := func(b *database.Book) bool {
+		return b != nil && b.MetadataReviewStatus != nil && *b.MetadataReviewStatus == "matched"
 	}
 	dropped := 0
 	items := make([]gin.H, 0, len(candidates))
 	for _, cand := range candidates {
 		if cand.EntityType == "book" {
-			if !bookExists(cand.EntityAID) || !bookExists(cand.EntityBID) {
+			ba := lookupBook(cand.EntityAID)
+			bb := lookupBook(cand.EntityBID)
+			if ba == nil || bb == nil {
 				dropped++
 				continue
 			}
+			// both_unmatched: keep only pairs where NEITHER side is matched.
+			if bothUnmatched && (isMetadataMatched(ba) || isMetadataMatched(bb)) {
+				continue
+			}
+		} else if bothUnmatched {
+			// Non-book entities carry no book metadata; exclude from this view.
+			continue
 		}
 		// Build the response item: always include band + top-level score;
 		// conditionally include score_breakdown.
@@ -279,6 +305,25 @@ func (h *Handler) ListDedupCandidates(c *gin.Context) {
 		if total >= dropped {
 			total -= dropped
 		}
+	}
+
+	// both_unmatched fetched the full candidate set and filtered in-handler, so
+	// `items` holds every qualifying pair. Report the filtered total and slice
+	// the requested page here.
+	if bothUnmatched {
+		total = len(items)
+		start := offset
+		if start > len(items) {
+			start = len(items)
+		}
+		end := len(items)
+		if limit > 0 {
+			end = start + limit
+			if end > len(items) {
+				end = len(items)
+			}
+		}
+		items = items[start:end]
 	}
 
 	httputil.RespondWithOK(c, gin.H{
