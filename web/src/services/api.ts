@@ -1,7 +1,7 @@
 // file: web/src/services/api.ts
-// version: 2.37.0
+// version: 2.38.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
-// last-edited: 2026-06-10
+// last-edited: 2026-06-12
 
 // API service layer for audiobook-organizer backend
 // Provides typed functions for all backend endpoints
@@ -4484,6 +4484,12 @@ export interface DedupCandidate {
   formula_version?: string;
   score?: number;
   score_breakdown?: DedupScoreBreakdown;
+  // Inline book enrichment, populated only when getDedupCandidates is called
+  // with include_books=true. Lets the unified UI render rich cards
+  // (title/author/path/metadata-quality) without per-book getBook() fetches.
+  // null when the entity is a non-book type or the lookup missed.
+  book_a?: Book | null;
+  book_b?: Book | null;
 }
 
 export interface DedupCandidatesResponse {
@@ -4508,6 +4514,8 @@ export async function getDedupCandidates(params?: {
   // T016 extensions
   band?: string;
   include_breakdown?: boolean;
+  // When true, each candidate row carries inline book_a/book_b objects.
+  include_books?: boolean;
 }): Promise<DedupCandidatesResponse> {
   const qs = new URLSearchParams();
   if (params?.entity_type) qs.set('entity_type', params.entity_type);
@@ -4517,6 +4525,7 @@ export async function getDedupCandidates(params?: {
     qs.set('min_similarity', String(params.min_similarity));
   if (params?.band) qs.set('band', params.band);
   if (params?.include_breakdown) qs.set('include_breakdown', 'true');
+  if (params?.include_books) qs.set('include_books', 'true');
   if (params?.limit != null) qs.set('limit', String(params.limit));
   if (params?.offset != null) qs.set('offset', String(params.offset));
   const url = qs.toString()

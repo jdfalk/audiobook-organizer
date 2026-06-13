@@ -107,6 +107,30 @@
 
 ### Changed
 
+#### June 12, 2026 — Unified dedup view: acoustic-style rich cards + clearer toolbar
+
+- **`internal/server/handlers/dedup/handler.go`** (`ListDedupCandidates`): New
+  `include_books=true` query param attaches the full `book_a` / `book_b` objects
+  (title/author/path/metadata) inline on each candidate row. Reuses the book
+  lookups already performed for the dead-row existence filter, so there are no
+  extra DB round-trips. Default off — existing callers (acoustic tab, export) are
+  unaffected.
+- **`web/src/services/api.ts`**: `DedupCandidate` gains optional `book_a` / `book_b`;
+  `getDedupCandidates` accepts `include_books`.
+- **`web/src/components/dedup/UnifiedDedupTab.tsx`**: Rows now render the same rich
+  cells as the legacy Acoustic tab — title (linked to the book page), author, file
+  path, a Rich/Partial/Poor metadata chip and a ★ Recommended-keep chip — instead
+  of raw ULIDs. Per-row actions are **Keep A / Keep B / Compare / Dismiss** (Keep A/B
+  do a directional merge via `keep_id`). Search now matches title/author/path, not
+  just IDs. Metadata-quality and keep-recommendation logic ported from the Acoustic
+  tab (computed client-side from the inline book objects — no per-book `getBook()`
+  fan-out). The legacy Acoustic tab is left unchanged.
+- **`web/src/components/dedup/UnifiedDedupTab.tsx`** (toolbar): Reduced to three
+  clear actions — **Find Duplicates** (incremental scan), **Rescore** (recompute
+  scores from stored signals), and **Force Full Rescan**, which opens a modal to
+  re-run a specific detection layer (Everything / Embeddings / Acoustic / Fingerprint
+  all books / LLM verdicts).
+
 #### June 10, 2026 — T020: drop AcoustID segment fields from Pebble book_file values
 
 - **`internal/database/pebble_store.go`**: New `marshalBookFileDropSegs` helper strips

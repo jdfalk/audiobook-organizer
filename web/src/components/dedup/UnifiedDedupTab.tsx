@@ -1,7 +1,7 @@
 // file: web/src/components/dedup/UnifiedDedupTab.tsx
-// version: 1.0.1
+// version: 1.1.0
 // guid: c8b9d0e1-f2a3-4567-bcde-cb8901234567
-// last-edited: 2026-06-10
+// last-edited: 2026-06-12
 
 // UnifiedDedupTab is the T017 single surface that replaces the separate Books /
 // Advanced-Scan / Acoustic tabs. It shows a paginated candidate table filtered
@@ -9,13 +9,20 @@
 // comparison and score breakdown. The legacy tabs remain mounted behind a
 // "show legacy" toggle for one release.
 //
+// Rows render acoustic-style rich cells: title (linked) + author + file path +
+// a Rich/Partial/Poor metadata chip + a ★ Recommended-keep chip, with Keep A /
+// Keep B / Compare / Dismiss actions. The book data arrives inline on each
+// candidate (include_books=true) so there is no per-book getBook() fan-out;
+// metadata-quality and the keep recommendation are computed client-side, ported
+// from the legacy Acoustic tab.
+//
 // Memory-leak discipline (PR #1076):
 //   - AbortController for every fetch, cancelled on cleanup / re-trigger.
 //   - Timers cleared on unmount.
 //   - No module-level mutable state.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link as RouterLink } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -29,6 +36,7 @@ import {
   DialogContentText,
   DialogTitle,
   IconButton,
+  Link,
   Paper,
   Snackbar,
   Stack,
@@ -43,12 +51,9 @@ import {
   Typography,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import MergeIcon from '@mui/icons-material/MergeType';
-import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
-import InfoIcon from '@mui/icons-material/Info';
 import ClearIcon from '@mui/icons-material/Clear';
 import * as api from '../../services/api';
-import type { DedupCandidate, DedupBand, DedupStats } from '../../services/api';
+import type { Book, DedupCandidate, DedupBand, DedupStats } from '../../services/api';
 import { useOperationsStore } from '../../stores/useOperationsStore';
 import { BandFilterBar, type BandCounts } from './BandFilterBar';
 import { ScoreBadgeRow } from './ScoreBadgeRow';
@@ -66,6 +71,98 @@ function deriveBandCounts(stats: DedupStats[]): BandCounts {
   // the table results will reflect the filter accurately.
   const total = pending.reduce((sum, s) => sum + s.count, 0);
   return { CERTAIN: 0, HIGH: 0, MEDIUM: 0, REVIEW: 0, total };
+}
+
+// metadataQuality scores a Book's metadata completeness (0–10). Higher = more
+// complete / reliable source, used to recommend which side of a duplicate pair
+// to keep. Ported from the legacy Acoustic tab (BookDedup.tsx) so the unified
+// view renders the same Rich/Partial/Poor judgement.
+function metadataQuality(book: Book | null | undefined): number {
+  if (!book) return 0;
+  let score = 0;
+  const title = book.title ?? '';
+  // Title sanity: not empty, not literal "TITLE", not a bare ULID/UUID.
+  const isGarbageTitle =
+    !title || title.toUpperCase() === 'TITLE' || /^[0-9A-Z]{26}$/.test(title.trim());
+  if (!isGarbageTitle) score += 2;
+  if (book.asin) score += 3;
+  if (book.isbn13 || book.isbn) score += 2;
+  if (book.cover_url) score += 1;
+  if (book.narrator) score += 0.5;
+  if (book.description) score += 0.5;
+  if (book.publisher) score += 0.5;
+  return score;
+}
+
+function qualityChip(score: number) {
+  if (score >= 6) return <Chip label="Rich metadata" size="small" color="success" variant="outlined" />;
+  if (score >= 3) return <Chip label="Partial metadata" size="small" color="warning" variant="outlined" />;
+  return <Chip label="Poor metadata" size="small" color="error" variant="outlined" />;
+}
+
+// renderBookCard shows a candidate book's title (linking to its detail page) and
+// file path. The title falls back to a muted ULID tail when the book row is
+// missing (merged/deleted/orphaned candidate) and is shown in orange when the
+// stored title is itself garbage — the case the user kept hitting in the raw-ULID
+// table. Path lives under the title so identical/missing titles can still be
+// disambiguated.
+function renderBookCard(book: Book | null | undefined, id: string) {
+  const missing = !book;
+  const path = book?.file_path ?? '';
+  const title = book?.title ?? '';
+  const isGarbageTitle =
+    !title || title.toUpperCase() === 'TITLE' || /^[0-9A-Z]{26}$/.test(title.trim());
+  return (
+    <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+      {missing ? (
+        <Typography variant="body2" sx={{ color: 'error.main', fontStyle: 'italic' }}>
+          (missing book — {id.slice(-8)})
+        </Typography>
+      ) : (
+        <Link
+          component={RouterLink}
+          to={`/library/${id}`}
+          underline="hover"
+          sx={{
+            color: isGarbageTitle ? 'warning.main' : 'primary.main',
+            fontWeight: 500,
+            fontSize: '0.95rem',
+            textTransform: 'none',
+            textAlign: 'left',
+            display: 'block',
+            whiteSpace: 'normal',
+            wordBreak: 'break-word',
+            fontStyle: isGarbageTitle ? 'italic' : 'normal',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {isGarbageTitle ? title || '(no title)' : title}
+        </Link>
+      )}
+      {book?.author_name && (
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          {book.author_name}
+        </Typography>
+      )}
+      {path && (
+        <Tooltip title={path} placement="bottom-start">
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              fontFamily: 'monospace',
+              fontSize: '0.72rem',
+              lineHeight: 1.2,
+              wordBreak: 'break-all',
+              opacity: 0.75,
+            }}
+          >
+            {path}
+          </Typography>
+        </Tooltip>
+      )}
+    </Stack>
+  );
 }
 
 // ---------- component ----------
@@ -106,6 +203,7 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
   // --- bulk action state ---
   const [bulkBusy, setBulkBusy] = useState(false);
   const [rescoringOpen, setRescoringOpen] = useState(false);
+  const [rescanOpen, setRescanOpen] = useState(false);
 
   // --- abort controller refs ---
   const fetchAbortRef = useRef<AbortController | null>(null);
@@ -162,6 +260,7 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
       limit: rowsPerPage,
       offset: page * rowsPerPage,
       include_breakdown: true,
+      include_books: true,
     };
     if (bandFilter) params.band = bandFilter;
 
@@ -170,6 +269,9 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
     if (params.status) qs.set('status', params.status);
     if (params.band) qs.set('band', params.band);
     if (params.include_breakdown) qs.set('include_breakdown', 'true');
+    // include_books surfaces title/author/path/metadata inline per row so the
+    // cards render without a per-book getBook() fan-out (handled server-side).
+    if (params.include_books) qs.set('include_books', 'true');
     qs.set('limit', String(params.limit));
     qs.set('offset', String(params.offset ?? 0));
 
@@ -215,17 +317,26 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
       );
     }
     if (searchQuery.trim()) {
-      // Client-side search over the loaded page. Searches both entity IDs only
-      // (book title/author data is not pre-fetched in the unified table for
-      // performance; use the drawer for detailed info).
+      // Client-side search over the loaded page. With include_books the rows
+      // carry title/author/path inline, so search those too — not just the
+      // raw entity IDs.
       const q = searchQuery.trim().toLowerCase();
-      result = result.filter(
-        (c) =>
-          c.entity_a_id.toLowerCase().includes(q) ||
-          c.entity_b_id.toLowerCase().includes(q) ||
-          c.layer.toLowerCase().includes(q) ||
-          (c.band ?? '').toLowerCase().includes(q)
-      );
+      const hay = (c: DedupCandidate) =>
+        [
+          c.entity_a_id,
+          c.entity_b_id,
+          c.layer,
+          c.band ?? '',
+          c.book_a?.title ?? '',
+          c.book_b?.title ?? '',
+          c.book_a?.author_name ?? '',
+          c.book_b?.author_name ?? '',
+          c.book_a?.file_path ?? '',
+          c.book_b?.file_path ?? '',
+        ]
+          .join(' ')
+          .toLowerCase();
+      result = result.filter((c) => hay(c).includes(q));
     }
     return result;
   }, [candidates, bookFromURL, searchQuery]);
@@ -295,6 +406,38 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
     loadCandidates();
     loadStats();
     setBulkBusy(false);
+  };
+
+  // --- per-row actions (acoustic-style Keep A / Keep B / Dismiss) ---
+  // Keep <keepId>: merge the pair keeping that book as the primary (the other
+  // is merged into it). keepId must be the candidate's entity_a_id or
+  // entity_b_id — the backend validates and 400s otherwise.
+  const handleKeep = async (id: number, keepId: string, label: string) => {
+    setBulkBusy(true);
+    try {
+      await api.mergeDedupCandidate(id, keepId);
+      setToast(`Merged — kept ${label}`);
+      loadCandidates();
+      loadStats();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Merge failed');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleDismissOne = async (id: number) => {
+    setBulkBusy(true);
+    try {
+      await api.dismissDedupCandidate(id);
+      setToast('Dismissed');
+      loadCandidates();
+      loadStats();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Dismiss failed');
+    } finally {
+      setBulkBusy(false);
+    }
   };
 
   const handleMergeAllFiltered = async () => {
@@ -369,13 +512,76 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
     }
   };
 
+  // --- force full rescan (modal-selected layer) ---
+  // Each option maps to a specific backend scan op. These are heavier than the
+  // incremental "Find Duplicates" scan — they re-run a whole detection layer.
+  const RESCAN_OPTIONS: {
+    kind: string;
+    label: string;
+    desc: string;
+    run: () => Promise<api.Operation>;
+  }[] = [
+    {
+      kind: 'full',
+      label: 'Everything (embeddings + exact + similarity)',
+      desc: 'Full pipeline re-scan. Slowest, but rebuilds every layer of candidates.',
+      run: () => api.triggerDedupScan(),
+    },
+    {
+      kind: 'embeddings',
+      label: 'Embeddings only',
+      desc: 'Re-embed and re-compare semantic vectors. Catches near-duplicate titles/metadata.',
+      run: () => api.triggerEmbedScan(),
+    },
+    {
+      kind: 'acoustic',
+      label: 'Acoustic fingerprints only',
+      desc: 'Compare stored audio fingerprints. Fast — no file I/O. Requires fingerprints to exist.',
+      run: () => api.triggerDedupAcoustID(),
+    },
+    {
+      kind: 'fingerprint',
+      label: 'Fingerprint all books (read audio)',
+      desc: 'Re-read every audio file and recompute chromaprints. Multi-hour. Run before acoustic if fingerprints are missing/stale.',
+      run: () => api.triggerFingerprintBackfill('all'),
+    },
+    {
+      kind: 'llm',
+      label: 'LLM verdicts',
+      desc: 'Re-run the LLM judgement pass over ambiguous pending candidates.',
+      run: () => api.triggerDedupLLM(),
+    },
+  ];
+
+  const handleForceRescan = async (
+    opt: (typeof RESCAN_OPTIONS)[number]
+  ) => {
+    setRescanOpen(false);
+    setBulkBusy(true);
+    try {
+      const op = await opt.run();
+      setToast(trackOp(op, `Force rescan (${opt.kind})`));
+      setTimeout(() => {
+        loadCandidates();
+        loadStats();
+      }, 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Rescan failed');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   if (hidden) return null;
 
   return (
     <Box data-testid="unified-dedup-tab">
-      {/* Toolbar */}
+      {/* Toolbar — three primary actions:
+          1. Find Duplicates  — incremental scan for new dupes
+          2. Rescore          — recompute scores from stored signals (no re-scan)
+          3. Force Full Rescan — opens a modal to re-run a specific detection layer */}
       <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center" flexWrap="wrap" useFlexGap>
-        <Tooltip title="Re-run full dedup scan (embed + exact + similarity matching)">
+        <Tooltip title="Scan for new duplicate candidates (embed + exact + similarity matching)">
           <span>
             <Button
               variant="contained"
@@ -388,7 +594,7 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
             </Button>
           </span>
         </Tooltip>
-        <Tooltip title="Re-compute scores for all pending candidates from stored signals (no re-embedding)">
+        <Tooltip title="Recompute scores for all pending candidates from stored signals (no re-scan)">
           <span>
             <Button
               variant="outlined"
@@ -398,6 +604,20 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
               data-testid="rescore-btn"
             >
               Rescore
+            </Button>
+          </span>
+        </Tooltip>
+        <Tooltip title="Force a full re-scan of a chosen detection layer (embeddings, acoustic, fingerprints, LLM)">
+          <span>
+            <Button
+              variant="outlined"
+              size="small"
+              color="warning"
+              disabled={bulkBusy}
+              onClick={() => setRescanOpen(true)}
+              data-testid="force-rescan-btn"
+            >
+              Force Full Rescan
             </Button>
           </span>
         </Tooltip>
@@ -502,6 +722,14 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
               <TableBody>
                 {filteredCandidates.map((c) => {
                   const busy = bulkBusy;
+                  const bookA = c.book_a;
+                  const bookB = c.book_b;
+                  const qA = metadataQuality(bookA);
+                  const qB = metadataQuality(bookB);
+                  // Recommend keeping the side with richer metadata. Ties (both
+                  // equal, or both missing) recommend neither.
+                  const recommendA = qA > qB;
+                  const recommendB = qB > qA;
                   return (
                     <TableRow
                       key={c.id}
@@ -516,7 +744,7 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
                           onChange={() => toggleSelect(c.id)}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ verticalAlign: 'top' }}>
                         <ScoreBadgeRow
                           band={c.band}
                           score={c.score}
@@ -524,29 +752,29 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
                           similarity={c.similarity}
                         />
                       </TableCell>
-                      <TableCell sx={{ maxWidth: 220, minWidth: 120 }}>
-                        <Tooltip title={c.entity_a_id}>
-                          <Typography
-                            variant="caption"
-                            sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}
-                            noWrap
-                          >
-                            {c.entity_a_id}
-                          </Typography>
-                        </Tooltip>
+                      <TableCell sx={{ verticalAlign: 'top', minWidth: 280 }}>
+                        <Stack spacing={0.5}>
+                          {renderBookCard(bookA, c.entity_a_id)}
+                          <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                            {qualityChip(qA)}
+                            {recommendA && (
+                              <Chip label="★ Recommended keep" size="small" color="primary" />
+                            )}
+                          </Stack>
+                        </Stack>
                       </TableCell>
-                      <TableCell sx={{ maxWidth: 220, minWidth: 120 }}>
-                        <Tooltip title={c.entity_b_id}>
-                          <Typography
-                            variant="caption"
-                            sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}
-                            noWrap
-                          >
-                            {c.entity_b_id}
-                          </Typography>
-                        </Tooltip>
+                      <TableCell sx={{ verticalAlign: 'top', minWidth: 280 }}>
+                        <Stack spacing={0.5}>
+                          {renderBookCard(bookB, c.entity_b_id)}
+                          <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                            {qualityChip(qB)}
+                            {recommendB && (
+                              <Chip label="★ Recommended keep" size="small" color="primary" />
+                            )}
+                          </Stack>
+                        </Stack>
                       </TableCell>
-                      <TableCell align="center">
+                      <TableCell align="center" sx={{ verticalAlign: 'top' }}>
                         <Chip
                           label={c.status}
                           size="small"
@@ -560,63 +788,55 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
                           variant="outlined"
                         />
                       </TableCell>
-                      <TableCell align="center">
-                        <Stack direction="row" spacing={0.5} justifyContent="center">
-                          <Tooltip title="View comparison and breakdown">
-                            <IconButton
-                              size="small"
-                              onClick={() => setDrawerCandidateId(c.id)}
-                              aria-label={`Open comparison for candidate ${c.id}`}
-                            >
-                              <InfoIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                      <TableCell sx={{ verticalAlign: 'top' }}>
+                        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
                           {c.status === 'pending' && (
                             <>
-                              <Tooltip title="Merge">
-                                <IconButton
+                              <Tooltip title="Keep Book A, merge B into it">
+                                <Button
                                   size="small"
+                                  variant={recommendA ? 'contained' : 'outlined'}
                                   color="primary"
                                   disabled={busy}
-                                  onClick={async () => {
-                                    try {
-                                      await api.mergeDedupCandidate(c.id);
-                                      setToast('Merged');
-                                      loadCandidates();
-                                      loadStats();
-                                    } catch (err) {
-                                      setError(
-                                        err instanceof Error ? err.message : 'Merge failed'
-                                      );
-                                    }
-                                  }}
-                                  aria-label={`Merge candidate ${c.id}`}
+                                  onClick={() => handleKeep(c.id, c.entity_a_id, 'A')}
                                 >
-                                  <MergeIcon fontSize="small" />
-                                </IconButton>
+                                  Keep A
+                                </Button>
                               </Tooltip>
-                              <Tooltip title="Dismiss">
-                                <IconButton
+                              <Tooltip title="Keep Book B, merge A into it">
+                                <Button
                                   size="small"
+                                  variant={recommendB ? 'contained' : 'outlined'}
+                                  color="primary"
                                   disabled={busy}
-                                  onClick={async () => {
-                                    try {
-                                      await api.dismissDedupCandidate(c.id);
-                                      setToast('Dismissed');
-                                      loadCandidates();
-                                      loadStats();
-                                    } catch (err) {
-                                      setError(
-                                        err instanceof Error ? err.message : 'Dismiss failed'
-                                      );
-                                    }
-                                  }}
-                                  aria-label={`Dismiss candidate ${c.id}`}
+                                  onClick={() => handleKeep(c.id, c.entity_b_id, 'B')}
                                 >
-                                  <VisibilityOffIcon fontSize="small" />
-                                </IconButton>
+                                  Keep B
+                                </Button>
                               </Tooltip>
                             </>
+                          )}
+                          <Tooltip title="Compare side-by-side with full score breakdown">
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => setDrawerCandidateId(c.id)}
+                            >
+                              Compare
+                            </Button>
+                          </Tooltip>
+                          {c.status === 'pending' && (
+                            <Tooltip title="Not a duplicate — dismiss">
+                              <Button
+                                size="small"
+                                variant="text"
+                                color="inherit"
+                                disabled={busy}
+                                onClick={() => handleDismissOne(c.id)}
+                              >
+                                Dismiss
+                              </Button>
+                            </Tooltip>
                           )}
                         </Stack>
                       </TableCell>
@@ -671,6 +891,48 @@ export function UnifiedDedupTab({ hidden }: UnifiedDedupTabProps) {
           loadStats();
         }}
       />
+
+      {/* Force Full Rescan modal — pick which detection layer to re-run */}
+      <Dialog open={rescanOpen} onClose={() => setRescanOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Force full rescan</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Pick which detection layer to re-run from scratch. These are heavier than
+            the incremental “Find Duplicates” scan — each rebuilds a whole layer of
+            candidates and runs in the background (watch the bell for progress).
+          </DialogContentText>
+          <Stack spacing={1}>
+            {RESCAN_OPTIONS.map((opt) => (
+              <Button
+                key={opt.kind}
+                variant="outlined"
+                fullWidth
+                disabled={bulkBusy}
+                onClick={() => handleForceRescan(opt)}
+                data-testid={`force-rescan-${opt.kind}`}
+                sx={{
+                  justifyContent: 'flex-start',
+                  textAlign: 'left',
+                  textTransform: 'none',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  py: 1,
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  {opt.label}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'normal' }}>
+                  {opt.desc}
+                </Typography>
+              </Button>
+            ))}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRescanOpen(false)}>Cancel</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Rescore dialog */}
       <Dialog open={rescoringOpen} onClose={() => setRescoringOpen(false)}>

@@ -1,7 +1,7 @@
 // file: internal/server/handlers/dedup/handler.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: d1b9e024-d28c-4d62-8f90-96d7064559c4
-// last-edited: 2026-06-10
+// last-edited: 2026-06-12
 
 // Package deduphandler hosts the dedup-domain HTTP handlers extracted from the
 // server package: dedup candidate / cluster / series listing, merge / dismiss /
@@ -41,10 +41,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/falkcorp/audiobook-organizer/internal/database"
 	"github.com/falkcorp/audiobook-organizer/internal/httputil"
 	"github.com/falkcorp/audiobook-organizer/internal/plugin"
+	"github.com/gin-gonic/gin"
 )
 
 // Handler hosts the dedup-domain HTTP endpoints.
@@ -180,6 +180,11 @@ func (h *Handler) ListDedupCandidates(c *gin.Context) {
 		filter.Band = v
 	}
 	includeBreakdown := c.Query("include_breakdown") == "true"
+	// include_books surfaces the full book objects (title/author/path/metadata)
+	// inline on each candidate row so the unified dedup UI can render rich cards
+	// without an N+2 per-book getBook() fan-out. The book lookups already happen
+	// below for the dead-row existence filter, so this is nearly free.
+	includeBooks := c.Query("include_books") == "true"
 
 	p := httputil.ParsePaginationParams(c)
 	limit, offset := p.Limit, p.Offset
@@ -199,18 +204,27 @@ func (h *Handler) ListDedupCandidates(c *gin.Context) {
 	// the UI never shows a candidate that would 404 when clicked.
 	// Non-book entities (e.g. author) skip the existence check.
 	store := h.resolveStore()
-	existCache := make(map[string]bool, len(candidates)*2)
-	bookExists := func(id string) bool {
+	// bookCache memoises GetBookByID across both referenced IDs of every
+	// candidate. A miss is recorded as a nil entry so we never re-query a
+	// known-dead ID. The cached *database.Book doubles as the include_books
+	// enrichment payload below — no second fetch.
+	bookCache := make(map[string]*database.Book, len(candidates)*2)
+	lookupBook := func(id string) *database.Book {
 		if id == "" {
-			return false
+			return nil
 		}
-		if v, ok := existCache[id]; ok {
+		if v, ok := bookCache[id]; ok {
 			return v
 		}
 		book, gerr := store.GetBookByID(id)
-		exists := gerr == nil && book != nil
-		existCache[id] = exists
-		return exists
+		if gerr != nil {
+			book = nil
+		}
+		bookCache[id] = book
+		return book
+	}
+	bookExists := func(id string) bool {
+		return lookupBook(id) != nil
 	}
 	dropped := 0
 	items := make([]gin.H, 0, len(candidates))
@@ -244,6 +258,13 @@ func (h *Handler) ListDedupCandidates(c *gin.Context) {
 		}
 		if includeBreakdown {
 			row["score_breakdown"] = cand.ScoreBreakdown
+		}
+		// Attach the cached book objects so the unified UI can render rich
+		// cards (title/author/path/metadata-quality) inline. nil when the
+		// entity is a non-book type or the lookup missed.
+		if includeBooks {
+			row["book_a"] = lookupBook(cand.EntityAID)
+			row["book_b"] = lookupBook(cand.EntityBID)
 		}
 		items = append(items, row)
 	}
