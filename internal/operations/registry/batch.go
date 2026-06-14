@@ -1,5 +1,5 @@
 // file: internal/operations/registry/batch.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: e1f2a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b
 // last-edited: 2026-06-14
 
@@ -284,7 +284,9 @@ func (r *Registry) batchFire(opType string, capturedGen uint64) {
 
 	// --- Phase 3: dispatch one OperationV2Row for all ready subjects ---
 	if err := r.batchDispatch(def, readySubs); err != nil {
-		r.logger.Warn("batch: fire: dispatch failed; subjects will be lost from journal",
+		// ClearBatchBucket only runs on success, so these subjects stay
+		// journaled and are retried on the next Start() — not lost.
+		r.logger.Warn("batch: fire: dispatch failed; subjects remain journaled and will be retried on next Start()",
 			"op_type", opType, "ready", len(readySubs), "error", err)
 		return
 	}
