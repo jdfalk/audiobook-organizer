@@ -1,7 +1,7 @@
 // file: internal/operations/registry/teststore_test.go
-// version: 2.6.0
+// version: 2.7.0
 // guid: c9d0e1f2-a3b4-5c6d-7e8f-9a0b1c2d3e4f
-// last-edited: 2026-06-13
+// last-edited: 2026-06-14
 
 package registry_test
 
@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/falkcorp/audiobook-organizer/internal/database"
@@ -35,6 +36,17 @@ type fakeStore struct {
 
 	// M3 batch bucket: maps "opType:subjectType:subjectID" → BatchBucketEntry.
 	batchBucket map[string]database.BatchBucketEntry
+
+	// closed simulates DB-close for shutdown-safety tests. When true,
+	// InsertOperationV2 returns an error rather than panicking — the test
+	// can assert that no insert is attempted after Shutdown returns.
+	closed atomic.Bool
+
+	// insertHook, if non-nil, is called inside InsertOperationV2 (while holding
+	// the store mutex) before the row is written. Used by
+	// TestBatch_ShutdownWaitsForInFlightFire to block the fire goroutine at a
+	// deterministic point so Shutdown's fireWG.Wait() can be observed.
+	insertHook func()
 }
 
 func newFakeStore() *fakeStore {
@@ -90,6 +102,12 @@ func (f *fakeStore) DeleteOrphanOpDefsV2(keepIDs []string) error {
 func (f *fakeStore) InsertOperationV2(row database.OperationV2Row) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.closed.Load() {
+		return fmt.Errorf("fakeStore: InsertOperationV2 called after Close()")
+	}
+	if f.insertHook != nil {
+		f.insertHook()
+	}
 	if _, exists := f.ops[row.ID]; exists {
 		return fmt.Errorf("duplicate op id %s", row.ID)
 	}
