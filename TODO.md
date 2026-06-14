@@ -1678,6 +1678,15 @@ Activity page mobile layout, adaptive refresh, version vs snapshot UI polish, co
 
 </details>
 
+
+## ⚠️ Automated Findings
+
+- [ ] **MEMLEAK-2026-06-14** [memory-leak] 4 potential memory leak(s) detected by scheduled scan — https://github.com/falkcorp/audiobook-organizer/actions/runs/27492872026.
+  - `src/components/dedup/UnifiedDedupTab.tsx:511` — Untracked setTimeout (may fire after unmount)
+  - `src/components/dedup/UnifiedDedupTab.tsx:569` — Untracked setTimeout (may fire after unmount)
+  - `src/pages/ActivityLog.tsx:250` — Untracked setTimeout (may fire after unmount)
+  - `src/pages/ActivityLog.tsx:285` — Untracked setTimeout (may fire after unmount)
+
 ---
 
 ## 2026-05-01 Re-Audit Bot Tasks
