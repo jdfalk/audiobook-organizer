@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.59.0
+// version: 1.60.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 // last-edited: 2026-06-13
 
@@ -2601,3 +2601,4 @@ func (m *MockStore) ListFileCompletions(_ OpSubject, _ string) (map[string]uint6
 	return nil, nil
 }
 func (m *MockStore) ListWaitingDepsOps() ([]OperationV2Row, error) { return nil, nil }
+func (m *MockStore) PromoteToQueued(_ string) error                { return nil }

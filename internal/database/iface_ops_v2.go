@@ -1,5 +1,5 @@
 // file: internal/database/iface_ops_v2.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-06-13
 
@@ -204,4 +204,11 @@ type OpsV2Store interface {
 	// ListWaitingDepsOps returns all OperationV2Row entries whose Status is
 	// "waiting_deps".  Used by the dependency evaluator to re-check parked ops.
 	ListWaitingDepsOps() ([]OperationV2Row, error)
+
+	// PromoteToQueued atomically transitions an operation from "waiting_deps"
+	// to "queued", writing both the row JSON and the opv2:q: queue-index key
+	// (identical encoding to InsertOperationV2 for a queued op) so that
+	// ListQueuedOperationsV2 can discover the promoted op.
+	// Returns an error if the op does not exist or its status is not "waiting_deps".
+	PromoteToQueued(id string) error
 }

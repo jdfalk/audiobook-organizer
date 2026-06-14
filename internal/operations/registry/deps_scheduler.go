@@ -1,5 +1,5 @@
 // file: internal/operations/registry/deps_scheduler.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a3b4c5d6-e7f8-9a0b-1c2d-3e4f5a6b7c8d
 // last-edited: 2026-06-13
 
@@ -41,6 +41,9 @@ type SchedulerStore interface {
 	ListWaitingDepsOps() ([]database.OperationV2Row, error)
 	RecordOpCompletion(sub database.OpSubject, opType, fileID string, depRev uint64) error
 	UpdateOperationV2Status(id, status string, startedAt, completedAt *time.Time, errMsg *string) error
+	// PromoteToQueued atomically transitions an op from waiting_deps → queued,
+	// writing the opv2:q: queue-index key so ListQueuedOperationsV2 finds it.
+	PromoteToQueued(id string) error
 }
 
 // DepsScheduler coordinates the re-evaluation and promotion of waiting_deps ops.
@@ -234,9 +237,10 @@ func (s *DepsScheduler) tryPromote(ctx context.Context, op database.OperationV2R
 	return s.promote(op, sub)
 }
 
-// promote flips status to "queued", removes from index, and pings the dispatcher.
+// promote flips status to "queued" via PromoteToQueued (which writes the
+// opv2:q: queue-index key), removes from index, and pings the dispatcher.
 func (s *DepsScheduler) promote(op database.OperationV2Row, sub Subject) error {
-	if err := s.store.UpdateOperationV2Status(op.ID, "queued", nil, nil, nil); err != nil {
+	if err := s.store.PromoteToQueued(op.ID); err != nil {
 		return fmt.Errorf("promote op %s: %w", op.ID, err)
 	}
 	s.mu.Lock()

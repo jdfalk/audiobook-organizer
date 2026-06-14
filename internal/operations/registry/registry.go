@@ -1,5 +1,5 @@
 // file: internal/operations/registry/registry.go
-// version: 2.8.0
+// version: 2.9.0
 // guid: f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c
 // last-edited: 2026-06-13
 
@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -60,6 +61,9 @@ type Registry struct {
 	// abandonGrace is how long a ctx-canceled op goroutine has to return before
 	// it is classified as abandoned. Zero means use defaultAbandonGrace.
 	abandonGrace time.Duration
+	// sweepInterval controls how often DepsScheduler.SweepTick fires.
+	// Zero means use the default (5m).
+	sweepInterval time.Duration
 }
 
 // Options contains optional tunable parameters for a Registry. Zero values
@@ -75,6 +79,9 @@ type Options struct {
 	AbandonGrace time.Duration
 	// Bus is the SSE event bus (UOS-06). Nil is safe.
 	Bus Bus
+	// SweepInterval overrides how often DepsScheduler.SweepTick is called.
+	// Zero = default (5m). Only meaningful when a DepsScheduler is wired.
+	SweepInterval time.Duration
 }
 
 // New creates a new Registry. workers controls the in-process worker pool size.
@@ -105,6 +112,7 @@ func NewWithOptions(store database.OpsV2Store, logger *slog.Logger, workers int,
 		abandoned:        newAbandonedTracker(opts.AbandonedCap),
 		watchdogInterval: opts.WatchdogInterval,
 		abandonGrace:     opts.AbandonGrace,
+		sweepInterval:    opts.SweepInterval,
 	}
 }
 
@@ -195,17 +203,52 @@ func (r *Registry) Start(ctx context.Context) {
 		r.goroutineWG.Add(1)
 		go func(slot int) { defer r.goroutineWG.Done(); r.startWorker(internalCtx, slot) }(i)
 	}
+
+	// Wire the dependency-scheduler sweep ticker if a scheduler has been set.
+	// The goroutine is enrolled in goroutineWG so Shutdown() drains it cleanly.
+	r.mu.RLock()
+	sched := r.depsScheduler
+	r.mu.RUnlock()
+	if sched != nil {
+		sweepInterval := r.sweepInterval
+		if sweepInterval <= 0 {
+			sweepInterval = 5 * time.Minute
+		}
+		r.goroutineWG.Add(1)
+		go func() {
+			defer r.goroutineWG.Done()
+			ticker := time.NewTicker(sweepInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-internalCtx.Done():
+					return
+				case <-ticker.C:
+					r.mu.RLock()
+					activeSched := r.depsScheduler
+					r.mu.RUnlock()
+					if activeSched != nil {
+						activeSched.SweepTick(internalCtx)
+					}
+				}
+			}
+		}()
+	}
 }
 
 // RegisterOp validates and registers an OperationDef.
 // Returns an error if:
 //   - def.ID is empty
+//   - def.ID contains ':' (reserved by the completion keyspace)
 //   - def.Run is nil
 //   - def.ResumePolicy == ResumeUnspecified
 //   - def.ID is already registered
 func (r *Registry) RegisterOp(def OperationDef) error {
 	if def.ID == "" {
 		return errors.New("registry: OperationDef.ID must not be empty")
+	}
+	if strings.Contains(def.ID, ":") {
+		return fmt.Errorf("registry: OperationDef.ID must not contain ':' (reserved by completion keyspace): %q", def.ID)
 	}
 	if def.Run == nil {
 		return fmt.Errorf("registry: OperationDef.Run must not be nil (id=%s)", def.ID)
@@ -335,7 +378,8 @@ func (r *Registry) EnqueueOp(ctx context.Context, defID string, params any, opts
 	}
 
 	// Combine def-level and per-enqueue requirements.
-	allReqs := append(def.Requires, eopts.Requires...)
+	// Use a fresh backing array to avoid aliasing def.Requires under -race.
+	allReqs := append(append([]Requirement(nil), def.Requires...), eopts.Requires...)
 
 	// Dependency check: evaluate requirements; park if any unmet.
 	status := "queued"
