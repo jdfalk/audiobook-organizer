@@ -1,7 +1,7 @@
 // file: internal/plugins/dedup/plugin.go
-// version: 1.4.1
+// version: 1.5.0
 // guid: d1e2f3a4-b5c6-7890-abcd-ef1234567890
-// last-edited: 2026-06-13
+// last-edited: 2026-06-14
 
 // Package dedup is the UOS plugin for deduplication operations.
 // It wraps the internal dedup.Engine and registers OperationDefs through
@@ -60,6 +60,7 @@ func (p *Plugin) Register(r sdk.Registry) error {
 		p.embReencodeDef(),     // T021: float16+zstd re-encode op
 		p.bookfileSegDropDef(), // T020: drop AcoustID segment fields from stored values
 		p.datasetBackfillDef(), // C4: label + suppress residual pending candidates
+		p.checkBookDef(),       // M4: per-book dedup check via dependency scheduler
 	}
 
 	for _, op := range ops {
