@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store_ops_v2.go
-// version: 3.1.1
+// version: 3.2.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 // last-edited: 2026-06-13
 
@@ -635,4 +635,44 @@ func (p *PebbleStore) ListWaitingDepsOps() ([]OperationV2Row, error) {
 		}
 	}
 	return result, iter.Error()
+}
+
+// PromoteToQueued atomically transitions an operation from "waiting_deps" to
+// "queued", writing both the row JSON and the opv2:q: queue-index key
+// (same encoding as InsertOperationV2 for a queued op) so that
+// ListQueuedOperationsV2 can discover the promoted op.
+//
+// The opv2:act: active-set key is intentionally NOT written here: that key is
+// added when the dispatcher transitions the op to "running", matching the
+// normal InsertOperationV2→UpdateOperationV2Status("running") lifecycle.
+//
+// Returns an error if the op does not exist or its current status is not
+// "waiting_deps".
+func (p *PebbleStore) PromoteToQueued(id string) error {
+	p.opsMu.Lock()
+	defer p.opsMu.Unlock()
+
+	var row OperationV2Row
+	if err := p.pebbleGetJSON(opv2OpKey(id), &row); err != nil {
+		return err
+	}
+	if row.ID == "" {
+		return fmt.Errorf("opv2: PromoteToQueued: operation not found: %s", id)
+	}
+	if row.Status != "waiting_deps" {
+		return fmt.Errorf("opv2: PromoteToQueued: expected status %q, got %q for op %s",
+			"waiting_deps", row.Status, id)
+	}
+
+	row.Status = "queued"
+	if err := p.pebbleSetJSON(opv2OpKey(id), &row); err != nil {
+		return err
+	}
+
+	// Write the queue-index key so ListQueuedOperationsV2 can find this op.
+	// Mirror the exact encoding used by InsertOperationV2.
+	if err := p.db.Set(opv2QueueKey(row.Priority, row.QueuedAt, id), []byte(id), pebble.Sync); err != nil {
+		return err
+	}
+	return nil
 }

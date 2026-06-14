@@ -1,5 +1,5 @@
 // file: internal/operations/registry/teststore_test.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: c9d0e1f2-a3b4-5c6d-7e8f-9a0b1c2d3e4f
 // last-edited: 2026-06-13
 
@@ -435,4 +435,24 @@ func (f *fakeStore) GetOpCompletion(_ database.OpSubject, _ string) (uint64, boo
 }
 func (f *fakeStore) ListFileCompletions(_ database.OpSubject, _ string) (map[string]uint64, error) {
 	return nil, nil
+}
+
+// PromoteToQueued transitions the op from waiting_deps → queued in memory.
+// The fake uses a linear scan (no opv2:q: index needed — ListQueuedOperationsV2
+// already scans by status), but it correctly rejects non-waiting_deps ops
+// to mirror PebbleStore's pre-condition check.
+func (f *fakeStore) PromoteToQueued(id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	op, ok := f.ops[id]
+	if !ok {
+		return fmt.Errorf("fakeStore: PromoteToQueued: op %s not found", id)
+	}
+	if op.Status != "waiting_deps" {
+		return fmt.Errorf("fakeStore: PromoteToQueued: expected status %q, got %q for op %s",
+			"waiting_deps", op.Status, id)
+	}
+	op.Status = "queued"
+	f.ops[id] = op
+	return nil
 }

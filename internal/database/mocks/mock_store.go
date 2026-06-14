@@ -23533,6 +23533,57 @@ func (_c *MockOpsV2Store_UpsertOpStateV2_Call) RunAndReturn(run func(row databas
 	return _c
 }
 
+// PromoteToQueued provides a mock function for the type MockOpsV2Store
+func (_mock *MockOpsV2Store) PromoteToQueued(id string) error {
+	ret := _mock.Called(id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PromoteToQueued")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(id)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockOpsV2Store_PromoteToQueued_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PromoteToQueued'
+type MockOpsV2Store_PromoteToQueued_Call struct {
+	*mock.Call
+}
+
+// PromoteToQueued is a helper method to define mock.On call
+//   - id string
+func (_e *MockOpsV2Store_Expecter) PromoteToQueued(id interface{}) *MockOpsV2Store_PromoteToQueued_Call {
+	return &MockOpsV2Store_PromoteToQueued_Call{Call: _e.mock.On("PromoteToQueued", id)}
+}
+
+func (_c *MockOpsV2Store_PromoteToQueued_Call) Run(run func(id string)) *MockOpsV2Store_PromoteToQueued_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockOpsV2Store_PromoteToQueued_Call) Return(err error) *MockOpsV2Store_PromoteToQueued_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockOpsV2Store_PromoteToQueued_Call) RunAndReturn(run func(id string) error) *MockOpsV2Store_PromoteToQueued_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockSeriesReader creates a new instance of MockSeriesReader. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockSeriesReader(t interface {
@@ -49581,6 +49632,57 @@ func (_c *MockStore_ListWaitingDepsOps_Call) Return(operationV2Rows []database.O
 }
 
 func (_c *MockStore_ListWaitingDepsOps_Call) RunAndReturn(run func() ([]database.OperationV2Row, error)) *MockStore_ListWaitingDepsOps_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// PromoteToQueued provides a mock function for the type MockStore
+func (_mock *MockStore) PromoteToQueued(id string) error {
+	ret := _mock.Called(id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PromoteToQueued")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(id)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_PromoteToQueued_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PromoteToQueued'
+type MockStore_PromoteToQueued_Call struct {
+	*mock.Call
+}
+
+// PromoteToQueued is a helper method to define mock.On call
+//   - id string
+func (_e *MockStore_Expecter) PromoteToQueued(id interface{}) *MockStore_PromoteToQueued_Call {
+	return &MockStore_PromoteToQueued_Call{Call: _e.mock.On("PromoteToQueued", id)}
+}
+
+func (_c *MockStore_PromoteToQueued_Call) Run(run func(id string)) *MockStore_PromoteToQueued_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_PromoteToQueued_Call) Return(err error) *MockStore_PromoteToQueued_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_PromoteToQueued_Call) RunAndReturn(run func(id string) error) *MockStore_PromoteToQueued_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -1,5 +1,5 @@
 // file: internal/operations/registry/registry_test.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: d0e1f2a3-b4c5-6d7e-8f9a-0b1c2d3e4f5a
 // last-edited: 2026-06-13
 
@@ -76,6 +76,14 @@ func TestRegisterOp_RejectsEmptyID(t *testing.T) {
 	def := makeValidDef("")
 	if err := r.RegisterOp(def); err == nil {
 		t.Fatal("expected error for empty ID, got nil")
+	}
+}
+
+func TestRegisterOp_RejectsColonInID(t *testing.T) {
+	r, _ := newTestRegistry(t)
+	def := makeValidDef("plugin:op-type")
+	if err := r.RegisterOp(def); err == nil {
+		t.Fatal("expected error for ID containing ':', got nil")
 	}
 }
 
