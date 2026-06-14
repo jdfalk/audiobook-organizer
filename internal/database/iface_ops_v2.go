@@ -1,5 +1,5 @@
 // file: internal/database/iface_ops_v2.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-06-13
 
@@ -211,4 +211,32 @@ type OpsV2Store interface {
 	// ListQueuedOperationsV2 can discover the promoted op.
 	// Returns an error if the op does not exist or its status is not "waiting_deps".
 	PromoteToQueued(id string) error
+
+	// --- M3 batch bucket (journaled pending subjects) ---
+	//
+	// Keyspace: op:batch:<opType>:<subjectType>:<subjectID> → JSON(BatchBucketEntry)
+	// This journal lets the registry survive a crash mid-window without dropping subjects.
+	// Entries are removed by ClearBatchBucket once they have been dispatched.
+
+	// AddToBatchBucket adds a subject to the persistent pending bucket for opType.
+	// Idempotent: if an entry already exists for this (opType, subjectType, subjectID)
+	// triple, the call is a no-op (the existing AddedAt timestamp is preserved so
+	// MaxWait is anchored to the first arrival).
+	AddToBatchBucket(opType string, sub OpSubject) error
+
+	// ListBatchBucket returns all pending subjects for opType.
+	// Returns an empty slice (not an error) when no bucket exists.
+	ListBatchBucket(opType string) ([]BatchBucketEntry, error)
+
+	// ClearBatchBucket removes the given subjects from the bucket for opType.
+	// Subjects not present in the bucket are silently skipped.
+	ClearBatchBucket(opType string, subs []OpSubject) error
+}
+
+// BatchBucketEntry is a single pending subject in a batchable op's journal.
+// AddedAt records the wall-clock time of first addition so the registry can
+// compute whether BatchMaxWait has been exceeded at reload.
+type BatchBucketEntry struct {
+	Sub     OpSubject `json:"sub"`
+	AddedAt int64     `json:"added_at"` // Unix nanoseconds
 }

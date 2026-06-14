@@ -1,5 +1,5 @@
 // file: internal/operations/registry/registry.go
-// version: 2.9.0
+// version: 3.0.0
 // guid: f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c
 // last-edited: 2026-06-13
 
@@ -49,6 +49,9 @@ type Registry struct {
 	// Set via SetDepsScheduler before Start(). Nil is safe: worker hooks
 	// check for nil before notifying.
 	depsScheduler *DepsScheduler
+
+	// batch manages the M3 per-op-type debounce buckets for Batchable ops.
+	batch *batchManager
 
 	// cancelFn cancels the internal goroutine context created in Start().
 	// Shutdown() calls this after draining running ops to stop the
@@ -113,6 +116,7 @@ func NewWithOptions(store database.OpsV2Store, logger *slog.Logger, workers int,
 		watchdogInterval: opts.WatchdogInterval,
 		abandonGrace:     opts.AbandonGrace,
 		sweepInterval:    opts.SweepInterval,
+		batch:            newBatchManager(),
 	}
 }
 
@@ -189,6 +193,10 @@ func (r *Registry) Start(ctx context.Context) {
 	r.logger.Info("registry: starting", "workers", r.workers)
 	// Resume must complete before the dispatcher starts accepting new work.
 	r.resumeAfterStartup(ctx)
+	// Reload any journaled batch buckets from the previous run and re-arm their
+	// debounce timers. Must happen after resumeAfterStartup (so defs are registered)
+	// and before goroutines start, so the context is already set.
+	r.batchReloadOnStart(ctx)
 
 	// Owned context: Shutdown() cancels this after draining running ops so
 	// DB-touching goroutines stop before the caller closes the store.
@@ -326,12 +334,49 @@ func (r *Registry) upsertDefToDB(def OperationDef) error {
 
 // EnqueueOp creates a new queued run for the given def. Returns the ULID of
 // the new run.
+//
+// Batchable ops: when def.Batchable is true this call does NOT immediately
+// create a row. The subject is added to the per-op-type bucket and ("", nil)
+// is returned. The op ID is assigned at flush time (timer fire). Callers that
+// need the resulting op ID may subscribe to the op.created SSE event. All
+// existing callers ignore or log the returned ID, so this is safe.
 func (r *Registry) EnqueueOp(ctx context.Context, defID string, params any, opts ...EnqueueOption) (string, error) {
 	r.mu.RLock()
 	def, ok := r.defs[defID]
 	r.mu.RUnlock()
 	if !ok {
 		return "", fmt.Errorf("registry: unknown defID %q", defID)
+	}
+
+	// --- M3 Batching: intercept before ConcurrencyKey dedupe ---
+	// For Batchable ops we bucket the subject and return early.
+	// Per-enqueue WithRequires options cannot be journaled and are therefore
+	// ignored for batchable ops (requirements must be on OperationDef.Requires).
+	if def.Batchable {
+		// Marshal params to extract the subject (same logic as the non-batch path).
+		var rawParamsForSubject json.RawMessage
+		if params != nil {
+			b, err := json.Marshal(params)
+			if err != nil {
+				return "", fmt.Errorf("registry: batchable marshal params: %w", err)
+			}
+			rawParamsForSubject = b
+		} else {
+			rawParamsForSubject = json.RawMessage("{}")
+		}
+		sub := subjectFromParams(rawParamsForSubject)
+		if sub.ID == "" {
+			// No subject derivable — fall through to normal non-batched path so
+			// no-subject batchable ops are not silently dropped.
+			r.logger.Warn("registry: batchable op has no subject in params; falling through to non-batch enqueue",
+				"def_id", defID)
+		} else {
+			bw, bmw := effectiveBatchWindows(def)
+			r.batchAdd(defID, database.OpSubject{Type: sub.Type, ID: sub.ID}, bw, bmw)
+			r.logger.Debug("registry: batchable op bucketed",
+				"def_id", defID, "subject_type", sub.Type, "subject_id", sub.ID)
+			return "", nil // op ID assigned at flush time
+		}
 	}
 
 	// Dedupe: if this defID has a non-empty ConcurrencyKey, and an op for
@@ -592,6 +637,11 @@ func (r *Registry) Shutdown(ctx context.Context) error {
 	// embedded Pebble store is closing, and its next DB write panics
 	// with "pebble: closed".
 	r.shuttingDown.Store(true)
+
+	// Stop all batch debounce timers. Subjects remain journaled; the next
+	// Start() will reload them. We do NOT dispatch during shutdown because
+	// InsertOperationV2 after db.Close() panics (the "pebble: closed" issue).
+	r.batchStopAllTimers()
 
 	// Gather running ops.
 	r.mu.Lock()

@@ -23584,6 +23584,174 @@ func (_c *MockOpsV2Store_PromoteToQueued_Call) RunAndReturn(run func(id string) 
 	return _c
 }
 
+// AddToBatchBucket provides a mock function for the type MockOpsV2Store
+func (_mock *MockOpsV2Store) AddToBatchBucket(opType string, sub database.OpSubject) error {
+	ret := _mock.Called(opType, sub)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AddToBatchBucket")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, database.OpSubject) error); ok {
+		r0 = returnFunc(opType, sub)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockOpsV2Store_AddToBatchBucket_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AddToBatchBucket'
+type MockOpsV2Store_AddToBatchBucket_Call struct {
+	*mock.Call
+}
+
+// AddToBatchBucket is a helper method to define mock.On call
+//   - opType string
+//   - sub database.OpSubject
+func (_e *MockOpsV2Store_Expecter) AddToBatchBucket(opType interface{}, sub interface{}) *MockOpsV2Store_AddToBatchBucket_Call {
+	return &MockOpsV2Store_AddToBatchBucket_Call{Call: _e.mock.On("AddToBatchBucket", opType, sub)}
+}
+
+func (_c *MockOpsV2Store_AddToBatchBucket_Call) Run(run func(opType string, sub database.OpSubject)) *MockOpsV2Store_AddToBatchBucket_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 database.OpSubject
+		if args[1] != nil {
+			arg1 = args[1].(database.OpSubject)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockOpsV2Store_AddToBatchBucket_Call) Return(err error) *MockOpsV2Store_AddToBatchBucket_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockOpsV2Store_AddToBatchBucket_Call) RunAndReturn(run func(string, database.OpSubject) error) *MockOpsV2Store_AddToBatchBucket_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListBatchBucket provides a mock function for the type MockOpsV2Store
+func (_mock *MockOpsV2Store) ListBatchBucket(opType string) ([]database.BatchBucketEntry, error) {
+	ret := _mock.Called(opType)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListBatchBucket")
+	}
+
+	var r0 []database.BatchBucketEntry
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) ([]database.BatchBucketEntry, error)); ok {
+		return returnFunc(opType)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) []database.BatchBucketEntry); ok {
+		r0 = returnFunc(opType)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.BatchBucketEntry)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(opType)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockOpsV2Store_ListBatchBucket_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListBatchBucket'
+type MockOpsV2Store_ListBatchBucket_Call struct {
+	*mock.Call
+}
+
+// ListBatchBucket is a helper method to define mock.On call
+//   - opType string
+func (_e *MockOpsV2Store_Expecter) ListBatchBucket(opType interface{}) *MockOpsV2Store_ListBatchBucket_Call {
+	return &MockOpsV2Store_ListBatchBucket_Call{Call: _e.mock.On("ListBatchBucket", opType)}
+}
+
+func (_c *MockOpsV2Store_ListBatchBucket_Call) Run(run func(opType string)) *MockOpsV2Store_ListBatchBucket_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockOpsV2Store_ListBatchBucket_Call) Return(entries []database.BatchBucketEntry, err error) *MockOpsV2Store_ListBatchBucket_Call {
+	_c.Call.Return(entries, err)
+	return _c
+}
+
+func (_c *MockOpsV2Store_ListBatchBucket_Call) RunAndReturn(run func(string) ([]database.BatchBucketEntry, error)) *MockOpsV2Store_ListBatchBucket_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ClearBatchBucket provides a mock function for the type MockOpsV2Store
+func (_mock *MockOpsV2Store) ClearBatchBucket(opType string, subs []database.OpSubject) error {
+	ret := _mock.Called(opType, subs)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ClearBatchBucket")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, []database.OpSubject) error); ok {
+		r0 = returnFunc(opType, subs)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockOpsV2Store_ClearBatchBucket_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ClearBatchBucket'
+type MockOpsV2Store_ClearBatchBucket_Call struct {
+	*mock.Call
+}
+
+// ClearBatchBucket is a helper method to define mock.On call
+//   - opType string
+//   - subs []database.OpSubject
+func (_e *MockOpsV2Store_Expecter) ClearBatchBucket(opType interface{}, subs interface{}) *MockOpsV2Store_ClearBatchBucket_Call {
+	return &MockOpsV2Store_ClearBatchBucket_Call{Call: _e.mock.On("ClearBatchBucket", opType, subs)}
+}
+
+func (_c *MockOpsV2Store_ClearBatchBucket_Call) Run(run func(opType string, subs []database.OpSubject)) *MockOpsV2Store_ClearBatchBucket_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 []database.OpSubject
+		if args[1] != nil {
+			arg1 = args[1].([]database.OpSubject)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockOpsV2Store_ClearBatchBucket_Call) Return(err error) *MockOpsV2Store_ClearBatchBucket_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockOpsV2Store_ClearBatchBucket_Call) RunAndReturn(run func(string, []database.OpSubject) error) *MockOpsV2Store_ClearBatchBucket_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockSeriesReader creates a new instance of MockSeriesReader. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockSeriesReader(t interface {
@@ -49683,6 +49851,174 @@ func (_c *MockStore_PromoteToQueued_Call) Return(err error) *MockStore_PromoteTo
 }
 
 func (_c *MockStore_PromoteToQueued_Call) RunAndReturn(run func(id string) error) *MockStore_PromoteToQueued_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// AddToBatchBucket provides a mock function for the type MockStore
+func (_mock *MockStore) AddToBatchBucket(opType string, sub database.OpSubject) error {
+	ret := _mock.Called(opType, sub)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AddToBatchBucket")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, database.OpSubject) error); ok {
+		r0 = returnFunc(opType, sub)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_AddToBatchBucket_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AddToBatchBucket'
+type MockStore_AddToBatchBucket_Call struct {
+	*mock.Call
+}
+
+// AddToBatchBucket is a helper method to define mock.On call
+//   - opType string
+//   - sub database.OpSubject
+func (_e *MockStore_Expecter) AddToBatchBucket(opType interface{}, sub interface{}) *MockStore_AddToBatchBucket_Call {
+	return &MockStore_AddToBatchBucket_Call{Call: _e.mock.On("AddToBatchBucket", opType, sub)}
+}
+
+func (_c *MockStore_AddToBatchBucket_Call) Run(run func(opType string, sub database.OpSubject)) *MockStore_AddToBatchBucket_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 database.OpSubject
+		if args[1] != nil {
+			arg1 = args[1].(database.OpSubject)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockStore_AddToBatchBucket_Call) Return(err error) *MockStore_AddToBatchBucket_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_AddToBatchBucket_Call) RunAndReturn(run func(string, database.OpSubject) error) *MockStore_AddToBatchBucket_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListBatchBucket provides a mock function for the type MockStore
+func (_mock *MockStore) ListBatchBucket(opType string) ([]database.BatchBucketEntry, error) {
+	ret := _mock.Called(opType)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListBatchBucket")
+	}
+
+	var r0 []database.BatchBucketEntry
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) ([]database.BatchBucketEntry, error)); ok {
+		return returnFunc(opType)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) []database.BatchBucketEntry); ok {
+		r0 = returnFunc(opType)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.BatchBucketEntry)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(opType)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListBatchBucket_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListBatchBucket'
+type MockStore_ListBatchBucket_Call struct {
+	*mock.Call
+}
+
+// ListBatchBucket is a helper method to define mock.On call
+//   - opType string
+func (_e *MockStore_Expecter) ListBatchBucket(opType interface{}) *MockStore_ListBatchBucket_Call {
+	return &MockStore_ListBatchBucket_Call{Call: _e.mock.On("ListBatchBucket", opType)}
+}
+
+func (_c *MockStore_ListBatchBucket_Call) Run(run func(opType string)) *MockStore_ListBatchBucket_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockStore_ListBatchBucket_Call) Return(entries []database.BatchBucketEntry, err error) *MockStore_ListBatchBucket_Call {
+	_c.Call.Return(entries, err)
+	return _c
+}
+
+func (_c *MockStore_ListBatchBucket_Call) RunAndReturn(run func(string) ([]database.BatchBucketEntry, error)) *MockStore_ListBatchBucket_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ClearBatchBucket provides a mock function for the type MockStore
+func (_mock *MockStore) ClearBatchBucket(opType string, subs []database.OpSubject) error {
+	ret := _mock.Called(opType, subs)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ClearBatchBucket")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, []database.OpSubject) error); ok {
+		r0 = returnFunc(opType, subs)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_ClearBatchBucket_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ClearBatchBucket'
+type MockStore_ClearBatchBucket_Call struct {
+	*mock.Call
+}
+
+// ClearBatchBucket is a helper method to define mock.On call
+//   - opType string
+//   - subs []database.OpSubject
+func (_e *MockStore_Expecter) ClearBatchBucket(opType interface{}, subs interface{}) *MockStore_ClearBatchBucket_Call {
+	return &MockStore_ClearBatchBucket_Call{Call: _e.mock.On("ClearBatchBucket", opType, subs)}
+}
+
+func (_c *MockStore_ClearBatchBucket_Call) Run(run func(opType string, subs []database.OpSubject)) *MockStore_ClearBatchBucket_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 []database.OpSubject
+		if args[1] != nil {
+			arg1 = args[1].([]database.OpSubject)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockStore_ClearBatchBucket_Call) Return(err error) *MockStore_ClearBatchBucket_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_ClearBatchBucket_Call) RunAndReturn(run func(string, []database.OpSubject) error) *MockStore_ClearBatchBucket_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -1,5 +1,5 @@
 // file: internal/operations/registry/types.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
 // last-edited: 2026-06-13
 
@@ -79,6 +79,35 @@ type OperationDef struct {
 	// field-set (M2) extends the same machinery. An op without Requires behaves
 	// exactly as today — no new branches are entered.
 	Requires []Requirement
+
+	// Batching. Optional (M3).
+	//
+	// When Batchable is true, EnqueueOp does NOT immediately create an OperationV2Row.
+	// Instead the call's subject is added to a per-op-type in-memory + journaled bucket
+	// and a debounce timer is (re-)armed. When the timer fires, one OperationV2Row is
+	// created whose params carry all collected subjects as {"subjects":[...]}.
+	//
+	// Return contract: EnqueueOp for a batchable op returns ("", nil) — there is no
+	// op ID yet; the ID is assigned at flush time. Callers that need the resulting op
+	// ID should subscribe to the op.created event (once that bus is wired) or use a
+	// polling scan. All existing callers either ignore or log the returned ID, so this
+	// is safe.
+	//
+	// Requirement gating: per-enqueue WithRequires cannot be journaled in the bucket
+	// (the store method receives only the subject). Requirement evaluation at dispatch
+	// uses OperationDef.Requires only. M4 consumers (e.g. dedup.check-book) must
+	// therefore declare their requirements on the OperationDef, not per-enqueue.
+	Batchable bool
+
+	// BatchWindow is the debounce window: the timer is reset to BatchWindow from the
+	// last arrival, but capped so the first flush never waits past BatchMaxWait.
+	// Zero with Batchable=true uses defaultBatchWindow (5s).
+	BatchWindow time.Duration
+
+	// BatchMaxWait is the hard cap on how long subjects can accumulate before a
+	// flush is forced even under a steady trickle of new arrivals.
+	// Zero with Batchable=true uses defaultBatchMaxWait (60s).
+	BatchMaxWait time.Duration
 
 	// Phases. Optional, for fine-grained resume.
 	Phases []Phase // if set, registry tracks phase progress for resume
