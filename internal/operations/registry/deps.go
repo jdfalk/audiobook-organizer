@@ -41,7 +41,24 @@ type DepStore interface {
 
 	// BookFiles returns the list of file IDs belonging to bookID.
 	// Used when evaluating AllFiles=true requirements.
+	// Implementations may return nil, nil when book-file enumeration is not
+	// available (e.g. early-startup or M1 enqueue path) — the evaluator
+	// treats an empty list as "no files known → unmet".
 	BookFiles(bookID string) ([]string, error)
+}
+
+// OpsV2DepAdapter wraps a database.OpsV2Store to satisfy DepStore.
+// BookFiles always returns nil (no file enumeration in the OpsV2Store
+// interface). Use this adapter for the enqueue parking path where AllFiles
+// evaluation is not needed; wire a real BookFiles provider for Task 5+.
+type OpsV2DepAdapter struct {
+	database.OpsV2Store
+}
+
+// BookFiles satisfies DepStore. Returns nil so AllFiles requirements are
+// treated as unmet (conservative) when no file source is wired.
+func (a OpsV2DepAdapter) BookFiles(_ string) ([]string, error) {
+	return nil, nil
 }
 
 // subjectToOpSubject converts the registry's Subject to the database wire type.

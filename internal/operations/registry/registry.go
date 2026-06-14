@@ -1,7 +1,7 @@
 // file: internal/operations/registry/registry.go
-// version: 2.7.0
+// version: 2.8.0
 // guid: f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c
-// last-edited: 2026-06-10
+// last-edited: 2026-06-13
 
 package registry
 
@@ -173,6 +173,22 @@ func (r *Registry) RegisterOp(def OperationDef) error {
 		r.mu.Unlock()
 		return fmt.Errorf("registry: OperationDef already registered (id=%s)", def.ID)
 	}
+
+	// Cycle check: build the full requirement graph including the new def and
+	// verify there are no cycles. Rejects the registration if a cycle is found.
+	// This runs under the write lock so the graph view is consistent.
+	if len(def.Requires) > 0 {
+		graph := make(map[string][]Requirement, len(r.defs)+1)
+		for id, d := range r.defs {
+			graph[id] = d.Requires
+		}
+		graph[def.ID] = def.Requires
+		if err := CheckRequirementCycle(graph); err != nil {
+			r.mu.Unlock()
+			return fmt.Errorf("registry: RegisterOp(%s): %w", def.ID, err)
+		}
+	}
+
 	r.defs[def.ID] = def
 	r.mu.Unlock()
 
@@ -272,6 +288,43 @@ func (r *Registry) EnqueueOp(ctx context.Context, defID string, params any, opts
 		priority = *eopts.Priority
 	}
 
+	// Combine def-level and per-enqueue requirements.
+	allReqs := append(def.Requires, eopts.Requires...)
+
+	// Dependency check: evaluate requirements; park if any unmet.
+	status := "queued"
+	var subjectType, subjectID string
+	var reqSnapshotRev uint64
+	var requirementsJSON string
+
+	if len(allReqs) > 0 {
+		// Resolve subject from params (v1: book_id key).
+		sub := subjectFromParams(rawParams)
+		subjectType = sub.Type
+		subjectID = sub.ID
+
+		// Marshal requirements for persistence.
+		if b, err := json.Marshal(allReqs); err == nil {
+			requirementsJSON = string(b)
+		}
+
+		// Evaluate: if subject is empty or requirements unmet, park.
+		satisfied := false
+		if sub.ID != "" {
+			// Snapshot the current dep_rev so wakeup can compare.
+			if rev, err := r.store.GetDepRev(database.OpSubject{Type: sub.Type, ID: sub.ID}); err == nil {
+				reqSnapshotRev = rev
+			}
+			ok, _, err := AllSatisfied(OpsV2DepAdapter{r.store}, allReqs, sub)
+			if err == nil {
+				satisfied = ok
+			}
+		}
+		if !satisfied {
+			status = "waiting_deps"
+		}
+	}
+
 	// Generate ULID.
 	opID := ulid.Make().String()
 
@@ -299,32 +352,63 @@ func (r *Registry) EnqueueOp(ctx context.Context, defID string, params any, opts
 	}
 
 	row := database.OperationV2Row{
-		ID:           opID,
-		DefID:        def.ID,
-		Plugin:       def.Plugin,
-		ParentID:     parentID,
-		ActorUserID:  actorUserID,
-		TraceID:      traceID,
-		SpanID:       spanID,
-		ParentSpanID: parentSpanID,
-		Status:       "queued",
-		Priority:     int(priority),
-		Params:       string(rawParams),
-		QueuedAt:     now,
+		ID:             opID,
+		DefID:          def.ID,
+		Plugin:         def.Plugin,
+		ParentID:       parentID,
+		ActorUserID:    actorUserID,
+		TraceID:        traceID,
+		SpanID:         spanID,
+		ParentSpanID:   parentSpanID,
+		Status:         status,
+		Priority:       int(priority),
+		Params:         string(rawParams),
+		QueuedAt:       now,
+		SubjectType:    subjectType,
+		SubjectID:      subjectID,
+		Requirements:   requirementsJSON,
+		ReqSnapshotRev: reqSnapshotRev,
 	}
 
 	if err := r.store.InsertOperationV2(row); err != nil {
 		return "", fmt.Errorf("registry: insert operation_v2: %w", err)
 	}
 
-	r.logger.Info("registry: enqueued op", "op_id", opID, "def_id", defID, "priority", priority)
+	if status == "waiting_deps" {
+		r.logger.Info("registry: parked op (waiting_deps)", "op_id", opID, "def_id", defID,
+			"subject_type", subjectType, "subject_id", subjectID)
+	} else {
+		r.logger.Info("registry: enqueued op", "op_id", opID, "def_id", defID, "priority", priority)
+	}
 
 	r.publishOpCreated(row, false)
 
-	// Signal the dispatcher.
-	r.pingDispatch()
+	// Signal the dispatcher only for queued ops (waiting_deps are not dispatchable).
+	if status == "queued" {
+		r.pingDispatch()
+	}
 
 	return opID, nil
+}
+
+// subjectFromParams extracts a Subject from a serialized params JSON blob.
+// v1 convention: params["book_id"] → Subject{Type:"book", ID:<value>}.
+// Returns a zero Subject when params don't contain a recognized subject key.
+func subjectFromParams(params json.RawMessage) Subject {
+	if len(params) == 0 {
+		return Subject{}
+	}
+	var p map[string]json.RawMessage
+	if err := json.Unmarshal(params, &p); err != nil {
+		return Subject{}
+	}
+	if raw, ok := p["book_id"]; ok {
+		var id string
+		if err := json.Unmarshal(raw, &id); err == nil && id != "" {
+			return Subject{Type: "book", ID: id}
+		}
+	}
+	return Subject{}
 }
 
 // publishOpCreated fans out an op.created SSE event so the UI's operations
