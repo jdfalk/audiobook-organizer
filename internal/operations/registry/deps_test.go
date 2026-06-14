@@ -1,7 +1,7 @@
 // file: internal/operations/registry/deps_test.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: e1f2a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b
-// last-edited: 2026-06-13
+// last-edited: 2026-06-14
 
 package registry
 
@@ -477,3 +477,74 @@ var _ DepStore = (*fakeDepStore)(nil)
 
 // Compile-time guard: Satisfied, AllSatisfied, CheckRequirementCycle must exist.
 var _ = fmt.Sprintf // suppress unused import if guards are removed
+
+// TestSubjectsFromParams verifies I2: subjectsFromParams handles both the v1
+// single-subject shape {"book_id":"..."} and the batched
+// {"subjects":[{"type":"book","id":"..."},...]} shape that batchFire writes
+// into params.  worker.go iterates subjectsFromParams to fire one
+// notifyDepCompletion per subject after a batch op completes.
+func TestSubjectsFromParams(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		input string
+		want  []Subject
+	}{
+		{
+			name:  "empty",
+			input: `{}`,
+			want:  nil,
+		},
+		{
+			name:  "nil params",
+			input: ``,
+			want:  nil,
+		},
+		{
+			name:  "v1 single book_id",
+			input: `{"book_id":"book-42"}`,
+			want:  []Subject{{Type: "book", ID: "book-42"}},
+		},
+		{
+			name:  "batched subjects two entries",
+			input: `{"subjects":[{"type":"book","id":"book-a"},{"type":"book","id":"book-b"}]}`,
+			want: []Subject{
+				{Type: "book", ID: "book-a"},
+				{Type: "book", ID: "book-b"},
+			},
+		},
+		{
+			name:  "batched subjects skips empty IDs",
+			input: `{"subjects":[{"type":"book","id":""},{"type":"book","id":"book-c"}]}`,
+			want:  []Subject{{Type: "book", ID: "book-c"}},
+		},
+		{
+			name:  "batched subjects empty list",
+			input: `{"subjects":[]}`,
+			want:  []Subject{},
+		},
+		{
+			name:  "uppercase json keys (legacy serialisation)",
+			input: `{"Type":"book","ID":"book-99"}`,
+			// Neither key matches — returns nil.
+			want: nil,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := subjectsFromParams([]byte(tc.input))
+			if len(got) != len(tc.want) {
+				t.Fatalf("len mismatch: got %d %+v, want %d %+v", len(got), got, len(tc.want), tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("entry[%d]: got %+v, want %+v", i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+}

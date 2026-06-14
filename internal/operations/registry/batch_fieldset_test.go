@@ -1,5 +1,5 @@
 // file: internal/operations/registry/batch_fieldset_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
 // last-edited: 2026-06-14
 
@@ -16,9 +16,10 @@
 // a real *database.Book. Subjects whose book has book_sig_v1 set are
 // dispatched; subjects whose book has book_sig_v1 nil/empty stay bucketed.
 //
-// This file ALSO verifies I2: when the dispatched batched op completes, the
-// dep scheduler receives one notifyDepCompletion call per subject in the
-// batch (not zero, as the old subjectFromParams path produced).
+// Note: I2 (per-subject dep-completion notifications for batched ops) is
+// covered by the unit tests for subjectsFromParams in deps_test.go, which
+// verify both the v1 single-subject shape and the batched {"subjects":[...]}
+// shape that worker.go iterates over after a batch op completes.
 
 package registry_test
 
