@@ -1,5 +1,7 @@
 // file: internal/operations/registry/register.go
-// version: 1.0.0
+// version: 1.1.0
+// guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
+// last-edited: 2026-06-14
 
 package registry
 
@@ -30,6 +32,21 @@ func (w *RegistryWrapper) Stop(ctx context.Context) error {
 	return w.Registry.Shutdown(ctx)
 }
 
+// prodSchedulerStore wraps database.Store and adds the BookFiles method
+// required by SchedulerStore (which embeds DepStore). BookFiles returns nil
+// so AllFiles requirements are treated as unmet — a conservative stance that
+// matches OpsV2DepAdapter. The dedup.check-book op only uses ReqFieldSet
+// (not AllFiles), so this is correct, not a stub to remove later.
+type prodSchedulerStore struct {
+	database.Store
+}
+
+// BookFiles satisfies DepStore.BookFiles. Returns nil so AllFiles requirements
+// are treated as unmet when no per-file source is wired.
+func (p *prodSchedulerStore) BookFiles(_ string) ([]string, error) {
+	return nil, nil
+}
+
 func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:   "ophub",
@@ -45,9 +62,22 @@ func init() {
 		Needs:  []string{"store", "ophub"},
 		Groups: []string{"scheduler"},
 		Build: func(c *serviceregistry.Container) (any, error) {
-			store := serviceregistry.Get[database.OpsV2Store](c, "store")
+			// Resolve the wide database.Store so we get GetBookByID and all
+			// OpsV2Store methods from the same concrete *PebbleStore instance.
+			store := serviceregistry.Get[database.Store](c, "store")
 			hub := serviceregistry.Get[*EventHub](c, "ophub")
 			reg := New(store, slog.Default(), 8, hub)
+
+			// Wire the book store for dep evaluation (ReqFieldSet).
+			// prodSchedulerStore wraps database.Store and adds BookFiles (nil shim).
+			schedStore := &prodSchedulerStore{Store: store}
+			reg.SetDepBookStore(schedStore)
+
+			// Wire the DepsScheduler so waiting_deps ops are re-evaluated after
+			// op completions and on the periodic sweep tick.
+			sched := NewDepsScheduler(reg, schedStore)
+			reg.SetDepsScheduler(sched)
+
 			return &RegistryWrapper{Registry: reg}, nil
 		},
 	})

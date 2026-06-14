@@ -244,7 +244,7 @@ func (r *Registry) batchFire(opType string, capturedGen uint64) {
 	} else {
 		for _, sub := range snapshot {
 			regSub := Subject{Type: sub.Type, ID: sub.ID}
-			ok, reason, err := AllSatisfied(OpsV2DepAdapter{r.store}, def.Requires, regSub)
+			ok, reason, err := AllSatisfied(r.combinedDepStore(), def.Requires, regSub)
 			if err != nil {
 				r.logger.Warn("batch: fire: AllSatisfied error; keeping subject bucketed",
 					"op_type", opType, "subject_type", sub.Type, "subject_id", sub.ID, "error", err)

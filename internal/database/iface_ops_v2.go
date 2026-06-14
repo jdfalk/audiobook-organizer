@@ -1,7 +1,7 @@
 // file: internal/database/iface_ops_v2.go
-// version: 2.5.0
+// version: 2.6.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-06-13
+// last-edited: 2026-06-14
 
 package database
 
@@ -12,8 +12,8 @@ import "time"
 // Subject value; the registry converts Subject→OpSubject at its boundary so the
 // database package never imports registry.
 type OpSubject struct {
-	Type string // e.g. "book", "library"
-	ID   string // subject's opaque identifier
+	Type string `json:"type"` // e.g. "book", "library"
+	ID   string `json:"id"`   // subject's opaque identifier
 }
 
 // OpDefinitionV2Row is the DB representation of a registered OperationDef.

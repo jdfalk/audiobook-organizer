@@ -1,7 +1,7 @@
 // file: internal/operations/registry/registry.go
-// version: 3.0.0
+// version: 3.1.0
 // guid: f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c
-// last-edited: 2026-06-13
+// last-edited: 2026-06-14
 
 package registry
 
@@ -49,6 +49,11 @@ type Registry struct {
 	// Set via SetDepsScheduler before Start(). Nil is safe: worker hooks
 	// check for nil before notifying.
 	depsScheduler *DepsScheduler
+
+	// depBookStore provides GetBookByID and BookFiles for dep evaluation.
+	// Set via SetDepBookStore before Start(). Nil is safe: combinedDepStore()
+	// falls back to OpsV2DepAdapter (conservative: field_set always unmet).
+	depBookStore DepBookStore
 
 	// batch manages the M3 per-op-type debounce buckets for Batchable ops.
 	batch *batchManager
@@ -127,6 +132,70 @@ func (r *Registry) SetDepsScheduler(s *DepsScheduler) {
 	r.mu.Lock()
 	r.depsScheduler = s
 	r.mu.Unlock()
+}
+
+// DepBookStore is the narrow interface the dep evaluator needs to load a book
+// and enumerate its files. It is satisfied by *database.PebbleStore in
+// production (via a thin shim that maps GetBookFiles→BookFiles) and by any
+// fake in tests.
+//
+// Separation from database.Store is intentional: keeping this interface small
+// prevents the registry package from pulling in the full 50-method Store.
+type DepBookStore interface {
+	GetBookByID(id string) (*database.Book, error)
+	// BookFiles returns the file IDs belonging to bookID.
+	// May return nil, nil when file enumeration is not available;
+	// the evaluator treats an empty list as "unmet" for AllFiles requirements.
+	BookFiles(bookID string) ([]string, error)
+}
+
+// SetDepBookStore wires the book source used by the dep evaluator for
+// ReqFieldSet and AllFiles checks. Must be called BEFORE Start().
+// When nil (default), the evaluator falls back to the conservative
+// OpsV2DepAdapter (GetBookByID always returns nil → field unmet).
+func (r *Registry) SetDepBookStore(bs DepBookStore) {
+	r.mu.Lock()
+	r.depBookStore = bs
+	r.mu.Unlock()
+}
+
+// combinedDepStore returns a DepStore that delegates OpsV2 methods to r.store
+// and book-lookup methods to r.depBookStore. When depBookStore is nil it
+// returns OpsV2DepAdapter{r.store}, preserving the original conservative
+// behaviour (all field_set requirements unmet).
+//
+// Called from batchFire and EnqueueOp — both run under r.mu, but since we
+// only need a snapshot of the pointer, we access it without locking here.
+// Setting depBookStore is safe because it happens once at startup before
+// Start() is called.
+func (r *Registry) combinedDepStore() DepStore {
+	if r.depBookStore == nil {
+		return OpsV2DepAdapter{r.store}
+	}
+	return &combinedDepStoreImpl{ops: r.store, books: r.depBookStore}
+}
+
+// combinedDepStoreImpl implements DepStore by delegating OpsV2 calls to ops
+// and book lookups to books.
+type combinedDepStoreImpl struct {
+	ops   database.OpsV2Store
+	books DepBookStore
+}
+
+func (c *combinedDepStoreImpl) GetDepRev(sub database.OpSubject) (uint64, error) {
+	return c.ops.GetDepRev(sub)
+}
+func (c *combinedDepStoreImpl) GetOpCompletion(sub database.OpSubject, opType string) (uint64, bool, error) {
+	return c.ops.GetOpCompletion(sub, opType)
+}
+func (c *combinedDepStoreImpl) ListFileCompletions(sub database.OpSubject, opType string) (map[string]uint64, error) {
+	return c.ops.ListFileCompletions(sub, opType)
+}
+func (c *combinedDepStoreImpl) BookFiles(bookID string) ([]string, error) {
+	return c.books.BookFiles(bookID)
+}
+func (c *combinedDepStoreImpl) GetBookByID(id string) (*database.Book, error) {
+	return c.books.GetBookByID(id)
 }
 
 // notifyDepCompletion notifies the scheduler (if wired) that opID completed for
@@ -450,7 +519,7 @@ func (r *Registry) EnqueueOp(ctx context.Context, defID string, params any, opts
 			if rev, err := r.store.GetDepRev(database.OpSubject{Type: sub.Type, ID: sub.ID}); err == nil {
 				reqSnapshotRev = rev
 			}
-			ok, _, err := AllSatisfied(OpsV2DepAdapter{r.store}, allReqs, sub)
+			ok, _, err := AllSatisfied(r.combinedDepStore(), allReqs, sub)
 			if err == nil {
 				satisfied = ok
 			}
@@ -544,6 +613,46 @@ func subjectFromParams(params json.RawMessage) Subject {
 		}
 	}
 	return Subject{}
+}
+
+// subjectsFromParams extracts all subjects from a serialized params JSON blob,
+// handling both the v1 single-subject shape and the batched-op shape.
+//
+//   - v1 (single): params["book_id"] → one Subject{Type:"book", ID:<value>}
+//   - batched:     params["subjects"] → []Subject decoded from OpSubject json tags
+//
+// Returns nil (empty slice) when params contain no recognized subject keys.
+func subjectsFromParams(params json.RawMessage) []Subject {
+	if len(params) == 0 {
+		return nil
+	}
+	var p map[string]json.RawMessage
+	if err := json.Unmarshal(params, &p); err != nil {
+		return nil
+	}
+
+	// Batched shape: {"subjects":[{"type":"book","id":"..."},...]}
+	if raw, ok := p["subjects"]; ok {
+		var dbSubs []database.OpSubject
+		if err := json.Unmarshal(raw, &dbSubs); err == nil {
+			out := make([]Subject, 0, len(dbSubs))
+			for _, s := range dbSubs {
+				if s.ID != "" {
+					out = append(out, Subject{Type: s.Type, ID: s.ID})
+				}
+			}
+			return out
+		}
+	}
+
+	// v1 single-subject shape: {"book_id":"..."}
+	if raw, ok := p["book_id"]; ok {
+		var id string
+		if err := json.Unmarshal(raw, &id); err == nil && id != "" {
+			return []Subject{{Type: "book", ID: id}}
+		}
+	}
+	return nil
 }
 
 // publishOpCreated fans out an op.created SSE event so the UI's operations
