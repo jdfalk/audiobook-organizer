@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.79.0 -->
+<!-- version: 8.80.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-06-13 -->
 
@@ -592,6 +592,16 @@ must sequence, but A and B are parallelizable. Spawn:
 ---
 
 ## 🐛 Open Bugs — May 17, 2026
+
+- [ ] **CI-FRONTEND-UNITTESTS-STALE** (2026-06-13) — `Minimal CI / Frontend Unit Tests`
+  is failing on `web/src/components/dedup/__tests__/UnifiedDedupTab.test.tsx`: 2 tests
+  (`renders candidates in the table`, `shows bulk action bar when a candidate is selected`)
+  assert a raw ULID `01ABCDEFGHIJKLMNOPQRSTUV01` appears in the table, but the reworked
+  `UnifiedDedupTab` now renders acoustic-style rich cards (title/author/path + metadata
+  chips), not bare ULIDs. The tests are stale vs the cards/filter rework — update them to
+  match the new rendering (query by the card title/path, not the ULID). Also clean up the
+  `getSystemStorage` mock-export warning in the same suite if it surfaces. Failing on every
+  PR (it's a pre-existing red on main, not caused by any one PR).
 
 - [x] **BUG-ITUNES-WRITEBACK-CORRUPTS-LIBRARY** — Fixed in PR #1319 (2026-06-05). See PD-2.
 
