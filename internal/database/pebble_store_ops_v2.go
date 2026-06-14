@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store_ops_v2.go
-// version: 3.1.0
+// version: 3.1.1
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 // last-edited: 2026-06-13
 
@@ -558,15 +558,20 @@ func (p *PebbleStore) RecordOpCompletion(sub OpSubject, opType, fileID string, d
 
 // GetOpCompletion retrieves the stored depRev for a book-level completion record.
 // Returns (rev, true, nil) when found, (0, false, nil) when absent.
+// Uses a direct key-existence check (not the zero-value sentinel from pebbleGetJSON)
+// so that rev=0 completions (recorded before any BumpDepRev) are correctly found.
 func (p *PebbleStore) GetOpCompletion(sub OpSubject, opType string) (uint64, bool, error) {
-	var v opDepRevValue
-	if err := p.pebbleGetJSON(completionKey(sub, opType, ""), &v); err != nil {
+	val, closer, err := p.db.Get(completionKey(sub, opType, ""))
+	if errors.Is(err, pebble.ErrNotFound) {
+		return 0, false, nil
+	}
+	if err != nil {
 		return 0, false, err
 	}
-	if v.Rev == 0 {
-		// pebbleGetJSON returns a zero-value struct when key not found.
-		// A rev of 0 is never written (BumpDepRev starts at 1), so zero means absent.
-		return 0, false, nil
+	defer closer.Close()
+	var v opDepRevValue
+	if err := json.Unmarshal(val, &v); err != nil {
+		return 0, false, err
 	}
 	return v.Rev, true, nil
 }
