@@ -1,7 +1,7 @@
 // file: internal/operations/registry/types.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
-// last-edited: 2026-05-06
+// last-edited: 2026-06-13
 
 // Package registry provides the UOS-02 in-memory OperationDef registry,
 // dispatcher, and in-process worker pool. See the spec at
@@ -72,6 +72,13 @@ type OperationDef struct {
 
 	// Dependencies. Optional.
 	DependsOn []string // op def IDs that must NOT be running for this op to start
+
+	// Requires are standing prerequisites evaluated before every enqueue of this op.
+	// Unlike DependsOn (which means "must NOT run concurrently"), Requires means
+	// "these must be SATISFIED first". Op-completed requirements only in M1;
+	// field-set (M2) extends the same machinery. An op without Requires behaves
+	// exactly as today — no new branches are entered.
+	Requires []Requirement
 
 	// Phases. Optional, for fine-grained resume.
 	Phases []Phase // if set, registry tracks phase progress for resume
@@ -162,6 +169,35 @@ type Phase struct {
 	Name string
 }
 
+// Subject identifies the entity a requirement/completion is about.
+// v1 subjects are book-scoped; "file" is reserved for a later milestone.
+type Subject struct {
+	Type string // "book" (v1); "file" reserved
+	ID   string
+}
+
+// RequirementKind is the discriminator for a Requirement.
+type RequirementKind string
+
+const (
+	// ReqOpCompleted requires that op-type X has completed for the subject
+	// at the current dep_rev (i.e. since the subject last changed).
+	ReqOpCompleted RequirementKind = "op_completed"
+	// ReqFieldSet requires that a named field on the subject is non-empty.
+	// Defined now for type stability; evaluated starting in M2.
+	ReqFieldSet RequirementKind = "field_set"
+)
+
+// Requirement is a single prerequisite/condition for an op to become runnable.
+// The Kind field selects which remaining fields are meaningful.
+type Requirement struct {
+	Kind        RequirementKind `json:"kind"`
+	OpType      string          `json:"op_type,omitempty"`      // ReqOpCompleted: required op def ID
+	Field       string          `json:"field,omitempty"`        // ReqFieldSet: subject field (M2)
+	SubjectType string          `json:"subject_type,omitempty"` // override; defaults to the dependent's own subject type
+	AllFiles    bool            `json:"all_files,omitempty"`    // ReqOpCompleted + book subject: require completion for ALL files of the book
+}
+
 // EnqueueOption is the function-option pattern for EnqueueOp.
 type EnqueueOption func(*EnqueueOptions)
 
@@ -173,6 +209,7 @@ type EnqueueOptions struct {
 	SpanID       string
 	ParentSpanID string
 	Priority     *Priority
+	Requires     []Requirement // per-enqueue requirements added on top of the def's Requires
 }
 
 // WithParent sets the parent run ID for trigger lineage.
@@ -188,4 +225,11 @@ func WithActor(userID string) EnqueueOption {
 // WithPriority overrides the OperationDef's DefaultPriority for this run.
 func WithPriority(p Priority) EnqueueOption {
 	return func(o *EnqueueOptions) { o.Priority = &p }
+}
+
+// WithRequires adds per-enqueue requirements on top of the def's Requires.
+// These are evaluated together with OperationDef.Requires before the op is
+// admitted to the queue.
+func WithRequires(reqs ...Requirement) EnqueueOption {
+	return func(o *EnqueueOptions) { o.Requires = append(o.Requires, reqs...) }
 }
