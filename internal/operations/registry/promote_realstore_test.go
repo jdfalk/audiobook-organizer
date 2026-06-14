@@ -1,5 +1,5 @@
 // file: internal/operations/registry/promote_realstore_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b5c6d7e8-f9a0-1b2c-3d4e-5f6a7b8c9d0e
 // last-edited: 2026-06-13
 

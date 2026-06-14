@@ -1,19 +1,21 @@
 // file: internal/operations/registry/deps.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: f2a3b4c5-d6e7-8f9a-0b1c-2d3e4f5a6b7c
 // last-edited: 2026-06-13
 
-// deps.go implements the UOS M1 requirement evaluator, AllSatisfied aggregator,
+// deps.go implements the UOS M1/M2 requirement evaluator, AllSatisfied aggregator,
 // and cycle-detection guard for OperationDef.Requires graphs.
 //
 // Design constraints:
 //   - Pure evaluator: no I/O side-effects, no goroutines, no locks.
-//   - DepStore is a narrow interface (4 methods) so the evaluator is testable
+//   - DepStore is a narrow interface (5 methods) so the evaluator is testable
 //     with a fake without importing PebbleDB.
 //   - database.OpSubject is the persisted shape; registry.Subject is the
 //     in-process shape. Conversion happens at the call boundary in this file.
-//   - ReqFieldSet always returns (false, "not implemented in M1", nil).
-//     No error — callers can distinguish "not satisfied" from "broken".
+//   - ReqFieldSet (M2): load the subject book via GetBookByID and check one of
+//     the allow-listed fields is non-empty. Unknown field names return an error
+//     so typos in a Requirement are caught immediately rather than silently
+//     evaluating to false.
 
 package registry
 
@@ -45,12 +47,21 @@ type DepStore interface {
 	// available (e.g. early-startup or M1 enqueue path) — the evaluator
 	// treats an empty list as "no files known → unmet".
 	BookFiles(bookID string) ([]string, error)
+
+	// GetBookByID returns the book with the given ID, or (nil, nil) when no
+	// such book exists. Used by ReqFieldSet evaluation (M2).
+	GetBookByID(id string) (*database.Book, error)
 }
 
 // OpsV2DepAdapter wraps a database.OpsV2Store to satisfy DepStore.
 // BookFiles always returns nil (no file enumeration in the OpsV2Store
 // interface). Use this adapter for the enqueue parking path where AllFiles
 // evaluation is not needed; wire a real BookFiles provider for Task 5+.
+//
+// GetBookByID always returns (nil, nil): ReqFieldSet requirements evaluated
+// through this adapter are treated as unmet (conservative). The periodic sweep
+// via DepsScheduler.SweepTick uses a SchedulerStore that includes a real book
+// source, so field_set conditions are eventually satisfied.
 type OpsV2DepAdapter struct {
 	database.OpsV2Store
 }
@@ -59,6 +70,62 @@ type OpsV2DepAdapter struct {
 // treated as unmet (conservative) when no file source is wired.
 func (a OpsV2DepAdapter) BookFiles(_ string) ([]string, error) {
 	return nil, nil
+}
+
+// GetBookByID satisfies DepStore. Returns (nil, nil) so ReqFieldSet
+// requirements are treated as unmet (conservative) at enqueue time when no
+// book source is wired. The sweep re-evaluates once the book is available.
+func (a OpsV2DepAdapter) GetBookByID(_ string) (*database.Book, error) {
+	return nil, nil
+}
+
+// bookFieldPredicate is a function that extracts a string value from a Book
+// for a named field. Returns ("", false) when the field is absent or empty.
+type bookFieldPredicate func(*database.Book) (string, bool)
+
+// allowedBookFields maps the allow-listed field names for ReqFieldSet to
+// accessor predicates over *database.Book. A field is "set" when the accessor
+// returns a non-empty string.
+//
+// Allow-listed fields (all *string on database.Book):
+//   - book_sig_v1         — unified per-book audio signature (base64)
+//   - metadata_source_hash — sha256 of provider+canonical_id (O(1) dedup key)
+//   - asin                — Audible ASIN
+//   - isbn13              — ISBN-13
+//
+// Note: "acoustid_fingerprint" is NOT listed because AcoustIDFingerprint is a
+// []byte field on *database.BookFile (per-file), not on *database.Book.
+// Fingerprint readiness should be expressed as:
+//
+//	Requirement{Kind: ReqOpCompleted, OpType: "acoustid.fingerprint-extract", AllFiles: true}
+//
+// (See spec M4 example.) Adding a Book-level proxy here would be wrong;
+// use the AllFiles completion requirement instead.
+var allowedBookFields = map[string]bookFieldPredicate{
+	"book_sig_v1": func(b *database.Book) (string, bool) {
+		if b.BookSigV1 == nil || *b.BookSigV1 == "" {
+			return "", false
+		}
+		return *b.BookSigV1, true
+	},
+	"metadata_source_hash": func(b *database.Book) (string, bool) {
+		if b.MetadataSourceHash == nil || *b.MetadataSourceHash == "" {
+			return "", false
+		}
+		return *b.MetadataSourceHash, true
+	},
+	"asin": func(b *database.Book) (string, bool) {
+		if b.ASIN == nil || *b.ASIN == "" {
+			return "", false
+		}
+		return *b.ASIN, true
+	},
+	"isbn13": func(b *database.Book) (string, bool) {
+		if b.ISBN13 == nil || *b.ISBN13 == "" {
+			return "", false
+		}
+		return *b.ISBN13, true
+	},
 }
 
 // subjectToOpSubject converts the registry's Subject to the database wire type.
@@ -77,12 +144,36 @@ func Satisfied(store DepStore, req Requirement, sub Subject) (bool, string, erro
 	case ReqOpCompleted:
 		return evalOpCompleted(store, req, sub)
 	case ReqFieldSet:
-		// M1 stub: field_set requirements are defined in the type system but
-		// not yet evaluated. Return false with a clear reason, no error.
-		return false, fmt.Sprintf("field_set requirement on %q not implemented in M1", req.Field), nil
+		return evalFieldSet(store, req, sub)
 	default:
 		return false, fmt.Sprintf("unknown requirement kind %q", req.Kind), nil
 	}
+}
+
+// evalFieldSet evaluates a ReqFieldSet requirement.
+// It loads the subject book and checks whether the named field is non-empty.
+// An unknown field name returns an error (typo guard). A missing book
+// (GetBookByID returns nil, nil) is treated as unmet with a clear reason.
+func evalFieldSet(store DepStore, req Requirement, sub Subject) (bool, string, error) {
+	pred, ok := allowedBookFields[req.Field]
+	if !ok {
+		return false, "", fmt.Errorf("field_set: unknown field %q (not in allow-list)", req.Field)
+	}
+
+	book, err := store.GetBookByID(sub.ID)
+	if err != nil {
+		return false, "", fmt.Errorf("field_set: GetBookByID(%q): %w", sub.ID, err)
+	}
+	if book == nil {
+		return false, fmt.Sprintf("field_set: book %q not found for subject %s/%s", sub.ID, sub.Type, sub.ID), nil
+	}
+
+	val, set := pred(book)
+	_ = val // value itself is not used; only presence matters
+	if !set {
+		return false, fmt.Sprintf("field_set: field %q is empty on book %q", req.Field, sub.ID), nil
+	}
+	return true, "", nil
 }
 
 // AllSatisfied evaluates every requirement in reqs. Returns true only when all
