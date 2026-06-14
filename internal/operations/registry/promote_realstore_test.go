@@ -66,10 +66,13 @@ func (p *pebbleSchedulerStore) BookFiles(_ string) ([]string, error) {
 //     does NOT do).
 //
 // Without PromoteToQueued (old promote() using UpdateOperationV2Status):
-//   B's row status is "queued" but ListQueuedOperationsV2() returns empty →
-//   the dispatcher never sees B → test FAILS.
+//
+//	B's row status is "queued" but ListQueuedOperationsV2() returns empty →
+//	the dispatcher never sees B → test FAILS.
+//
 // With PromoteToQueued:
-//   Both the row and the queue-index key are written atomically → test PASSES.
+//
+//	Both the row and the queue-index key are written atomically → test PASSES.
 func TestPromoteToQueued_RealStore(t *testing.T) {
 	store, cleanup := openTestPebbleStore(t)
 	defer cleanup()
