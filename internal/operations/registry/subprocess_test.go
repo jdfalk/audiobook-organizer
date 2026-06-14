@@ -1,7 +1,7 @@
 // file: internal/operations/registry/subprocess_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f90
-// last-edited: 2026-05-06
+// last-edited: 2026-06-13
 
 package registry_test
 
@@ -283,4 +283,57 @@ func writeStubChildResult(conn net.Conn, errMsg string) {
 	b, _ := json.Marshal(res)
 	b = append(b, '\n')
 	_, _ = conn.Write(b)
+}
+
+// TestSubprocess_HandshakeSuccessRoundtrip verifies the parent/child handshake
+// and successful result roundtrip over the unix socket when the child re-execs
+// the binary, including params validation.
+func TestSubprocess_HandshakeSuccessRoundtrip(t *testing.T) {
+	const (
+		defID         = "test.subprocess-success"
+		paramsPayload = `{"handshake":"success"}`
+	)
+
+	prev := registry.ChildEnvFunc
+	registry.ChildEnvFunc = func() []string {
+		return []string{
+			testChildEnvVar + "=1",
+			testChildExpectDefVar + "=" + defID,
+			testChildExpectParamsVar + "=" + paramsPayload,
+		}
+	}
+	t.Cleanup(func() { registry.ChildEnvFunc = prev })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	store := newFakeStore()
+	r := registry.New(store, slog.Default(), 1, nil)
+
+	def := makeValidDef(defID)
+	def.Isolate = true
+	def.Run = func(_ context.Context, _ json.RawMessage, _ registry.Reporter) error {
+		t.Error("def.Run should not be called in-process for Isolate=true op")
+		return nil
+	}
+	if err := r.RegisterOp(def); err != nil {
+		t.Fatalf("RegisterOp: %v", err)
+	}
+	r.Start(ctx)
+
+	params := json.RawMessage(paramsPayload)
+	opID, err := r.EnqueueOp(ctx, defID, params)
+	if err != nil {
+		t.Fatalf("EnqueueOp: %v", err)
+	}
+
+	awaitStatus(t, store, opID, "completed", 15*time.Second)
+
+	row, _ := store.GetOperationV2(opID)
+	if row == nil {
+		t.Fatal("op row not found")
+	}
+	if row.ErrorMessage != nil {
+		t.Fatalf("expected no error_message for successful subprocess; got %v", *row.ErrorMessage)
+	}
 }
