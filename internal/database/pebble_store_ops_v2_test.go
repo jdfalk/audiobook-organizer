@@ -1,0 +1,175 @@
+// file: internal/database/pebble_store_ops_v2_test.go
+// version: 1.1.0
+// guid: d7e8f9a0-b1c2-4d3e-5f6a-7b8c9d0e1f2a
+// last-edited: 2026-06-13
+
+package database
+
+import (
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+)
+
+// buildTestOpRow constructs a minimal OperationV2Row with the given id and status.
+// All other fields are set to non-zero defaults so InsertOperationV2 succeeds.
+func buildTestOpRow(id, status string) OperationV2Row {
+	return OperationV2Row{
+		ID:       id,
+		DefID:    "test-def",
+		Plugin:   "test-plugin",
+		Status:   status,
+		Priority: 5,
+		QueuedAt: time.Now().UTC(),
+	}
+}
+
+// TestOpCompletionAndDepRev_RoundTrip verifies the dep_rev bump, completion
+// record, and staleness semantics added in Task 2.
+func TestOpCompletionAndDepRev_RoundTrip(t *testing.T) {
+	store, cleanup := setupPebbleTestDB(t)
+	defer cleanup()
+	s := store.(OpsV2Store)
+
+	sub := OpSubject{Type: "book", ID: "b1"}
+
+	// dep_rev starts at 0; bump → 1.
+	got, err := s.GetDepRev(sub)
+	require.NoError(t, err)
+	if got != 0 {
+		t.Fatalf("expected dep_rev=0 initially, got %d", got)
+	}
+
+	newRev, err := s.BumpDepRev(sub)
+	require.NoError(t, err)
+	if newRev != 1 {
+		t.Fatalf("expected bump result=1, got %d", newRev)
+	}
+
+	got, err = s.GetDepRev(sub)
+	require.NoError(t, err)
+	if got != 1 {
+		t.Fatalf("expected dep_rev=1 after bump, got %d", got)
+	}
+
+	// Record a book-level completion at rev 1.
+	err = s.RecordOpCompletion(sub, "acoustid.fingerprint-extract", "", 1)
+	require.NoError(t, err)
+
+	// GetOpCompletion should return (rev=1, ok=true).
+	rev, ok, err := s.GetOpCompletion(sub, "acoustid.fingerprint-extract")
+	require.NoError(t, err)
+	if !ok {
+		t.Fatal("expected ok=true after recording completion")
+	}
+	if rev != 1 {
+		t.Fatalf("expected completion rev=1, got %d", rev)
+	}
+
+	// Bump again → current rev becomes 2; the completion at rev 1 is now stale.
+	// The evaluator (Task 3) handles staleness; here we just assert stored values.
+	_, err = s.BumpDepRev(sub)
+	require.NoError(t, err)
+
+	cur, err := s.GetDepRev(sub)
+	require.NoError(t, err)
+	if cur != 2 {
+		t.Fatalf("expected dep_rev=2 after second bump, got %d", cur)
+	}
+
+	// Completion record itself is unchanged (still rev 1).
+	rev, ok, err = s.GetOpCompletion(sub, "acoustid.fingerprint-extract")
+	require.NoError(t, err)
+	if !ok {
+		t.Fatal("expected ok=true — completion record survives dep_rev bump")
+	}
+	if rev != 1 {
+		t.Fatalf("expected stored rev still=1 (staleness is evaluator concern), got %d", rev)
+	}
+}
+
+// TestFileCompletions_RoundTrip verifies per-file completion storage and listing.
+func TestFileCompletions_RoundTrip(t *testing.T) {
+	store, cleanup := setupPebbleTestDB(t)
+	defer cleanup()
+	s := store.(OpsV2Store)
+
+	sub := OpSubject{Type: "book", ID: "b2"}
+
+	// Bump dep_rev once so we can record completions at rev 1.
+	_, err := s.BumpDepRev(sub)
+	require.NoError(t, err)
+
+	// Record file-level completions for two files.
+	err = s.RecordOpCompletion(sub, "fp.extract", "file1", 1)
+	require.NoError(t, err)
+	err = s.RecordOpCompletion(sub, "fp.extract", "file2", 1)
+	require.NoError(t, err)
+
+	// ListFileCompletions should return both.
+	filemap, err := s.ListFileCompletions(sub, "fp.extract")
+	require.NoError(t, err)
+	require.Len(t, filemap, 2)
+	require.Equal(t, uint64(1), filemap["file1"])
+	require.Equal(t, uint64(1), filemap["file2"])
+}
+
+// TestWaitingDepsOps_RoundTrip verifies that ListWaitingDepsOps returns ops
+// whose status is "waiting_deps".
+func TestWaitingDepsOps_RoundTrip(t *testing.T) {
+	store, cleanup := setupPebbleTestDB(t)
+	defer cleanup()
+	s := store.(OpsV2Store)
+
+	// Insert a "waiting_deps" row with the new subject/requirements fields.
+	row := buildTestOpRow("op-wd-1", "waiting_deps")
+	row.SubjectType = "book"
+	row.SubjectID = "b3"
+	row.Requirements = `[{"kind":"op_completed","op_type":"fp.extract"}]`
+	row.ReqSnapshotRev = 1
+	err := s.InsertOperationV2(row)
+	require.NoError(t, err)
+
+	// Insert a "queued" row — should NOT appear.
+	err = s.InsertOperationV2(buildTestOpRow("op-q-1", "queued"))
+	require.NoError(t, err)
+
+	// Insert a "completed" row — should NOT appear.
+	err = s.InsertOperationV2(buildTestOpRow("op-done-1", "completed"))
+	require.NoError(t, err)
+
+	waiting, err := s.ListWaitingDepsOps()
+	require.NoError(t, err)
+	require.Len(t, waiting, 1)
+	require.Equal(t, "op-wd-1", waiting[0].ID)
+	require.Equal(t, "waiting_deps", waiting[0].Status)
+	require.Equal(t, "book", waiting[0].SubjectType)
+	require.Equal(t, "b3", waiting[0].SubjectID)
+	require.Equal(t, uint64(1), waiting[0].ReqSnapshotRev)
+}
+
+// TestOperationV2Row_SubjectFields_RoundTrip ensures the new fields survive a
+// write-read cycle on the existing InsertOperationV2 / GetOperationV2 path.
+func TestOperationV2Row_SubjectFields_RoundTrip(t *testing.T) {
+	store, cleanup := setupPebbleTestDB(t)
+	defer cleanup()
+	s := store.(OpsV2Store)
+
+	row := buildTestOpRow("op-subj-1", "queued")
+	row.SubjectType = "book"
+	row.SubjectID = "b4"
+	row.Requirements = `[{"kind":"op_completed","op_type":"scan"}]`
+	row.ReqSnapshotRev = 7
+
+	err := s.InsertOperationV2(row)
+	require.NoError(t, err)
+
+	got, err := s.GetOperationV2("op-subj-1")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, "book", got.SubjectType)
+	require.Equal(t, "b4", got.SubjectID)
+	require.Equal(t, row.Requirements, got.Requirements)
+	require.Equal(t, uint64(7), got.ReqSnapshotRev)
+}

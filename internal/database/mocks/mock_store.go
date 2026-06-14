@@ -22232,6 +22232,375 @@ func (_c *MockOpsV2Store_GetOpLogsV2_Call) RunAndReturn(run func(opID string, li
 	return _c
 }
 
+// GetDepRev provides a mock function for the type MockOpsV2Store
+func (_mock *MockOpsV2Store) GetDepRev(sub database.OpSubject) (uint64, error) {
+	ret := _mock.Called(sub)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetDepRev")
+	}
+
+	var r0 uint64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(database.OpSubject) (uint64, error)); ok {
+		return returnFunc(sub)
+	}
+	if returnFunc, ok := ret.Get(0).(func(database.OpSubject) uint64); ok {
+		r0 = returnFunc(sub)
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(database.OpSubject) error); ok {
+		r1 = returnFunc(sub)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockOpsV2Store_GetDepRev_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDepRev'
+type MockOpsV2Store_GetDepRev_Call struct {
+	*mock.Call
+}
+
+// GetDepRev is a helper method to define mock.On call
+//   - sub database.OpSubject
+func (_e *MockOpsV2Store_Expecter) GetDepRev(sub interface{}) *MockOpsV2Store_GetDepRev_Call {
+	return &MockOpsV2Store_GetDepRev_Call{Call: _e.mock.On("GetDepRev", sub)}
+}
+
+func (_c *MockOpsV2Store_GetDepRev_Call) Run(run func(sub database.OpSubject)) *MockOpsV2Store_GetDepRev_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 database.OpSubject
+		if args[0] != nil {
+			arg0 = args[0].(database.OpSubject)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockOpsV2Store_GetDepRev_Call) Return(u uint64, err error) *MockOpsV2Store_GetDepRev_Call {
+	_c.Call.Return(u, err)
+	return _c
+}
+
+func (_c *MockOpsV2Store_GetDepRev_Call) RunAndReturn(run func(database.OpSubject) (uint64, error)) *MockOpsV2Store_GetDepRev_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// BumpDepRev provides a mock function for the type MockOpsV2Store
+func (_mock *MockOpsV2Store) BumpDepRev(sub database.OpSubject) (uint64, error) {
+	ret := _mock.Called(sub)
+
+	if len(ret) == 0 {
+		panic("no return value specified for BumpDepRev")
+	}
+
+	var r0 uint64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(database.OpSubject) (uint64, error)); ok {
+		return returnFunc(sub)
+	}
+	if returnFunc, ok := ret.Get(0).(func(database.OpSubject) uint64); ok {
+		r0 = returnFunc(sub)
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(database.OpSubject) error); ok {
+		r1 = returnFunc(sub)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockOpsV2Store_BumpDepRev_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'BumpDepRev'
+type MockOpsV2Store_BumpDepRev_Call struct {
+	*mock.Call
+}
+
+// BumpDepRev is a helper method to define mock.On call
+//   - sub database.OpSubject
+func (_e *MockOpsV2Store_Expecter) BumpDepRev(sub interface{}) *MockOpsV2Store_BumpDepRev_Call {
+	return &MockOpsV2Store_BumpDepRev_Call{Call: _e.mock.On("BumpDepRev", sub)}
+}
+
+func (_c *MockOpsV2Store_BumpDepRev_Call) Run(run func(sub database.OpSubject)) *MockOpsV2Store_BumpDepRev_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 database.OpSubject
+		if args[0] != nil {
+			arg0 = args[0].(database.OpSubject)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockOpsV2Store_BumpDepRev_Call) Return(u uint64, err error) *MockOpsV2Store_BumpDepRev_Call {
+	_c.Call.Return(u, err)
+	return _c
+}
+
+func (_c *MockOpsV2Store_BumpDepRev_Call) RunAndReturn(run func(database.OpSubject) (uint64, error)) *MockOpsV2Store_BumpDepRev_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RecordOpCompletion provides a mock function for the type MockOpsV2Store
+func (_mock *MockOpsV2Store) RecordOpCompletion(sub database.OpSubject, opType string, fileID string, depRev uint64) error {
+	ret := _mock.Called(sub, opType, fileID, depRev)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RecordOpCompletion")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(database.OpSubject, string, string, uint64) error); ok {
+		r0 = returnFunc(sub, opType, fileID, depRev)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockOpsV2Store_RecordOpCompletion_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RecordOpCompletion'
+type MockOpsV2Store_RecordOpCompletion_Call struct {
+	*mock.Call
+}
+
+// RecordOpCompletion is a helper method to define mock.On call
+//   - sub database.OpSubject
+//   - opType string
+//   - fileID string
+//   - depRev uint64
+func (_e *MockOpsV2Store_Expecter) RecordOpCompletion(sub interface{}, opType interface{}, fileID interface{}, depRev interface{}) *MockOpsV2Store_RecordOpCompletion_Call {
+	return &MockOpsV2Store_RecordOpCompletion_Call{Call: _e.mock.On("RecordOpCompletion", sub, opType, fileID, depRev)}
+}
+
+func (_c *MockOpsV2Store_RecordOpCompletion_Call) Run(run func(sub database.OpSubject, opType string, fileID string, depRev uint64)) *MockOpsV2Store_RecordOpCompletion_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 database.OpSubject
+		if args[0] != nil {
+			arg0 = args[0].(database.OpSubject)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 uint64
+		if args[3] != nil {
+			arg3 = args[3].(uint64)
+		}
+		run(arg0, arg1, arg2, arg3)
+	})
+	return _c
+}
+
+func (_c *MockOpsV2Store_RecordOpCompletion_Call) Return(err error) *MockOpsV2Store_RecordOpCompletion_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockOpsV2Store_RecordOpCompletion_Call) RunAndReturn(run func(database.OpSubject, string, string, uint64) error) *MockOpsV2Store_RecordOpCompletion_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetOpCompletion provides a mock function for the type MockOpsV2Store
+func (_mock *MockOpsV2Store) GetOpCompletion(sub database.OpSubject, opType string) (uint64, bool, error) {
+	ret := _mock.Called(sub, opType)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetOpCompletion")
+	}
+
+	var r0 uint64
+	var r1 bool
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(database.OpSubject, string) (uint64, bool, error)); ok {
+		return returnFunc(sub, opType)
+	}
+	if returnFunc, ok := ret.Get(0).(func(database.OpSubject, string) uint64); ok {
+		r0 = returnFunc(sub, opType)
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(database.OpSubject, string) bool); ok {
+		r1 = returnFunc(sub, opType)
+	} else {
+		r1 = ret.Get(1).(bool)
+	}
+	if returnFunc, ok := ret.Get(2).(func(database.OpSubject, string) error); ok {
+		r2 = returnFunc(sub, opType)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockOpsV2Store_GetOpCompletion_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetOpCompletion'
+type MockOpsV2Store_GetOpCompletion_Call struct {
+	*mock.Call
+}
+
+// GetOpCompletion is a helper method to define mock.On call
+//   - sub database.OpSubject
+//   - opType string
+func (_e *MockOpsV2Store_Expecter) GetOpCompletion(sub interface{}, opType interface{}) *MockOpsV2Store_GetOpCompletion_Call {
+	return &MockOpsV2Store_GetOpCompletion_Call{Call: _e.mock.On("GetOpCompletion", sub, opType)}
+}
+
+func (_c *MockOpsV2Store_GetOpCompletion_Call) Run(run func(sub database.OpSubject, opType string)) *MockOpsV2Store_GetOpCompletion_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 database.OpSubject
+		if args[0] != nil {
+			arg0 = args[0].(database.OpSubject)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockOpsV2Store_GetOpCompletion_Call) Return(u uint64, b bool, err error) *MockOpsV2Store_GetOpCompletion_Call {
+	_c.Call.Return(u, b, err)
+	return _c
+}
+
+func (_c *MockOpsV2Store_GetOpCompletion_Call) RunAndReturn(run func(database.OpSubject, string) (uint64, bool, error)) *MockOpsV2Store_GetOpCompletion_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListFileCompletions provides a mock function for the type MockOpsV2Store
+func (_mock *MockOpsV2Store) ListFileCompletions(sub database.OpSubject, opType string) (map[string]uint64, error) {
+	ret := _mock.Called(sub, opType)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListFileCompletions")
+	}
+
+	var r0 map[string]uint64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(database.OpSubject, string) (map[string]uint64, error)); ok {
+		return returnFunc(sub, opType)
+	}
+	if returnFunc, ok := ret.Get(0).(func(database.OpSubject, string) map[string]uint64); ok {
+		r0 = returnFunc(sub, opType)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[string]uint64)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(database.OpSubject, string) error); ok {
+		r1 = returnFunc(sub, opType)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockOpsV2Store_ListFileCompletions_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListFileCompletions'
+type MockOpsV2Store_ListFileCompletions_Call struct {
+	*mock.Call
+}
+
+// ListFileCompletions is a helper method to define mock.On call
+//   - sub database.OpSubject
+//   - opType string
+func (_e *MockOpsV2Store_Expecter) ListFileCompletions(sub interface{}, opType interface{}) *MockOpsV2Store_ListFileCompletions_Call {
+	return &MockOpsV2Store_ListFileCompletions_Call{Call: _e.mock.On("ListFileCompletions", sub, opType)}
+}
+
+func (_c *MockOpsV2Store_ListFileCompletions_Call) Run(run func(sub database.OpSubject, opType string)) *MockOpsV2Store_ListFileCompletions_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 database.OpSubject
+		if args[0] != nil {
+			arg0 = args[0].(database.OpSubject)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockOpsV2Store_ListFileCompletions_Call) Return(stringToUint64 map[string]uint64, err error) *MockOpsV2Store_ListFileCompletions_Call {
+	_c.Call.Return(stringToUint64, err)
+	return _c
+}
+
+func (_c *MockOpsV2Store_ListFileCompletions_Call) RunAndReturn(run func(database.OpSubject, string) (map[string]uint64, error)) *MockOpsV2Store_ListFileCompletions_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListWaitingDepsOps provides a mock function for the type MockOpsV2Store
+func (_mock *MockOpsV2Store) ListWaitingDepsOps() ([]database.OperationV2Row, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListWaitingDepsOps")
+	}
+
+	var r0 []database.OperationV2Row
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]database.OperationV2Row, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []database.OperationV2Row); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.OperationV2Row)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockOpsV2Store_ListWaitingDepsOps_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListWaitingDepsOps'
+type MockOpsV2Store_ListWaitingDepsOps_Call struct {
+	*mock.Call
+}
+
+// ListWaitingDepsOps is a helper method to define mock.On call
+func (_e *MockOpsV2Store_Expecter) ListWaitingDepsOps() *MockOpsV2Store_ListWaitingDepsOps_Call {
+	return &MockOpsV2Store_ListWaitingDepsOps_Call{Call: _e.mock.On("ListWaitingDepsOps")}
+}
+
+func (_c *MockOpsV2Store_ListWaitingDepsOps_Call) Run(run func()) *MockOpsV2Store_ListWaitingDepsOps_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockOpsV2Store_ListWaitingDepsOps_Call) Return(operationV2Rows []database.OperationV2Row, err error) *MockOpsV2Store_ListWaitingDepsOps_Call {
+	_c.Call.Return(operationV2Rows, err)
+	return _c
+}
+
+func (_c *MockOpsV2Store_ListWaitingDepsOps_Call) RunAndReturn(run func() ([]database.OperationV2Row, error)) *MockOpsV2Store_ListWaitingDepsOps_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetOpStateV2 provides a mock function for the type MockOpsV2Store
 func (_mock *MockOpsV2Store) GetOpStateV2(opID string) (*database.OpStateV2Row, error) {
 	ret := _mock.Called(opID)
@@ -48843,6 +49212,375 @@ func (_c *MockStore_UpsertOpStateV2_Call) Return(err error) *MockStore_UpsertOpS
 }
 
 func (_c *MockStore_UpsertOpStateV2_Call) RunAndReturn(run func(row database.OpStateV2Row) error) *MockStore_UpsertOpStateV2_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetDepRev provides a mock function for the type MockStore
+func (_mock *MockStore) GetDepRev(sub database.OpSubject) (uint64, error) {
+	ret := _mock.Called(sub)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetDepRev")
+	}
+
+	var r0 uint64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(database.OpSubject) (uint64, error)); ok {
+		return returnFunc(sub)
+	}
+	if returnFunc, ok := ret.Get(0).(func(database.OpSubject) uint64); ok {
+		r0 = returnFunc(sub)
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(database.OpSubject) error); ok {
+		r1 = returnFunc(sub)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetDepRev_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDepRev'
+type MockStore_GetDepRev_Call struct {
+	*mock.Call
+}
+
+// GetDepRev is a helper method to define mock.On call
+//   - sub database.OpSubject
+func (_e *MockStore_Expecter) GetDepRev(sub interface{}) *MockStore_GetDepRev_Call {
+	return &MockStore_GetDepRev_Call{Call: _e.mock.On("GetDepRev", sub)}
+}
+
+func (_c *MockStore_GetDepRev_Call) Run(run func(sub database.OpSubject)) *MockStore_GetDepRev_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 database.OpSubject
+		if args[0] != nil {
+			arg0 = args[0].(database.OpSubject)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetDepRev_Call) Return(u uint64, err error) *MockStore_GetDepRev_Call {
+	_c.Call.Return(u, err)
+	return _c
+}
+
+func (_c *MockStore_GetDepRev_Call) RunAndReturn(run func(database.OpSubject) (uint64, error)) *MockStore_GetDepRev_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// BumpDepRev provides a mock function for the type MockStore
+func (_mock *MockStore) BumpDepRev(sub database.OpSubject) (uint64, error) {
+	ret := _mock.Called(sub)
+
+	if len(ret) == 0 {
+		panic("no return value specified for BumpDepRev")
+	}
+
+	var r0 uint64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(database.OpSubject) (uint64, error)); ok {
+		return returnFunc(sub)
+	}
+	if returnFunc, ok := ret.Get(0).(func(database.OpSubject) uint64); ok {
+		r0 = returnFunc(sub)
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(database.OpSubject) error); ok {
+		r1 = returnFunc(sub)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_BumpDepRev_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'BumpDepRev'
+type MockStore_BumpDepRev_Call struct {
+	*mock.Call
+}
+
+// BumpDepRev is a helper method to define mock.On call
+//   - sub database.OpSubject
+func (_e *MockStore_Expecter) BumpDepRev(sub interface{}) *MockStore_BumpDepRev_Call {
+	return &MockStore_BumpDepRev_Call{Call: _e.mock.On("BumpDepRev", sub)}
+}
+
+func (_c *MockStore_BumpDepRev_Call) Run(run func(sub database.OpSubject)) *MockStore_BumpDepRev_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 database.OpSubject
+		if args[0] != nil {
+			arg0 = args[0].(database.OpSubject)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockStore_BumpDepRev_Call) Return(u uint64, err error) *MockStore_BumpDepRev_Call {
+	_c.Call.Return(u, err)
+	return _c
+}
+
+func (_c *MockStore_BumpDepRev_Call) RunAndReturn(run func(database.OpSubject) (uint64, error)) *MockStore_BumpDepRev_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RecordOpCompletion provides a mock function for the type MockStore
+func (_mock *MockStore) RecordOpCompletion(sub database.OpSubject, opType string, fileID string, depRev uint64) error {
+	ret := _mock.Called(sub, opType, fileID, depRev)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RecordOpCompletion")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(database.OpSubject, string, string, uint64) error); ok {
+		r0 = returnFunc(sub, opType, fileID, depRev)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_RecordOpCompletion_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RecordOpCompletion'
+type MockStore_RecordOpCompletion_Call struct {
+	*mock.Call
+}
+
+// RecordOpCompletion is a helper method to define mock.On call
+//   - sub database.OpSubject
+//   - opType string
+//   - fileID string
+//   - depRev uint64
+func (_e *MockStore_Expecter) RecordOpCompletion(sub interface{}, opType interface{}, fileID interface{}, depRev interface{}) *MockStore_RecordOpCompletion_Call {
+	return &MockStore_RecordOpCompletion_Call{Call: _e.mock.On("RecordOpCompletion", sub, opType, fileID, depRev)}
+}
+
+func (_c *MockStore_RecordOpCompletion_Call) Run(run func(sub database.OpSubject, opType string, fileID string, depRev uint64)) *MockStore_RecordOpCompletion_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 database.OpSubject
+		if args[0] != nil {
+			arg0 = args[0].(database.OpSubject)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 uint64
+		if args[3] != nil {
+			arg3 = args[3].(uint64)
+		}
+		run(arg0, arg1, arg2, arg3)
+	})
+	return _c
+}
+
+func (_c *MockStore_RecordOpCompletion_Call) Return(err error) *MockStore_RecordOpCompletion_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_RecordOpCompletion_Call) RunAndReturn(run func(database.OpSubject, string, string, uint64) error) *MockStore_RecordOpCompletion_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetOpCompletion provides a mock function for the type MockStore
+func (_mock *MockStore) GetOpCompletion(sub database.OpSubject, opType string) (uint64, bool, error) {
+	ret := _mock.Called(sub, opType)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetOpCompletion")
+	}
+
+	var r0 uint64
+	var r1 bool
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(database.OpSubject, string) (uint64, bool, error)); ok {
+		return returnFunc(sub, opType)
+	}
+	if returnFunc, ok := ret.Get(0).(func(database.OpSubject, string) uint64); ok {
+		r0 = returnFunc(sub, opType)
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(database.OpSubject, string) bool); ok {
+		r1 = returnFunc(sub, opType)
+	} else {
+		r1 = ret.Get(1).(bool)
+	}
+	if returnFunc, ok := ret.Get(2).(func(database.OpSubject, string) error); ok {
+		r2 = returnFunc(sub, opType)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockStore_GetOpCompletion_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetOpCompletion'
+type MockStore_GetOpCompletion_Call struct {
+	*mock.Call
+}
+
+// GetOpCompletion is a helper method to define mock.On call
+//   - sub database.OpSubject
+//   - opType string
+func (_e *MockStore_Expecter) GetOpCompletion(sub interface{}, opType interface{}) *MockStore_GetOpCompletion_Call {
+	return &MockStore_GetOpCompletion_Call{Call: _e.mock.On("GetOpCompletion", sub, opType)}
+}
+
+func (_c *MockStore_GetOpCompletion_Call) Run(run func(sub database.OpSubject, opType string)) *MockStore_GetOpCompletion_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 database.OpSubject
+		if args[0] != nil {
+			arg0 = args[0].(database.OpSubject)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetOpCompletion_Call) Return(u uint64, b bool, err error) *MockStore_GetOpCompletion_Call {
+	_c.Call.Return(u, b, err)
+	return _c
+}
+
+func (_c *MockStore_GetOpCompletion_Call) RunAndReturn(run func(database.OpSubject, string) (uint64, bool, error)) *MockStore_GetOpCompletion_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListFileCompletions provides a mock function for the type MockStore
+func (_mock *MockStore) ListFileCompletions(sub database.OpSubject, opType string) (map[string]uint64, error) {
+	ret := _mock.Called(sub, opType)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListFileCompletions")
+	}
+
+	var r0 map[string]uint64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(database.OpSubject, string) (map[string]uint64, error)); ok {
+		return returnFunc(sub, opType)
+	}
+	if returnFunc, ok := ret.Get(0).(func(database.OpSubject, string) map[string]uint64); ok {
+		r0 = returnFunc(sub, opType)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[string]uint64)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(database.OpSubject, string) error); ok {
+		r1 = returnFunc(sub, opType)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListFileCompletions_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListFileCompletions'
+type MockStore_ListFileCompletions_Call struct {
+	*mock.Call
+}
+
+// ListFileCompletions is a helper method to define mock.On call
+//   - sub database.OpSubject
+//   - opType string
+func (_e *MockStore_Expecter) ListFileCompletions(sub interface{}, opType interface{}) *MockStore_ListFileCompletions_Call {
+	return &MockStore_ListFileCompletions_Call{Call: _e.mock.On("ListFileCompletions", sub, opType)}
+}
+
+func (_c *MockStore_ListFileCompletions_Call) Run(run func(sub database.OpSubject, opType string)) *MockStore_ListFileCompletions_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 database.OpSubject
+		if args[0] != nil {
+			arg0 = args[0].(database.OpSubject)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockStore_ListFileCompletions_Call) Return(stringToUint64 map[string]uint64, err error) *MockStore_ListFileCompletions_Call {
+	_c.Call.Return(stringToUint64, err)
+	return _c
+}
+
+func (_c *MockStore_ListFileCompletions_Call) RunAndReturn(run func(database.OpSubject, string) (map[string]uint64, error)) *MockStore_ListFileCompletions_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListWaitingDepsOps provides a mock function for the type MockStore
+func (_mock *MockStore) ListWaitingDepsOps() ([]database.OperationV2Row, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListWaitingDepsOps")
+	}
+
+	var r0 []database.OperationV2Row
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]database.OperationV2Row, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []database.OperationV2Row); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.OperationV2Row)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListWaitingDepsOps_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListWaitingDepsOps'
+type MockStore_ListWaitingDepsOps_Call struct {
+	*mock.Call
+}
+
+// ListWaitingDepsOps is a helper method to define mock.On call
+func (_e *MockStore_Expecter) ListWaitingDepsOps() *MockStore_ListWaitingDepsOps_Call {
+	return &MockStore_ListWaitingDepsOps_Call{Call: _e.mock.On("ListWaitingDepsOps")}
+}
+
+func (_c *MockStore_ListWaitingDepsOps_Call) Run(run func()) *MockStore_ListWaitingDepsOps_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_ListWaitingDepsOps_Call) Return(operationV2Rows []database.OperationV2Row, err error) *MockStore_ListWaitingDepsOps_Call {
+	_c.Call.Return(operationV2Rows, err)
+	return _c
+}
+
+func (_c *MockStore_ListWaitingDepsOps_Call) RunAndReturn(run func() ([]database.OperationV2Row, error)) *MockStore_ListWaitingDepsOps_Call {
 	_c.Call.Return(run)
 	return _c
 }
