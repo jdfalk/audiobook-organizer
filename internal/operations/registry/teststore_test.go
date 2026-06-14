@@ -1,7 +1,7 @@
 // file: internal/operations/registry/teststore_test.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: c9d0e1f2-a3b4-5c6d-7e8f-9a0b1c2d3e4f
-// last-edited: 2026-05-06
+// last-edited: 2026-06-13
 
 package registry_test
 
@@ -420,4 +420,19 @@ func (f *fakeStore) GetOpLogsV2(opID string, limit int) ([]database.OpLogV2Row, 
 		result = result[len(result)-limit:]
 	}
 	return result, nil
+}
+
+// --- UOS M1 dependency-scheduling stubs ---
+
+func (f *fakeStore) GetDepRev(_ database.OpSubject) (uint64, error)         { return 0, nil }
+func (f *fakeStore) BumpDepRev(_ database.OpSubject) (uint64, error)        { return 1, nil }
+func (f *fakeStore) ListWaitingDepsOps() ([]database.OperationV2Row, error) { return nil, nil }
+func (f *fakeStore) RecordOpCompletion(_ database.OpSubject, _, _ string, _ uint64) error {
+	return nil
+}
+func (f *fakeStore) GetOpCompletion(_ database.OpSubject, _ string) (uint64, bool, error) {
+	return 0, false, nil
+}
+func (f *fakeStore) ListFileCompletions(_ database.OpSubject, _ string) (map[string]uint64, error) {
+	return nil, nil
 }
