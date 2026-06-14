@@ -1,7 +1,7 @@
 // file: internal/importer/service.go
-// version: 1.0.2
+// version: 1.1.0
 // guid: d0e1f2a3-b4c5-6d7e-8f9a-0b1c2d3e4f5b
-// last-edited: 2026-05-15
+// last-edited: 2026-06-14
 
 package importer
 
@@ -19,6 +19,7 @@ import (
 	itunesservice "github.com/falkcorp/audiobook-organizer/internal/itunes/service"
 	"github.com/falkcorp/audiobook-organizer/internal/metadata"
 	"github.com/falkcorp/audiobook-organizer/internal/versions"
+	"github.com/falkcorp/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // Store is the narrow slice of database.Store this service uses.
@@ -31,6 +32,11 @@ type ImportService struct {
 	db          Store
 	provisioner *itunesservice.TrackProvisioner
 	dedupEngine *dedup.Engine
+	// opRegistry is the UOS operation registry. When set and
+	// config.AppConfig.DedupOnImportViaScheduler is true, post-import dedup
+	// checks are routed through the scheduler (dedup.check-book op) instead
+	// of the eager goroutine. Nil when the registry is not yet available.
+	opRegistry sdk.Registry
 }
 
 // SetTrackProvisioner wires the iTunes track provisioner for newly-imported
@@ -41,6 +47,14 @@ func (is *ImportService) SetTrackProvisioner(p *itunesservice.TrackProvisioner) 
 
 func (is *ImportService) SetDedupEngine(e *dedup.Engine) {
 	is.dedupEngine = e
+}
+
+// SetRegistry wires the UOS operation registry. When set and
+// DedupOnImportViaScheduler is enabled in config, post-import dedup
+// checks are enqueued as dedup.check-book operations instead of
+// running via an eager background goroutine.
+func (is *ImportService) SetRegistry(r sdk.Registry) {
+	is.opRegistry = r
 }
 
 func NewImportService(db Store) *ImportService {
@@ -201,9 +215,21 @@ func (is *ImportService) ImportFile(req *ImportFileRequest) (*ImportFileResponse
 		}
 	}
 
-	// Fire dedup check on import if dedup engine is wired. Run async so we don't
-	// block the import API; dedup engine will create pending candidates for review.
-	if is.dedupEngine != nil {
+	// Post-import dedup check — two paths, selected by config flag:
+	//
+	//   flag ON  (DedupOnImportViaScheduler=true):
+	//     Enqueue dedup.check-book via the UOS scheduler. The op is Batchable
+	//     (M3) so burst enqueues are coalesced, and Requires book_sig_v1 (M4)
+	//     so the check is deferred until fingerprinting has completed.
+	//
+	//   flag OFF (default):
+	//     Eager goroutine — existing behavior, unchanged for instant rollback.
+	if config.AppConfig.DedupOnImportViaScheduler && is.opRegistry != nil {
+		if _, err := is.opRegistry.EnqueueOp(context.Background(), "dedup.check-book",
+			map[string]any{"book_id": created.ID}); err != nil {
+			slog.Warn("dedup-on-import: EnqueueOp dedup.check-book", "id", created.ID, "err", err)
+		}
+	} else if is.dedupEngine != nil {
 		go func(id string) {
 			if _, err := is.dedupEngine.CheckBook(context.Background(), id); err != nil {
 				slog.Warn("dedup-on-import CheckBook", "id", id, "err", err)

@@ -1,7 +1,7 @@
 // file: internal/config/config.go
-// version: 1.47.0
+// version: 1.48.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
-// last-edited: 2026-06-10
+// last-edited: 2026-06-14
 
 package config
 
@@ -176,6 +176,12 @@ type Config struct {
 	DedupAuthorHighThreshold float64 `json:"dedup_author_high_threshold"` // default 0.92
 	DedupAuthorLowThreshold  float64 `json:"dedup_author_low_threshold"`  // default 0.80
 	DedupAutoMergeEnabled    bool    `json:"dedup_auto_merge_enabled"`    // default true
+	// DedupOnImportViaScheduler, when true, routes the post-import dedup check
+	// through the UOS dependency scheduler (dedup.check-book op, M4) instead
+	// of firing an eager goroutine. Defaults false so production import behavior
+	// is unchanged until explicitly opted in. Set to true to enable the
+	// scheduled path once book_sig_v1 population is confirmed in the library.
+	DedupOnImportViaScheduler bool `json:"dedup_on_import_via_scheduler"` // default false — opt-in
 	// DedupLLMAutoMergeHighConfidence, when true, automatically
 	// applies a merge when the LLM review (Layer 3) returns a
 	// "duplicate" verdict with confidence "high". Opt-in because
@@ -764,7 +770,8 @@ func InitConfig() {
 	c.DedupAuthorHighThreshold = 0.92
 	c.DedupAuthorLowThreshold = 0.80
 	c.DedupAutoMergeEnabled = true
-	c.DedupLLMAutoMergeHighConfidence = false // opt-in
+	c.DedupLLMAutoMergeHighConfidence = false  // opt-in
+	c.DedupOnImportViaScheduler = false        // opt-in — keep eager path until M4 is confirmed
 
 	// Metadata candidate scoring (defaults used unless DB settings override)
 	c.MetadataEmbeddingScoringEnabled = true
@@ -1088,6 +1095,7 @@ func ResetToDefaults() {
 		DedupAuthorLowThreshold:         0.80,
 		DedupAutoMergeEnabled:           true,
 		DedupLLMAutoMergeHighConfidence: false,
+		DedupOnImportViaScheduler:       false, // opt-in
 
 		// Metadata candidate scoring (PR1)
 		MetadataEmbeddingScoringEnabled: true,
