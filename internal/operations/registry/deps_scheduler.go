@@ -1,7 +1,7 @@
 // file: internal/operations/registry/deps_scheduler.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: a3b4c5d6-e7f8-9a0b-1c2d-3e4f5a6b7c8d
-// last-edited: 2026-06-13
+// last-edited: 2026-06-14
 
 // deps_scheduler.go implements the event-driven + sweep re-evaluation loop for
 // waiting_deps operations. It is the bridge between op lifecycle events
@@ -56,17 +56,18 @@ type DepsScheduler struct {
 	logger *slog.Logger
 }
 
-// NewDepsScheduler creates a DepsScheduler and pre-loads the waiting_deps index
-// from the store. The registry is used to ping the dispatcher after promotions.
+// NewDepsScheduler creates a DepsScheduler. It does NOT touch the store — the
+// waiting_deps index is loaded by the registry's Start() (via rebuildIndex)
+// before any goroutine runs. Keeping construction side-effect-free means building
+// the registry never calls the store, which matters for the many handler unit
+// tests that construct the registry with a mock store and never call Start().
 func NewDepsScheduler(reg *Registry, store SchedulerStore) *DepsScheduler {
-	s := &DepsScheduler{
+	return &DepsScheduler{
 		index:  make(map[string]map[string]struct{}),
 		store:  store,
 		reg:    reg,
 		logger: reg.logger,
 	}
-	s.rebuildIndex()
-	return s
 }
 
 // rebuildIndex loads all waiting_deps ops from the store and populates the

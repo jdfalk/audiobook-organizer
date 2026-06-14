@@ -1,5 +1,5 @@
 // file: internal/operations/registry/registry.go
-// version: 3.1.0
+// version: 3.1.1
 // guid: f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c
 // last-edited: 2026-06-14
 
@@ -266,6 +266,16 @@ func (r *Registry) Start(ctx context.Context) {
 	// debounce timers. Must happen after resumeAfterStartup (so defs are registered)
 	// and before goroutines start, so the context is already set.
 	r.batchReloadOnStart(ctx)
+
+	// Load the dependency scheduler's waiting_deps index now (kept out of
+	// NewDepsScheduler so constructing the registry never touches the store).
+	// Runs before any goroutine below, so no lock is needed on the index.
+	r.mu.RLock()
+	startSched := r.depsScheduler
+	r.mu.RUnlock()
+	if startSched != nil {
+		startSched.rebuildIndex()
+	}
 
 	// Owned context: Shutdown() cancels this after draining running ops so
 	// DB-touching goroutines stop before the caller closes the store.
