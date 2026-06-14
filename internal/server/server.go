@@ -16,8 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gin-contrib/gzip"
-	"github.com/gin-gonic/gin"
 	"github.com/falkcorp/audiobook-organizer/internal/activity"
 	"github.com/falkcorp/audiobook-organizer/internal/ai"
 	"github.com/falkcorp/audiobook-organizer/internal/aiscan"
@@ -42,6 +40,8 @@ import (
 	"github.com/falkcorp/audiobook-organizer/internal/scheduler"
 	operationshandlers "github.com/falkcorp/audiobook-organizer/internal/server/handlers/operations"
 	systemhandlers "github.com/falkcorp/audiobook-organizer/internal/server/handlers/system"
+	"github.com/gin-contrib/gzip"
+	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 
 	// Blank-import the plugin packages so their init() functions run and
@@ -197,21 +197,21 @@ type Server struct {
 	// setupRoutes (before the /api/* redirect middleware, so their pre-middleware
 	// ordering is preserved) via closures that delegate to this handler; the
 	// remaining protected system routes are registered directly in wireHandlers.
-	systemHandler *systemhandlers.Handler
-	batchPoller            *BatchPoller
-	mergeService           *merge.Service
-	diagnosticsService     *diagnostics.Service
-	changelogService       *activity.ChangelogService
-	activityService        *activity.Service
-	embeddingStore         *database.EmbeddingStore
-	embedClient            *ai.EmbeddingClient
-	metricsStore           database.MetricsStorer
-	dedupEngine            *dedup.Engine
-	activityWriter         *activity.Writer
-	itunesActivityFn       func(entry database.ActivityEntry)
-	eventBus               *plugin.EventBus
-	pluginRegistry         *plugin.Registry
-	quarantineSvc          *quarantine.QuarantineService
+	systemHandler      *systemhandlers.Handler
+	batchPoller        *BatchPoller
+	mergeService       *merge.Service
+	diagnosticsService *diagnostics.Service
+	changelogService   *activity.ChangelogService
+	activityService    *activity.Service
+	embeddingStore     *database.EmbeddingStore
+	embedClient        *ai.EmbeddingClient
+	metricsStore       database.MetricsStorer
+	dedupEngine        *dedup.Engine
+	activityWriter     *activity.Writer
+	itunesActivityFn   func(entry database.ActivityEntry)
+	eventBus           *plugin.EventBus
+	pluginRegistry     *plugin.Registry
+	quarantineSvc      *quarantine.QuarantineService
 	// searchIndex is the Bleve library search index (spec DES-1).
 	// Opened at startup, nil if DB path isn't set yet.
 	searchIndex *search.BleveIndex
@@ -226,7 +226,7 @@ type Server struct {
 	// an item and decremented when done. Tests use this to synchronize
 	// without relying on timed sleeps.
 	indexWorkerBusy int32
-	http3Server      *http3.Server
+	http3Server     *http3.Server
 
 	hub              *realtime.EventHub
 	writeBackBatcher *itunesservice.WriteBackBatcher
