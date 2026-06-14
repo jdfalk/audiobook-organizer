@@ -1,5 +1,5 @@
 // file: internal/operations/registry/teststore_test.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: c9d0e1f2-a3b4-5c6d-7e8f-9a0b1c2d3e4f
 // last-edited: 2026-06-13
 
@@ -434,6 +434,12 @@ func (f *fakeStore) GetOpCompletion(_ database.OpSubject, _ string) (uint64, boo
 	return 0, false, nil
 }
 func (f *fakeStore) ListFileCompletions(_ database.OpSubject, _ string) (map[string]uint64, error) {
+	return nil, nil
+}
+
+// GetBookByID satisfies DepStore (M2). Returns (nil, nil) — fakeStore has no
+// book storage; ReqFieldSet requirements are treated as unmet (conservative).
+func (f *fakeStore) GetBookByID(_ string) (*database.Book, error) {
 	return nil, nil
 }
 

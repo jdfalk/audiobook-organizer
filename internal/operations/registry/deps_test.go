@@ -1,5 +1,5 @@
 // file: internal/operations/registry/deps_test.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: e1f2a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b
 // last-edited: 2026-06-13
 
@@ -18,6 +18,7 @@ type fakeDepStore struct {
 	completion     map[string]uint64            // ckey(sub, opType) → rev
 	fileCompletion map[string]map[string]uint64 // ckey(sub, opType) → fileID→rev
 	files          map[string][]string          // bookID → file IDs
+	books          map[string]*database.Book    // bookID → book (nil entry = not found)
 }
 
 func newFakeDepStore() *fakeDepStore {
@@ -26,6 +27,7 @@ func newFakeDepStore() *fakeDepStore {
 		completion:     make(map[string]uint64),
 		fileCompletion: make(map[string]map[string]uint64),
 		files:          make(map[string][]string),
+		books:          make(map[string]*database.Book),
 	}
 }
 
@@ -63,6 +65,16 @@ func (f *fakeDepStore) ListFileCompletions(sub database.OpSubject, opType string
 
 func (f *fakeDepStore) BookFiles(bookID string) ([]string, error) {
 	return f.files[bookID], nil
+}
+
+// GetBookByID satisfies DepStore. Returns (nil, nil) when the book is not in
+// the map, mirroring PebbleStore.GetBookByID's not-found contract.
+func (f *fakeDepStore) GetBookByID(id string) (*database.Book, error) {
+	book, ok := f.books[id]
+	if !ok {
+		return nil, nil // not found → (nil, nil), same as PebbleStore
+	}
+	return book, nil
 }
 
 // TestEvaluate_OpCompleted_FreshVsStale verifies the core freshness check:
@@ -194,23 +206,168 @@ func TestAllSatisfied_CombinesReqs(t *testing.T) {
 	}
 }
 
-// TestReqFieldSet_NotImplemented_M1 verifies that field_set requirements
-// always return (false, "not implemented in M1", nil) — they should not block
-// compilation and should give a clear non-error signal.
-func TestReqFieldSet_NotImplemented_M1(t *testing.T) {
+// TestReqFieldSet_FieldSet_Satisfied verifies that a ReqFieldSet requirement
+// is satisfied when the named field is non-empty on the subject book.
+func TestReqFieldSet_FieldSet_Satisfied(t *testing.T) {
 	st := newFakeDepStore()
 	sub := Subject{Type: "book", ID: "b3"}
-	req := Requirement{Kind: ReqFieldSet, Field: "narrator"}
+	sig := "dGVzdA==" // non-empty base64
+	st.books["b3"] = &database.Book{ID: "b3", BookSigV1: &sig}
+	req := Requirement{Kind: ReqFieldSet, Field: "book_sig_v1"}
 
 	ok, reason, err := Satisfied(st, req, sub)
 	if err != nil {
-		t.Fatalf("field_set should not return an error in M1, got: %v", err)
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected satisfied when book_sig_v1 is set, got reason: %q", reason)
+	}
+}
+
+// TestReqFieldSet_FieldUnset_Nil verifies that a nil *string field is unmet.
+func TestReqFieldSet_FieldUnset_Nil(t *testing.T) {
+	st := newFakeDepStore()
+	sub := Subject{Type: "book", ID: "b4"}
+	st.books["b4"] = &database.Book{ID: "b4"} // BookSigV1 is nil
+	req := Requirement{Kind: ReqFieldSet, Field: "book_sig_v1"}
+
+	ok, reason, err := Satisfied(st, req, sub)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if ok {
-		t.Fatal("field_set must not satisfy in M1")
+		t.Fatal("expected unmet when book_sig_v1 is nil")
 	}
 	if reason == "" {
-		t.Fatal("expected non-empty reason for field_set not-implemented stub")
+		t.Fatal("expected non-empty reason when field is nil")
+	}
+}
+
+// TestReqFieldSet_FieldUnset_Empty verifies that an empty-string *string field is unmet.
+func TestReqFieldSet_FieldUnset_Empty(t *testing.T) {
+	st := newFakeDepStore()
+	sub := Subject{Type: "book", ID: "b5"}
+	empty := ""
+	st.books["b5"] = &database.Book{ID: "b5", BookSigV1: &empty}
+	req := Requirement{Kind: ReqFieldSet, Field: "book_sig_v1"}
+
+	ok, reason, err := Satisfied(st, req, sub)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok {
+		t.Fatal("expected unmet when book_sig_v1 is empty string")
+	}
+	if reason == "" {
+		t.Fatal("expected non-empty reason when field is empty")
+	}
+}
+
+// TestReqFieldSet_UnknownField_Error verifies that an unknown field name
+// returns an error rather than silently evaluating to false.
+func TestReqFieldSet_UnknownField_Error(t *testing.T) {
+	st := newFakeDepStore()
+	sub := Subject{Type: "book", ID: "b6"}
+	st.books["b6"] = &database.Book{ID: "b6"}
+	req := Requirement{Kind: ReqFieldSet, Field: "narrator"} // not in allow-list
+
+	ok, _, err := Satisfied(st, req, sub)
+	if err == nil {
+		t.Fatal("expected error for unknown field name, got nil")
+	}
+	if ok {
+		t.Fatal("expected not satisfied when field name is unknown")
+	}
+}
+
+// TestReqFieldSet_MissingBook_Unmet verifies that a missing book (GetBookByID
+// returns nil, nil) is treated as unmet, not as an error.
+func TestReqFieldSet_MissingBook_Unmet(t *testing.T) {
+	st := newFakeDepStore()
+	sub := Subject{Type: "book", ID: "no-such-book"}
+	// Do NOT add "no-such-book" to st.books — GetBookByID returns (nil, nil).
+	req := Requirement{Kind: ReqFieldSet, Field: "book_sig_v1"}
+
+	ok, reason, err := Satisfied(st, req, sub)
+	if err != nil {
+		t.Fatalf("missing book should be unmet (not error), got: %v", err)
+	}
+	if ok {
+		t.Fatal("expected unmet when book does not exist")
+	}
+	if reason == "" {
+		t.Fatal("expected non-empty reason when book is missing")
+	}
+}
+
+// TestReqFieldSet_AllAllowedFields verifies that every field in the allow-list
+// can be both satisfied (non-empty) and unsatisfied (nil). This catches the
+// case where a field is listed but its accessor predicate is broken.
+func TestReqFieldSet_AllAllowedFields(t *testing.T) {
+	cases := []struct {
+		field    string
+		populate func(b *database.Book)
+	}{
+		{
+			field: "book_sig_v1",
+			populate: func(b *database.Book) {
+				v := "sig"
+				b.BookSigV1 = &v
+			},
+		},
+		{
+			field: "metadata_source_hash",
+			populate: func(b *database.Book) {
+				v := "abc123"
+				b.MetadataSourceHash = &v
+			},
+		},
+		{
+			field: "asin",
+			populate: func(b *database.Book) {
+				v := "B001234567"
+				b.ASIN = &v
+			},
+		},
+		{
+			field: "isbn13",
+			populate: func(b *database.Book) {
+				v := "9781234567890"
+				b.ISBN13 = &v
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.field+"/set", func(t *testing.T) {
+			st := newFakeDepStore()
+			b := &database.Book{ID: "bx"}
+			tc.populate(b)
+			st.books["bx"] = b
+			sub := Subject{Type: "book", ID: "bx"}
+			req := Requirement{Kind: ReqFieldSet, Field: tc.field}
+			ok, reason, err := Satisfied(st, req, sub)
+			if err != nil {
+				t.Fatalf("field %q set: unexpected error: %v", tc.field, err)
+			}
+			if !ok {
+				t.Fatalf("field %q set: expected satisfied, got reason %q", tc.field, reason)
+			}
+		})
+		t.Run(tc.field+"/unset", func(t *testing.T) {
+			st := newFakeDepStore()
+			st.books["bx"] = &database.Book{ID: "bx"} // all fields nil
+			sub := Subject{Type: "book", ID: "bx"}
+			req := Requirement{Kind: ReqFieldSet, Field: tc.field}
+			ok, _, err := Satisfied(st, req, sub)
+			if err != nil {
+				t.Fatalf("field %q unset: unexpected error: %v", tc.field, err)
+			}
+			if ok {
+				t.Fatalf("field %q unset: expected not satisfied when field is nil", tc.field)
+			}
+		})
 	}
 }
 
