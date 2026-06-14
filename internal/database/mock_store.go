@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.60.0
+// version: 1.61.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 // last-edited: 2026-06-13
 
@@ -2602,3 +2602,10 @@ func (m *MockStore) ListFileCompletions(_ OpSubject, _ string) (map[string]uint6
 }
 func (m *MockStore) ListWaitingDepsOps() ([]OperationV2Row, error) { return nil, nil }
 func (m *MockStore) PromoteToQueued(_ string) error                { return nil }
+
+// M3 batch bucket stubs. MockStore is a permissive stub — these are no-ops
+// by default. Tests that need batch-bucket behaviour should use fakeStore
+// (in internal/operations/registry/teststore_test.go) which carries real state.
+func (m *MockStore) AddToBatchBucket(_ string, _ OpSubject) error         { return nil }
+func (m *MockStore) ListBatchBucket(_ string) ([]BatchBucketEntry, error) { return nil, nil }
+func (m *MockStore) ClearBatchBucket(_ string, _ []OpSubject) error       { return nil }

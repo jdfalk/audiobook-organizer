@@ -1,5 +1,5 @@
 // file: internal/operations/registry/teststore_test.go
-// version: 2.5.0
+// version: 2.6.0
 // guid: c9d0e1f2-a3b4-5c6d-7e8f-9a0b1c2d3e4f
 // last-edited: 2026-06-13
 
@@ -26,14 +26,40 @@ type fakeStore struct {
 	states  map[string]database.OpStateV2Row
 	logs    []database.OpLogV2Row
 	errors  []database.OpErrorV2Row
+
+	// Configurable dep-store state for M3 batch requirement tests.
+	// depRevs maps "subjectType:subjectID" → current dep_rev.
+	depRevs map[string]uint64
+	// completions maps "subjectType:subjectID:opType" → dep_rev.
+	completions map[string]uint64
+
+	// M3 batch bucket: maps "opType:subjectType:subjectID" → BatchBucketEntry.
+	batchBucket map[string]database.BatchBucketEntry
 }
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{
-		defs:   make(map[string]database.OpDefinitionV2Row),
-		ops:    make(map[string]database.OperationV2Row),
-		states: make(map[string]database.OpStateV2Row),
+		defs:        make(map[string]database.OpDefinitionV2Row),
+		ops:         make(map[string]database.OperationV2Row),
+		states:      make(map[string]database.OpStateV2Row),
+		depRevs:     make(map[string]uint64),
+		completions: make(map[string]uint64),
+		batchBucket: make(map[string]database.BatchBucketEntry),
 	}
+}
+
+// setDepRev sets the dep_rev for a subject (for test control).
+func (f *fakeStore) setDepRev(subType, subID string, rev uint64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.depRevs[subType+":"+subID] = rev
+}
+
+// setCompletion records an op completion at a given dep_rev (for test control).
+func (f *fakeStore) setCompletion(subType, subID, opType string, rev uint64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.completions[subType+":"+subID+":"+opType] = rev
 }
 
 // Compile-time assertion: fakeStore must implement OpsV2Store.
@@ -422,17 +448,49 @@ func (f *fakeStore) GetOpLogsV2(opID string, limit int) ([]database.OpLogV2Row, 
 	return result, nil
 }
 
-// --- UOS M1 dependency-scheduling stubs ---
+// --- UOS M1 dependency-scheduling (configurable for M3 tests) ---
 
-func (f *fakeStore) GetDepRev(_ database.OpSubject) (uint64, error)         { return 0, nil }
-func (f *fakeStore) BumpDepRev(_ database.OpSubject) (uint64, error)        { return 1, nil }
-func (f *fakeStore) ListWaitingDepsOps() ([]database.OperationV2Row, error) { return nil, nil }
-func (f *fakeStore) RecordOpCompletion(_ database.OpSubject, _, _ string, _ uint64) error {
+func (f *fakeStore) GetDepRev(sub database.OpSubject) (uint64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.depRevs[sub.Type+":"+sub.ID], nil
+}
+
+func (f *fakeStore) BumpDepRev(sub database.OpSubject) (uint64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := sub.Type + ":" + sub.ID
+	f.depRevs[key]++
+	return f.depRevs[key], nil
+}
+
+func (f *fakeStore) ListWaitingDepsOps() ([]database.OperationV2Row, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var result []database.OperationV2Row
+	for _, op := range f.ops {
+		if op.Status == "waiting_deps" {
+			result = append(result, op)
+		}
+	}
+	return result, nil
+}
+
+func (f *fakeStore) RecordOpCompletion(sub database.OpSubject, opType, _ string, depRev uint64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.completions[sub.Type+":"+sub.ID+":"+opType] = depRev
 	return nil
 }
-func (f *fakeStore) GetOpCompletion(_ database.OpSubject, _ string) (uint64, bool, error) {
-	return 0, false, nil
+
+func (f *fakeStore) GetOpCompletion(sub database.OpSubject, opType string) (uint64, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := sub.Type + ":" + sub.ID + ":" + opType
+	rev, ok := f.completions[key]
+	return rev, ok, nil
 }
+
 func (f *fakeStore) ListFileCompletions(_ database.OpSubject, _ string) (map[string]uint64, error) {
 	return nil, nil
 }
@@ -462,3 +520,58 @@ func (f *fakeStore) PromoteToQueued(id string) error {
 	f.ops[id] = op
 	return nil
 }
+
+// --- M3 batch bucket ---
+
+func (f *fakeStore) AddToBatchBucket(opType string, sub database.OpSubject) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := opType + ":" + sub.Type + ":" + sub.ID
+	if _, exists := f.batchBucket[key]; exists {
+		return nil // idempotent
+	}
+	f.batchBucket[key] = database.BatchBucketEntry{
+		Sub:     sub,
+		AddedAt: timeNowNano(),
+	}
+	return nil
+}
+
+func (f *fakeStore) ListBatchBucket(opType string) ([]database.BatchBucketEntry, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	prefix := opType + ":"
+	var result []database.BatchBucketEntry
+	for k, v := range f.batchBucket {
+		if len(k) >= len(prefix) && k[:len(prefix)] == prefix {
+			result = append(result, v)
+		}
+	}
+	return result, nil
+}
+
+func (f *fakeStore) ClearBatchBucket(opType string, subs []database.OpSubject) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, sub := range subs {
+		delete(f.batchBucket, opType+":"+sub.Type+":"+sub.ID)
+	}
+	return nil
+}
+
+// batchBucketSize returns the number of pending subjects in the bucket for opType.
+func (f *fakeStore) batchBucketSize(opType string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	prefix := opType + ":"
+	n := 0
+	for k := range f.batchBucket {
+		if len(k) >= len(prefix) && k[:len(prefix)] == prefix {
+			n++
+		}
+	}
+	return n
+}
+
+// timeNowNano is a variable so tests can override the clock.
+var timeNowNano = func() int64 { return time.Now().UnixNano() }

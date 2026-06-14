@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store_ops_v2.go
-// version: 3.2.0
+// version: 3.3.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 // last-edited: 2026-06-13
 
@@ -673,6 +673,86 @@ func (p *PebbleStore) PromoteToQueued(id string) error {
 	// Mirror the exact encoding used by InsertOperationV2.
 	if err := p.db.Set(opv2QueueKey(row.Priority, row.QueuedAt, id), []byte(id), pebble.Sync); err != nil {
 		return err
+	}
+	return nil
+}
+
+// ── M3 batch bucket (journaled pending subjects) ────────────────────────────
+//
+// Keyspace:
+//
+//	op:batch:<opType>:<subjectType>:<subjectID> → JSON(BatchBucketEntry)
+//
+// One key per (opType, subjectType, subjectID) triple. The value carries the
+// wall-clock nanosecond timestamp of first addition so the registry can anchor
+// BatchMaxWait correctly across restarts.
+
+// batchBucketKey returns the PebbleDB key for a single bucket entry.
+func batchBucketKey(opType string, sub OpSubject) []byte {
+	return []byte("op:batch:" + opType + ":" + sub.Type + ":" + sub.ID)
+}
+
+// batchBucketPrefix returns the prefix for all entries in a given op-type bucket.
+func batchBucketPrefix(opType string) []byte {
+	return []byte("op:batch:" + opType + ":")
+}
+
+// AddToBatchBucket adds sub to the persistent pending bucket for opType.
+// Idempotent: if an entry already exists the call is a no-op (preserving AddedAt).
+func (p *PebbleStore) AddToBatchBucket(opType string, sub OpSubject) error {
+	key := batchBucketKey(opType, sub)
+	// Check for existing entry to preserve AddedAt.
+	_, closer, err := p.db.Get(key)
+	if err == nil {
+		closer.Close()
+		return nil // already present — idempotent
+	}
+	if !errors.Is(err, pebble.ErrNotFound) {
+		return err
+	}
+
+	entry := BatchBucketEntry{
+		Sub:     sub,
+		AddedAt: time.Now().UnixNano(),
+	}
+	data, err := json.Marshal(&entry)
+	if err != nil {
+		return err
+	}
+	return p.db.Set(key, data, pebble.Sync)
+}
+
+// ListBatchBucket returns all pending subjects for opType.
+// Returns an empty slice (not an error) when no bucket exists.
+func (p *PebbleStore) ListBatchBucket(opType string) ([]BatchBucketEntry, error) {
+	prefix := batchBucketPrefix(opType)
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: prefixEnd(prefix),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var result []BatchBucketEntry
+	for iter.First(); iter.Valid(); iter.Next() {
+		var entry BatchBucketEntry
+		if err := json.Unmarshal(iter.Value(), &entry); err != nil {
+			continue
+		}
+		result = append(result, entry)
+	}
+	return result, iter.Error()
+}
+
+// ClearBatchBucket removes the given subjects from the bucket for opType.
+// Subjects not present in the bucket are silently skipped.
+func (p *PebbleStore) ClearBatchBucket(opType string, subs []OpSubject) error {
+	for _, sub := range subs {
+		if err := p.db.Delete(batchBucketKey(opType, sub), pebble.Sync); err != nil {
+			return err
+		}
 	}
 	return nil
 }
