@@ -1,13 +1,43 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.21.1 -->
+<!-- version: 3.22.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-06-13 -->
+<!-- last-edited: 2026-06-14 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added
+
+#### June 14, 2026 — UOS dependency & condition scheduling (M1–M4)
+
+A systemd-inspired prerequisite/condition/batching layer for the unified operations
+system, so background jobs order correctly without hand-wired hooks. **Shipped
+flag-OFF (`DedupOnImportViaScheduler` default false) — dormant on prod until enabled.**
+
+- **M1 — dependency engine** (`internal/operations/registry/deps.go`,
+  `deps_scheduler.go`): ops declare `Requires []Requirement` (def-level) and/or
+  `WithRequires(...)` (per-enqueue). `op_completed` requirements use a per-subject
+  `dep_rev` freshness counter (a prereq is satisfied only if the op completed *since
+  the subject last changed*). Unmet ops park as `waiting_deps`; completion wakes
+  dependents, a failed prereq fails the dependent, and a periodic `SweepTick`
+  self-heals. Cycle detection at registration. New `OpsV2Store` keyspaces:
+  `op:completion:*`, `op:deprev:*`, plus `PromoteToQueued`.
+- **M2 — field conditions:** `ReqFieldSet` — a requirement satisfied when an
+  allow-listed `Book` field (`book_sig_v1`, `metadata_source_hash`, `asin`, `isbn13`)
+  is non-empty; unknown field names error (typo guard).
+- **M3 — batching:** `OperationDef.Batchable` + debounce window (`BatchWindow`/
+  `BatchMaxWait`) coalesces burst enqueues of one op type into a single
+  `{"subjects":[...]}` op; journaled buckets survive restart; per-subject requirement
+  gating at dispatch.
+- **M4 — dedup-on-import migration:** new Batchable `dedup.check-book` op requiring
+  `book_sig_v1`; when `DedupOnImportViaScheduler=true` the importer enqueues it
+  instead of the eager pre-fingerprint `CheckBook` goroutine (which remains the
+  flag-off default for instant rollback). This makes dedup run *after* the whole-book
+  signature exists, batched across an import burst.
+
+Design: `docs/specs/2026-06-13-uos-dependency-scheduling-design.md`. To enable on
+prod: flip `DedupOnImportViaScheduler` and validate ordering.
 
 #### June 13, 2026 — Dedup: "both unmatched metadata" candidate filter
 
