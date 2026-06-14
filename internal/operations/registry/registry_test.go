@@ -1,5 +1,5 @@
 // file: internal/operations/registry/registry_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: d0e1f2a3-b4c5-6d7e-8f9a-0b1c2d3e4f5a
 // last-edited: 2026-06-13
 
@@ -9,9 +9,11 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/falkcorp/audiobook-organizer/internal/database"
 	"github.com/falkcorp/audiobook-organizer/internal/operations/registry"
 )
 
@@ -381,5 +383,250 @@ func TestEnqueueOp_NoBookID_EmptySubject(t *testing.T) {
 	// With no subject, requirements cannot be evaluated → park conservatively.
 	if row.Status != "waiting_deps" {
 		t.Errorf("expected status=waiting_deps for op with requirements but no subject, got %q", row.Status)
+	}
+}
+
+// --- Task 5/6: completion recording + wakeup + failure propagation ---
+
+// smartFakeStore extends fakeStore with real dep_rev and completion tracking
+// so the scheduler can evaluate requirements against actual stored state.
+type smartFakeStore struct {
+	*fakeStore
+	mu              sync.Mutex
+	depRevs         map[string]uint64            // "type:id" → rev
+	completions     map[string]uint64            // "type:id:opType" → rev
+	fileCompletions map[string]map[string]uint64 // "type:id:opType" → fileID→rev
+}
+
+func newSmartFakeStore() *smartFakeStore {
+	return &smartFakeStore{
+		fakeStore:       newFakeStore(),
+		depRevs:         make(map[string]uint64),
+		completions:     make(map[string]uint64),
+		fileCompletions: make(map[string]map[string]uint64),
+	}
+}
+
+func (s *smartFakeStore) GetDepRev(sub database.OpSubject) (uint64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.depRevs[sub.Type+":"+sub.ID], nil
+}
+
+func (s *smartFakeStore) BumpDepRev(sub database.OpSubject) (uint64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := sub.Type + ":" + sub.ID
+	s.depRevs[key]++
+	return s.depRevs[key], nil
+}
+
+func (s *smartFakeStore) RecordOpCompletion(sub database.OpSubject, opType, _ string, depRev uint64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.completions[sub.Type+":"+sub.ID+":"+opType] = depRev
+	return nil
+}
+
+func (s *smartFakeStore) GetOpCompletion(sub database.OpSubject, opType string) (uint64, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rev, ok := s.completions[sub.Type+":"+sub.ID+":"+opType]
+	return rev, ok, nil
+}
+
+func (s *smartFakeStore) ListFileCompletions(sub database.OpSubject, opType string) (map[string]uint64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.fileCompletions[sub.Type+":"+sub.ID+":"+opType], nil
+}
+
+func (s *smartFakeStore) ListWaitingDepsOps() ([]database.OperationV2Row, error) {
+	s.fakeStore.mu.Lock()
+	defer s.fakeStore.mu.Unlock()
+	var result []database.OperationV2Row
+	for _, op := range s.fakeStore.ops {
+		if op.Status == "waiting_deps" {
+			result = append(result, op)
+		}
+	}
+	return result, nil
+}
+
+func (s *smartFakeStore) BookFiles(_ string) ([]string, error) { return nil, nil }
+
+func (s *smartFakeStore) UpdateOperationV2Status(id, status string, startedAt, completedAt *time.Time, errMsg *string) error {
+	return s.fakeStore.UpdateOperationV2Status(id, status, startedAt, completedAt, errMsg)
+}
+
+// TestDepsScheduler_WakeOnCompletion verifies that a parked op is promoted to
+// "queued" when the prerequisite op completes for the same subject.
+func TestDepsScheduler_WakeOnCompletion(t *testing.T) {
+	store := newSmartFakeStore()
+	r := registry.New(store, slog.Default(), 4, nil)
+
+	// Register prereq op (no requirements).
+	prereq := makeValidDef("test.prereq-wake")
+	if err := r.RegisterOp(prereq); err != nil {
+		t.Fatalf("RegisterOp prereq: %v", err)
+	}
+
+	// Register dependent op that requires prereq to have completed.
+	dep := makeValidDef("test.dep-wake")
+	dep.Requires = []registry.Requirement{{Kind: registry.ReqOpCompleted, OpType: "test.prereq-wake"}}
+	if err := r.RegisterOp(dep); err != nil {
+		t.Fatalf("RegisterOp dep: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r.Start(ctx)
+
+	// Enqueue dependent — should be parked since prereq hasn't run.
+	params := map[string]string{"book_id": "b-wake"}
+	depOpID, err := r.EnqueueOp(ctx, "test.dep-wake", params)
+	if err != nil {
+		t.Fatalf("EnqueueOp dep: %v", err)
+	}
+	if store.statusOf(depOpID) != "waiting_deps" {
+		t.Fatalf("expected dep to be parked, got %q", store.statusOf(depOpID))
+	}
+
+	// Complete the prereq externally (simulate worker completion via scheduler).
+	sched := registry.NewDepsScheduler(r, store)
+	sub := registry.Subject{Type: "book", ID: "b-wake"}
+	if err := sched.OnOpCompleted(ctx, sub, "test.prereq-wake"); err != nil {
+		t.Fatalf("OnOpCompleted: %v", err)
+	}
+
+	// After wakeup, the dependent should be promoted to "queued".
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if store.statusOf(depOpID) == "queued" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if store.statusOf(depOpID) != "queued" {
+		t.Errorf("expected dep to be promoted to queued after prereq completion, got %q",
+			store.statusOf(depOpID))
+	}
+}
+
+// TestDepsScheduler_FailPropagation verifies that a parked op is failed when
+// the op it requires fails.
+func TestDepsScheduler_FailPropagation(t *testing.T) {
+	store := newSmartFakeStore()
+	r := registry.New(store, slog.Default(), 4, nil)
+
+	prereq := makeValidDef("test.prereq-fail")
+	if err := r.RegisterOp(prereq); err != nil {
+		t.Fatalf("RegisterOp prereq: %v", err)
+	}
+
+	dep := makeValidDef("test.dep-fail")
+	dep.Requires = []registry.Requirement{{Kind: registry.ReqOpCompleted, OpType: "test.prereq-fail"}}
+	if err := r.RegisterOp(dep); err != nil {
+		t.Fatalf("RegisterOp dep: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r.Start(ctx)
+
+	params := map[string]string{"book_id": "b-fail"}
+	depOpID, err := r.EnqueueOp(ctx, "test.dep-fail", params)
+	if err != nil {
+		t.Fatalf("EnqueueOp dep: %v", err)
+	}
+	if store.statusOf(depOpID) != "waiting_deps" {
+		t.Fatalf("expected dep to be parked, got %q", store.statusOf(depOpID))
+	}
+
+	sched := registry.NewDepsScheduler(r, store)
+	sub := registry.Subject{Type: "book", ID: "b-fail"}
+	if err := sched.OnOpFailed(ctx, sub, "test.prereq-fail"); err != nil {
+		t.Fatalf("OnOpFailed: %v", err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if store.statusOf(depOpID) == "failed" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	status := store.statusOf(depOpID)
+	if status != "failed" {
+		t.Errorf("expected dep to be failed after prereq failure, got %q", status)
+	}
+	// Verify the error message mentions the failed dependency.
+	row, _ := store.GetOperationV2(depOpID)
+	if row != nil && (row.ErrorMessage == nil || *row.ErrorMessage == "") {
+		t.Error("expected error message to be set on failed dep")
+	}
+}
+
+// TestE2E_DependencyOrdering is the Task 6 end-to-end proof:
+// Register B (requires A), enqueue B (parks), enqueue+run A for same subject,
+// assert B is promoted and runs.
+func TestE2E_DependencyOrdering(t *testing.T) {
+	store := newSmartFakeStore()
+
+	bRan := make(chan struct{}, 1)
+
+	defA := makeValidDef("e2e.op-a")
+	defA.ResumePolicy = registry.ResumeDrop
+
+	defB := makeValidDef("e2e.op-b")
+	defB.ResumePolicy = registry.ResumeDrop
+	defB.Requires = []registry.Requirement{{Kind: registry.ReqOpCompleted, OpType: "e2e.op-a"}}
+	defB.Run = func(_ context.Context, _ json.RawMessage, _ registry.Reporter) error {
+		select {
+		case bRan <- struct{}{}:
+		default:
+		}
+		return nil
+	}
+
+	r := registry.New(store, slog.Default(), 4, nil)
+	if err := r.RegisterOp(defA); err != nil {
+		t.Fatalf("RegisterOp A: %v", err)
+	}
+	if err := r.RegisterOp(defB); err != nil {
+		t.Fatalf("RegisterOp B: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sched := registry.NewDepsScheduler(r, store)
+	r.SetDepsScheduler(sched)
+	r.Start(ctx)
+
+	params := map[string]string{"book_id": "e2e-book"}
+
+	// Enqueue B first — must park because A has never run.
+	bOpID, err := r.EnqueueOp(ctx, "e2e.op-b", params)
+	if err != nil {
+		t.Fatalf("EnqueueOp B: %v", err)
+	}
+	if store.statusOf(bOpID) != "waiting_deps" {
+		t.Fatalf("B should be parked before A runs, got %q", store.statusOf(bOpID))
+	}
+
+	// Enqueue A — runs immediately (no requirements), completes, wakes B.
+	_, err = r.EnqueueOp(ctx, "e2e.op-a", params)
+	if err != nil {
+		t.Fatalf("EnqueueOp A: %v", err)
+	}
+
+	// Wait for B to run.
+	select {
+	case <-bRan:
+		// B ran — success.
+	case <-time.After(10 * time.Second):
+		t.Fatalf("B did not run within 10s after A completed; B status=%q",
+			store.statusOf(bOpID))
 	}
 }

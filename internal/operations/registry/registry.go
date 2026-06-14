@@ -44,6 +44,11 @@ type Registry struct {
 	// and panic with "pebble: closed".
 	shuttingDown atomic.Bool
 
+	// depsScheduler is the optional dependency-scheduling coordinator.
+	// Set via SetDepsScheduler before Start(). Nil is safe: worker hooks
+	// check for nil before notifying.
+	depsScheduler *DepsScheduler
+
 	// cancelFn cancels the internal goroutine context created in Start().
 	// Shutdown() calls this after draining running ops to stop the
 	// dispatcher, watchdog, and idle workers before returning.
@@ -101,6 +106,47 @@ func NewWithOptions(store database.OpsV2Store, logger *slog.Logger, workers int,
 		watchdogInterval: opts.WatchdogInterval,
 		abandonGrace:     opts.AbandonGrace,
 	}
+}
+
+// SetDepsScheduler wires the dependency scheduler. Must be called BEFORE
+// Start(). The scheduler's OnOpCompleted and OnOpFailed are notified
+// asynchronously by the worker on status transitions.
+func (r *Registry) SetDepsScheduler(s *DepsScheduler) {
+	r.mu.Lock()
+	r.depsScheduler = s
+	r.mu.Unlock()
+}
+
+// notifyDepCompletion notifies the scheduler (if wired) that opID completed for
+// the given subject asynchronously so the worker is never blocked.
+func (r *Registry) notifyDepCompletion(sub Subject, opType string) {
+	r.mu.RLock()
+	sched := r.depsScheduler
+	r.mu.RUnlock()
+	if sched == nil {
+		return
+	}
+	go func() {
+		if err := sched.OnOpCompleted(context.Background(), sub, opType); err != nil {
+			r.logger.Warn("deps_scheduler: OnOpCompleted error", "op_type", opType, "error", err)
+		}
+	}()
+}
+
+// notifyDepFailed notifies the scheduler (if wired) that opID failed for the
+// given subject asynchronously so the worker is never blocked.
+func (r *Registry) notifyDepFailed(sub Subject, opType string) {
+	r.mu.RLock()
+	sched := r.depsScheduler
+	r.mu.RUnlock()
+	if sched == nil {
+		return
+	}
+	go func() {
+		if err := sched.OnOpFailed(context.Background(), sub, opType); err != nil {
+			r.logger.Warn("deps_scheduler: OnOpFailed error", "op_type", opType, "error", err)
+		}
+	}()
 }
 
 // SetBus wires an EventHub to the registry so that operation lifecycle
