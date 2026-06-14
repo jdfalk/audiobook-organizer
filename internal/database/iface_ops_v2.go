@@ -1,11 +1,20 @@
 // file: internal/database/iface_ops_v2.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-05-06
+// last-edited: 2026-06-13
 
 package database
 
 import "time"
+
+// OpSubject identifies the entity a dependency-scheduled operation is acting on
+// (e.g. a book or a library scan). It is the persisted form of the registry's
+// Subject value; the registry converts Subject→OpSubject at its boundary so the
+// database package never imports registry.
+type OpSubject struct {
+	Type string // e.g. "book", "library"
+	ID   string // subject's opaque identifier
+}
 
 // OpDefinitionV2Row is the DB representation of a registered OperationDef.
 type OpDefinitionV2Row struct {
@@ -52,6 +61,11 @@ type OperationV2Row struct {
 	LastCheckpointAt  *time.Time
 	HighWaterProgress int
 	ResumeCount       int
+	// UOS dependency-scheduling fields (Task 2). Zero values on old rows are safe.
+	SubjectType    string // e.g. "book" — the entity this op acts on
+	SubjectID      string // opaque ID of the subject
+	Requirements   string // JSON array of Requirement objects ([]registry.Requirement)
+	ReqSnapshotRev uint64 // dep_rev at the time the requirements were evaluated
 }
 
 // OpStrikeV2Row is a single row in op_strikes_v2.
@@ -162,4 +176,32 @@ type OpsV2Store interface {
 	// GetOpLogsV2 returns the last limit log lines for the given operation ID,
 	// ordered by created_at ASC. A limit ≤ 0 returns all rows.
 	GetOpLogsV2(opID string, limit int) ([]OpLogV2Row, error)
+
+	// --- UOS dependency-scheduling (Task 2) ---
+
+	// GetDepRev returns the current dependency-revision counter for sub.
+	// Returns 0, nil if no counter exists yet (first call before any bump).
+	GetDepRev(sub OpSubject) (uint64, error)
+
+	// BumpDepRev atomically increments the dep_rev counter for sub and returns
+	// the new value.  The first call on a never-seen subject transitions 0→1.
+	BumpDepRev(sub OpSubject) (uint64, error)
+
+	// RecordOpCompletion stores a completion record for opType on sub at the
+	// given depRev.  fileID is empty for book-level completions; non-empty for
+	// per-file completions.
+	RecordOpCompletion(sub OpSubject, opType, fileID string, depRev uint64) error
+
+	// GetOpCompletion retrieves the stored depRev for a book-level completion
+	// (fileID == "").  Returns (rev, true, nil) when found, (0, false, nil)
+	// when absent.
+	GetOpCompletion(sub OpSubject, opType string) (rev uint64, ok bool, err error)
+
+	// ListFileCompletions returns a map of fileID→depRev for all per-file
+	// completion records for opType on sub.
+	ListFileCompletions(sub OpSubject, opType string) (map[string]uint64, error)
+
+	// ListWaitingDepsOps returns all OperationV2Row entries whose Status is
+	// "waiting_deps".  Used by the dependency evaluator to re-check parked ops.
+	ListWaitingDepsOps() ([]OperationV2Row, error)
 }

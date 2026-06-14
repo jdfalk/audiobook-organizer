@@ -1,7 +1,7 @@
 // file: internal/database/mock_store.go
-// version: 1.58.0
+// version: 1.59.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
-// last-edited: 2026-06-10
+// last-edited: 2026-06-13
 
 package database
 
@@ -2589,3 +2589,15 @@ func (m *MockStore) ListOperationsV2Since(_ time.Time, _ int) ([]OperationV2Row,
 	return nil, nil
 }
 func (m *MockStore) GetOpLogsV2(_ string, _ int) ([]OpLogV2Row, error) { return nil, nil }
+
+// UOS dependency-scheduling stubs (Task 2).
+func (m *MockStore) GetDepRev(_ OpSubject) (uint64, error)                       { return 0, nil }
+func (m *MockStore) BumpDepRev(_ OpSubject) (uint64, error)                      { return 1, nil }
+func (m *MockStore) RecordOpCompletion(_ OpSubject, _, _ string, _ uint64) error { return nil }
+func (m *MockStore) GetOpCompletion(_ OpSubject, _ string) (uint64, bool, error) {
+	return 0, false, nil
+}
+func (m *MockStore) ListFileCompletions(_ OpSubject, _ string) (map[string]uint64, error) {
+	return nil, nil
+}
+func (m *MockStore) ListWaitingDepsOps() ([]OperationV2Row, error) { return nil, nil }

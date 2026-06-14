@@ -1,6 +1,7 @@
 // file: internal/database/pebble_store_ops_v2.go
-// version: 3.0.0
+// version: 3.1.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
+// last-edited: 2026-06-13
 
 // pebble_store_ops_v2 implements OpsV2Store for PebbleDB (the primary production
 // database). Key schema (all prefixed with "opv2:"):
@@ -493,4 +494,140 @@ func (p *PebbleStore) GetOpLogsV2(opID string, limit int) ([]OpLogV2Row, error) 
 		result = result[len(result)-limit:]
 	}
 	return result, nil
+}
+
+// ── UOS dependency-scheduling (Task 2) ──────────────────────────────────────
+//
+// Keyspace:
+//
+//	op:deprev:<subjectType>:<subjectID>               → JSON {"rev":N}
+//	op:completion:<subjectType>:<subjectID>:<opType>  → JSON {"rev":N} (book-level)
+//	op:completion:<subjectType>:<subjectID>:<opType>:<fileID> → JSON {"rev":N} (file)
+
+// depRevKey returns the PebbleDB key for the dep_rev counter of sub.
+func depRevKey(sub OpSubject) []byte {
+	return []byte("op:deprev:" + sub.Type + ":" + sub.ID)
+}
+
+// completionKey returns the PebbleDB key for a completion record.
+// fileID == "" → book-level; fileID != "" → per-file.
+func completionKey(sub OpSubject, opType, fileID string) []byte {
+	base := "op:completion:" + sub.Type + ":" + sub.ID + ":" + opType
+	if fileID != "" {
+		return []byte(base + ":" + fileID)
+	}
+	return []byte(base)
+}
+
+// opDepRevValue is the JSON envelope stored at dep_rev and completion keys.
+type opDepRevValue struct {
+	Rev uint64 `json:"rev"`
+}
+
+// GetDepRev returns the current dep_rev counter for sub, or 0 if never bumped.
+func (p *PebbleStore) GetDepRev(sub OpSubject) (uint64, error) {
+	var v opDepRevValue
+	if err := p.pebbleGetJSON(depRevKey(sub), &v); err != nil {
+		return 0, err
+	}
+	return v.Rev, nil
+}
+
+// BumpDepRev atomically increments the dep_rev counter for sub and returns the
+// new value.  Protected by opsMu to prevent concurrent read-increment-write races.
+func (p *PebbleStore) BumpDepRev(sub OpSubject) (uint64, error) {
+	p.opsMu.Lock()
+	defer p.opsMu.Unlock()
+
+	var v opDepRevValue
+	if err := p.pebbleGetJSON(depRevKey(sub), &v); err != nil {
+		return 0, err
+	}
+	v.Rev++
+	if err := p.pebbleSetJSON(depRevKey(sub), &v); err != nil {
+		return 0, err
+	}
+	return v.Rev, nil
+}
+
+// RecordOpCompletion stores a completion record for opType on sub at depRev.
+// fileID == "" → book-level completion; non-empty → per-file completion.
+func (p *PebbleStore) RecordOpCompletion(sub OpSubject, opType, fileID string, depRev uint64) error {
+	return p.pebbleSetJSON(completionKey(sub, opType, fileID), &opDepRevValue{Rev: depRev})
+}
+
+// GetOpCompletion retrieves the stored depRev for a book-level completion record.
+// Returns (rev, true, nil) when found, (0, false, nil) when absent.
+func (p *PebbleStore) GetOpCompletion(sub OpSubject, opType string) (uint64, bool, error) {
+	var v opDepRevValue
+	if err := p.pebbleGetJSON(completionKey(sub, opType, ""), &v); err != nil {
+		return 0, false, err
+	}
+	if v.Rev == 0 {
+		// pebbleGetJSON returns a zero-value struct when key not found.
+		// A rev of 0 is never written (BumpDepRev starts at 1), so zero means absent.
+		return 0, false, nil
+	}
+	return v.Rev, true, nil
+}
+
+// ListFileCompletions returns a map of fileID→depRev for all per-file completion
+// records for opType on sub.
+func (p *PebbleStore) ListFileCompletions(sub OpSubject, opType string) (map[string]uint64, error) {
+	// Per-file keys have the form: op:completion:<type>:<id>:<opType>:<fileID>
+	// The book-level key (no fileID suffix) must be excluded.
+	bookLevelKey := string(completionKey(sub, opType, ""))
+	prefix := []byte(bookLevelKey + ":")
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: prefixEnd(prefix),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	result := make(map[string]uint64)
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Key format after the book-level prefix + ":" is the fileID.
+		fileID := strings.TrimPrefix(string(iter.Key()), bookLevelKey+":")
+		if fileID == "" {
+			continue
+		}
+		var v opDepRevValue
+		if err := json.Unmarshal(iter.Value(), &v); err != nil {
+			continue
+		}
+		result[fileID] = v.Rev
+	}
+	if err := iter.Error(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// ListWaitingDepsOps returns all OperationV2Row entries whose Status is
+// "waiting_deps".  No status index exists, so this scans all opv2:op: rows.
+func (p *PebbleStore) ListWaitingDepsOps() ([]OperationV2Row, error) {
+	prefix := []byte("opv2:op:")
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: prefixEnd(prefix),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var result []OperationV2Row
+	for iter.First(); iter.Valid(); iter.Next() {
+		var row OperationV2Row
+		if err := json.Unmarshal(iter.Value(), &row); err != nil {
+			continue
+		}
+		if row.Status == "waiting_deps" {
+			result = append(result, row)
+		}
+	}
+	return result, iter.Error()
 }
