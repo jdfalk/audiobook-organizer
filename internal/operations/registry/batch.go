@@ -1,7 +1,7 @@
 // file: internal/operations/registry/batch.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e1f2a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b
-// last-edited: 2026-06-13
+// last-edited: 2026-06-14
 
 // batch.go implements M3: coalescing burst enqueues of a Batchable op type into
 // one OperationV2Row via a debounce timer.
@@ -91,6 +91,14 @@ type batchBucket struct {
 type batchManager struct {
 	mu      sync.Mutex
 	buckets map[string]*batchBucket // opType → bucket
+
+	// fireWG tracks in-flight batchFire goroutines that have passed the
+	// shuttingDown gate. Shutdown() waits on this after stopping all timers
+	// to ensure no fire goroutine can call InsertOperationV2 after the DB
+	// is closed. Add(1) is called inside batchMu (under the same lock that
+	// Shutdown's batchStopAllTimers acquires) so the happens-before
+	// relationship is established without a separate atomic CAS sequence.
+	fireWG sync.WaitGroup
 }
 
 func newBatchManager() *batchManager {
@@ -166,15 +174,24 @@ func (r *Registry) batchAdd(opType string, sub database.OpSubject, bw, bmw time.
 
 // batchFire is called by time.AfterFunc when the debounce window expires.
 // It dispatches ready subjects and leaves unready ones in the journal.
+//
+// Shutdown safety: the shuttingDown check and fireWG.Add(1) both execute
+// inside batchMu. batchStopAllTimers() also acquires batchMu. This establishes
+// a happens-before edge: either this goroutine saw shuttingDown=false and
+// Add(1)-ed before Shutdown's lock, or Shutdown's lock ran first and this
+// goroutine sees shuttingDown=true and exits without Add-ing. Either way,
+// Shutdown's fireWG.Wait() (called after batchStopAllTimers) correctly blocks
+// until all in-flight fires have completed their DB writes.
 func (r *Registry) batchFire(opType string, capturedGen uint64) {
-	// Bail immediately if shutting down — we must not touch the store after
-	// the DB is closed (mirrors the "pebble: closed" safety guard in worker.go).
+	// --- Phase 1: gate + snapshot under batchMu, then release ---
+	r.batch.mu.Lock()
+
+	// Bail if shutting down — inside the lock so Add(1) and the shuttingDown
+	// check are atomic with respect to batchStopAllTimers + Shutdown.
 	if r.shuttingDown.Load() {
+		r.batch.mu.Unlock()
 		return
 	}
-
-	// --- Phase 1: snapshot under batchMu, then release ---
-	r.batch.mu.Lock()
 
 	b, ok := r.batch.buckets[opType]
 	if !ok {
@@ -186,6 +203,12 @@ func (r *Registry) batchFire(opType string, capturedGen uint64) {
 		r.batch.mu.Unlock()
 		return
 	}
+
+	// Enroll in fireWG while still holding batchMu. This ensures Shutdown's
+	// fireWG.Wait() (which runs after batchStopAllTimers releases batchMu)
+	// cannot return until we call Done() — even if context-cancel races here.
+	r.batch.fireWG.Add(1)
+	defer r.batch.fireWG.Done()
 
 	// Snapshot subjects and reset the bucket.
 	snapshot := make([]database.OpSubject, 0, len(b.subjects))
@@ -241,7 +264,12 @@ func (r *Registry) batchFire(opType string, capturedGen uint64) {
 	// Re-bucket unready subjects (leave them in journal — they were never cleared).
 	// Their in-memory state was lost in the snapshot, so we re-add them.
 	// The journal entry already exists (idempotent), but we need the in-mem bucket.
-	if len(unreadySubs) > 0 {
+	//
+	// Guard: if we raced to this point while Shutdown was running, skip the
+	// re-arm entirely. The subjects stay journaled (never cleared above) and
+	// will be picked up by the next Start(). This prevents an orphan timer
+	// from being armed after batchStopAllTimers() has already run.
+	if len(unreadySubs) > 0 && !r.shuttingDown.Load() {
 		bw, bmw := effectiveBatchWindows(def)
 		for _, sub := range unreadySubs {
 			r.batchAdd(opType, sub, bw, bmw)
@@ -386,18 +414,30 @@ func (r *Registry) batchReloadOnStart(ctx context.Context) {
 	}
 }
 
-// batchStopAllTimers cancels all pending debounce timers without dispatching.
-// Called by Shutdown() to avoid timer goroutines firing after the DB is closed.
-// Subjects remain in the journal for the next Start() to reload.
+// batchStopAllTimers cancels all pending debounce timers without dispatching,
+// then waits for any already-in-flight batchFire goroutines to finish their
+// DB writes before returning.
+//
+// Called by Shutdown(). After this returns, no batchFire goroutine will call
+// InsertOperationV2 — it is safe for the caller to close the DB.
+//
+// Subjects that were in-flight or still pending remain in the journal; the
+// next Start() reloads them.
 func (r *Registry) batchStopAllTimers() {
 	r.batch.mu.Lock()
-	defer r.batch.mu.Unlock()
 	for _, b := range r.batch.buckets {
 		if b.timer != nil {
 			b.timer.Stop()
 			b.timer = nil
 		}
 	}
+	r.batch.mu.Unlock()
+
+	// Wait for goroutines that were already past the shuttingDown gate (i.e.
+	// they called fireWG.Add(1) under batchMu before we released the lock
+	// above). Any fire that hadn't yet acquired batchMu will see
+	// shuttingDown=true and bail before Add-ing, so this Wait is bounded.
+	r.batch.fireWG.Wait()
 }
 
 // effectiveBatchWindows returns the effective BatchWindow and BatchMaxWait for
