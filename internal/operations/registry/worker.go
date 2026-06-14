@@ -1,7 +1,7 @@
 // file: internal/operations/registry/worker.go
-// version: 2.4.1
+// version: 2.5.0
 // guid: b8c9d0e1-f2a3-4b5c-6d7e-8f9a0b1c2d3e
-// last-edited: 2026-06-10
+// last-edited: 2026-06-13
 
 package registry
 
@@ -306,6 +306,19 @@ func (r *Registry) executeRun(parentCtx context.Context, qr *queuedRun) (wasAban
 
 	if err := r.store.UpdateOperationV2Status(qr.opID, finalStatus, nil, &completedAt, errMsg); err != nil {
 		r.logger.Warn("registry: failed to update op terminal status", "op_id", qr.opID, "error", err)
+	}
+
+	// Notify the dependency scheduler (async; non-blocking) so waiting_deps ops
+	// for the same subject can be re-evaluated or failed as appropriate.
+	// Derive subject from params (same logic as EnqueueOp) so ops without
+	// requirements (which don't store SubjectID) still trigger wakeups.
+	if sub := subjectFromParams(qr.params); sub.ID != "" {
+		switch finalStatus {
+		case "completed":
+			r.notifyDepCompletion(sub, qr.defID)
+		case "failed":
+			r.notifyDepFailed(sub, qr.defID)
+		}
 	}
 
 	emitOpFinishedLog(runCtx, reporter, runStartedAt, finalStatus, runErr, false)
