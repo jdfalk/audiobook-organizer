@@ -340,17 +340,17 @@ type Config struct {
 	ScheduledReconcileOnStartup bool `json:"scheduled_reconcile_on_startup"`
 
 	// Per-task maintenance window toggles
-	MaintenanceWindowDedupRefresh     bool `json:"maintenance_window_dedup_refresh"`
-	MaintenanceWindowSeriesPrune      bool `json:"maintenance_window_series_prune"`
-	MaintenanceWindowAuthorSplit      bool `json:"maintenance_window_author_split"`
-	MaintenanceWindowTombstoneCleanup bool `json:"maintenance_window_tombstone_cleanup"`
-	MaintenanceWindowReconcile        bool `json:"maintenance_window_reconcile"`
-	MaintenanceWindowPurgeDeleted     bool `json:"maintenance_window_purge_deleted"`
-	MaintenanceWindowPurgeOldLogs     bool `json:"maintenance_window_purge_old_logs"`
-	MaintenanceWindowDbOptimize       bool `json:"maintenance_window_db_optimize"`
-	MaintenanceWindowLibraryScan      bool `json:"maintenance_window_library_scan"`
-	MaintenanceWindowLibraryOrganize  bool `json:"maintenance_window_library_organize"`
-	MaintenanceWindowMetadataRefresh  bool `json:"maintenance_window_metadata_refresh"`
+	MaintenanceWindowDedupRefresh       bool `json:"maintenance_window_dedup_refresh"`
+	MaintenanceWindowSeriesPrune        bool `json:"maintenance_window_series_prune"`
+	MaintenanceWindowAuthorSplit        bool `json:"maintenance_window_author_split"`
+	MaintenanceWindowTombstoneCleanup   bool `json:"maintenance_window_tombstone_cleanup"`
+	MaintenanceWindowReconcile          bool `json:"maintenance_window_reconcile"`
+	MaintenanceWindowPurgeDeleted       bool `json:"maintenance_window_purge_deleted"`
+	MaintenanceWindowPurgeOldLogs       bool `json:"maintenance_window_purge_old_logs"`
+	MaintenanceWindowDbOptimize         bool `json:"maintenance_window_db_optimize"`
+	MaintenanceWindowLibraryScan        bool `json:"maintenance_window_library_scan"`
+	MaintenanceWindowLibraryOrganize    bool `json:"maintenance_window_library_organize"`
+	MaintenanceWindowMetadataRefresh    bool `json:"maintenance_window_metadata_refresh"`
 	MaintenanceWindowLibrarySizeRefresh bool `json:"maintenance_window_library_size_refresh"`
 	// MaintenanceWindowAcoustIDOnlineLookup gates the nightly
 	// acoustid.lookup-online task. Off by default — the task hits a
@@ -604,270 +604,270 @@ func InitConfig() {
 
 	// WHY Mutate: whole-struct init; correct even if tests call InitConfig concurrently.
 	Mutate(func(c *Config) {
-	*c = Config{
-		// Core paths
-		RootDir:       viper.GetString("root_dir"),
-		DatabasePath:  viper.GetString("database_path"),
-		DatabaseType:  viper.GetString("database_type"),
-		EnableSQLite:  viper.GetBool("enable_sqlite3_i_know_the_risks"),
-		PlaylistDir:   viper.GetString("playlist_dir"),
-		SetupComplete: viper.GetBool("setup_complete"),
+		*c = Config{
+			// Core paths
+			RootDir:       viper.GetString("root_dir"),
+			DatabasePath:  viper.GetString("database_path"),
+			DatabaseType:  viper.GetString("database_type"),
+			EnableSQLite:  viper.GetBool("enable_sqlite3_i_know_the_risks"),
+			PlaylistDir:   viper.GetString("playlist_dir"),
+			SetupComplete: viper.GetBool("setup_complete"),
 
-		// Library organization
-		OrganizationStrategy:    viper.GetString("organization_strategy"),
-		ScanOnStartup:           viper.GetBool("scan_on_startup"),
-		AutoOrganize:            viper.GetBool("auto_organize"),
-		AutoScanEnabled:         viper.GetBool("auto_scan_enabled"),
-		AutoScanDebounceSeconds: viper.GetInt("auto_scan_debounce_seconds"),
-		FolderNamingPattern:     viper.GetString("folder_naming_pattern"),
-		FileNamingPattern:       viper.GetString("file_naming_pattern"),
-		CreateBackups:           viper.GetBool("create_backups"),
+			// Library organization
+			OrganizationStrategy:    viper.GetString("organization_strategy"),
+			ScanOnStartup:           viper.GetBool("scan_on_startup"),
+			AutoOrganize:            viper.GetBool("auto_organize"),
+			AutoScanEnabled:         viper.GetBool("auto_scan_enabled"),
+			AutoScanDebounceSeconds: viper.GetInt("auto_scan_debounce_seconds"),
+			FolderNamingPattern:     viper.GetString("folder_naming_pattern"),
+			FileNamingPattern:       viper.GetString("file_naming_pattern"),
+			CreateBackups:           viper.GetBool("create_backups"),
 
-		// Storage quotas
-		EnableDiskQuota:    viper.GetBool("enable_disk_quota"),
-		DiskQuotaPercent:   viper.GetInt("disk_quota_percent"),
-		EnableUserQuotas:   viper.GetBool("enable_user_quotas"),
-		DefaultUserQuotaGB: viper.GetInt("default_user_quota_gb"),
+			// Storage quotas
+			EnableDiskQuota:    viper.GetBool("enable_disk_quota"),
+			DiskQuotaPercent:   viper.GetInt("disk_quota_percent"),
+			EnableUserQuotas:   viper.GetBool("enable_user_quotas"),
+			DefaultUserQuotaGB: viper.GetInt("default_user_quota_gb"),
 
-		// Metadata
-		AutoFetchMetadata: viper.GetBool("auto_fetch_metadata"),
-		WriteBackMetadata: viper.GetBool("write_back_metadata"),
-		EmbedCoverArt:     viper.GetBool("embed_cover_art"),
-		Language:          viper.GetString("language"),
+			// Metadata
+			AutoFetchMetadata: viper.GetBool("auto_fetch_metadata"),
+			WriteBackMetadata: viper.GetBool("write_back_metadata"),
+			EmbedCoverArt:     viper.GetBool("embed_cover_art"),
+			Language:          viper.GetString("language"),
 
-		// Open Library dumps
-		OpenLibraryDumpEnabled: viper.GetBool("openlibrary_dump_enabled"),
-		OpenLibraryDumpDir:     viper.GetString("openlibrary_dump_dir"),
+			// Open Library dumps
+			OpenLibraryDumpEnabled: viper.GetBool("openlibrary_dump_enabled"),
+			OpenLibraryDumpDir:     viper.GetString("openlibrary_dump_dir"),
 
-		// Hardcover.app
-		HardcoverAPIToken: viper.GetString("hardcover_api_token"),
+			// Hardcover.app
+			HardcoverAPIToken: viper.GetString("hardcover_api_token"),
 
-		// Google Books
-		GoogleBooksAPIKey: viper.GetString("google_books_api_key"),
+			// Google Books
+			GoogleBooksAPIKey: viper.GetString("google_books_api_key"),
 
-		// AI parsing
-		EnableAIParsing:     viper.GetBool("enable_ai_parsing"),
-		OpenAIAPIKey:        viper.GetString("openai_api_key"),
-		AcoustIDAPIKey:      viper.GetString("acoustid_api_key"),
-		DedupReviewModel:    viper.GetString("dedup_review_model"),
-		MetadataReviewModel: viper.GetString("metadata_review_model"),
-		FilenameParseModel:  viper.GetString("filename_parse_model"),
-		CoverArtModel:       viper.GetString("cover_art_model"),
+			// AI parsing
+			EnableAIParsing:     viper.GetBool("enable_ai_parsing"),
+			OpenAIAPIKey:        viper.GetString("openai_api_key"),
+			AcoustIDAPIKey:      viper.GetString("acoustid_api_key"),
+			DedupReviewModel:    viper.GetString("dedup_review_model"),
+			MetadataReviewModel: viper.GetString("metadata_review_model"),
+			FilenameParseModel:  viper.GetString("filename_parse_model"),
+			CoverArtModel:       viper.GetString("cover_art_model"),
 
-		// Performance
-		ConcurrentScans:                  viper.GetInt("concurrent_scans"),
-		ChapterConsolidationThresholdMin: viper.GetInt("chapter_consolidation_threshold_min"),
-		OperationTimeoutMinutes:          viper.GetInt("operation_timeout_minutes"),
-		MinBookSizeBytes:                 viper.GetInt64("min_book_size_bytes"),
-		APIRateLimitPerMinute:            viper.GetInt("api_rate_limit_per_minute"),
-		AuthRateLimitPerMinute:           viper.GetInt("auth_rate_limit_per_minute"),
-		JSONBodyLimitMB:                  viper.GetInt("json_body_limit_mb"),
-		UploadBodyLimitMB:                viper.GetInt("upload_body_limit_mb"),
-		EnableAuth:                       viper.GetBool("enable_auth"),
-		EnableRateLimit:                  viper.GetBool("enable_rate_limit"),
-		BasicAuthEnabled:                 viper.GetBool("basic_auth_enabled"),
-		BasicAuthUsername:                viper.GetString("basic_auth_username"),
-		BasicAuthPassword:                viper.GetString("basic_auth_password"),
+			// Performance
+			ConcurrentScans:                  viper.GetInt("concurrent_scans"),
+			ChapterConsolidationThresholdMin: viper.GetInt("chapter_consolidation_threshold_min"),
+			OperationTimeoutMinutes:          viper.GetInt("operation_timeout_minutes"),
+			MinBookSizeBytes:                 viper.GetInt64("min_book_size_bytes"),
+			APIRateLimitPerMinute:            viper.GetInt("api_rate_limit_per_minute"),
+			AuthRateLimitPerMinute:           viper.GetInt("auth_rate_limit_per_minute"),
+			JSONBodyLimitMB:                  viper.GetInt("json_body_limit_mb"),
+			UploadBodyLimitMB:                viper.GetInt("upload_body_limit_mb"),
+			EnableAuth:                       viper.GetBool("enable_auth"),
+			EnableRateLimit:                  viper.GetBool("enable_rate_limit"),
+			BasicAuthEnabled:                 viper.GetBool("basic_auth_enabled"),
+			BasicAuthUsername:                viper.GetString("basic_auth_username"),
+			BasicAuthPassword:                viper.GetString("basic_auth_password"),
 
-		// Memory management
-		MemoryLimitType:           viper.GetString("memory_limit_type"),
-		CacheSize:                 viper.GetInt("cache_size"),
-		MetadataFetchCacheTTLDays: viper.GetInt("metadata_fetch_cache_ttl_days"),
-		MemoryLimitPercent:        viper.GetInt("memory_limit_percent"),
-		MemoryLimitMB:             viper.GetInt("memory_limit_mb"),
+			// Memory management
+			MemoryLimitType:           viper.GetString("memory_limit_type"),
+			CacheSize:                 viper.GetInt("cache_size"),
+			MetadataFetchCacheTTLDays: viper.GetInt("metadata_fetch_cache_ttl_days"),
+			MemoryLimitPercent:        viper.GetInt("memory_limit_percent"),
+			MemoryLimitMB:             viper.GetInt("memory_limit_mb"),
 
-		// Lifecycle / retention
-		PurgeSoftDeletedAfterDays:   viper.GetInt("purge_soft_deleted_after_days"),
-		PurgeSoftDeletedDeleteFiles: viper.GetBool("purge_soft_deleted_delete_files"),
+			// Lifecycle / retention
+			PurgeSoftDeletedAfterDays:   viper.GetInt("purge_soft_deleted_after_days"),
+			PurgeSoftDeletedDeleteFiles: viper.GetBool("purge_soft_deleted_delete_files"),
 
-		// Logging
-		LogLevel:          viper.GetString("log_level"),
-		LogFormat:         viper.GetString("log_format"),
-		EnableJsonLogging: viper.GetBool("enable_json_logging"),
+			// Logging
+			LogLevel:          viper.GetString("log_level"),
+			LogFormat:         viper.GetString("log_format"),
+			EnableJsonLogging: viper.GetBool("enable_json_logging"),
 
-		// Auto-update
-		AutoUpdateEnabled:      viper.GetBool("auto_update_enabled"),
-		AutoUpdateChannel:      viper.GetString("auto_update_channel"),
-		AutoUpdateCheckMinutes: viper.GetInt("auto_update_check_minutes"),
-		AutoUpdateWindowStart:  viper.GetInt("auto_update_window_start"),
-		AutoUpdateWindowEnd:    viper.GetInt("auto_update_window_end"),
+			// Auto-update
+			AutoUpdateEnabled:      viper.GetBool("auto_update_enabled"),
+			AutoUpdateChannel:      viper.GetString("auto_update_channel"),
+			AutoUpdateCheckMinutes: viper.GetInt("auto_update_check_minutes"),
+			AutoUpdateWindowStart:  viper.GetInt("auto_update_window_start"),
+			AutoUpdateWindowEnd:    viper.GetInt("auto_update_window_end"),
 
-		// Maintenance window
-		MaintenanceWindowEnabled:          viper.GetBool("maintenance_window_enabled"),
-		MaintenanceWindowStart:            viper.GetInt("maintenance_window_start"),
-		MaintenanceWindowEnd:              viper.GetInt("maintenance_window_end"),
-		MaintenanceWindowDedupRefresh:     viper.GetBool("maintenance_window_dedup_refresh"),
-		MaintenanceWindowSeriesPrune:      viper.GetBool("maintenance_window_series_prune"),
-		MaintenanceWindowAuthorSplit:      viper.GetBool("maintenance_window_author_split"),
-		MaintenanceWindowTombstoneCleanup: viper.GetBool("maintenance_window_tombstone_cleanup"),
-		MaintenanceWindowReconcile:        viper.GetBool("maintenance_window_reconcile"),
-		MaintenanceWindowPurgeDeleted:     viper.GetBool("maintenance_window_purge_deleted"),
-		MaintenanceWindowPurgeOldLogs:     viper.GetBool("maintenance_window_purge_old_logs"),
-		MaintenanceWindowDbOptimize:       viper.GetBool("maintenance_window_db_optimize"),
-		MaintenanceWindowLibraryScan:      viper.GetBool("maintenance_window_library_scan"),
-		MaintenanceWindowLibraryOrganize:  viper.GetBool("maintenance_window_library_organize"),
-		MaintenanceWindowMetadataRefresh:  viper.GetBool("maintenance_window_metadata_refresh"),
-		MaintenanceWindowLibrarySizeRefresh:   viper.GetBool("maintenance_window_library_size_refresh"),
-		MaintenanceWindowAcoustIDOnlineLookup: viper.GetBool("maintenance_window_acoustid_online_lookup"),
-		AcoustIDOnlineLookupNightlyLimit:      viper.GetInt("acoustid_online_lookup_nightly_limit"),
+			// Maintenance window
+			MaintenanceWindowEnabled:              viper.GetBool("maintenance_window_enabled"),
+			MaintenanceWindowStart:                viper.GetInt("maintenance_window_start"),
+			MaintenanceWindowEnd:                  viper.GetInt("maintenance_window_end"),
+			MaintenanceWindowDedupRefresh:         viper.GetBool("maintenance_window_dedup_refresh"),
+			MaintenanceWindowSeriesPrune:          viper.GetBool("maintenance_window_series_prune"),
+			MaintenanceWindowAuthorSplit:          viper.GetBool("maintenance_window_author_split"),
+			MaintenanceWindowTombstoneCleanup:     viper.GetBool("maintenance_window_tombstone_cleanup"),
+			MaintenanceWindowReconcile:            viper.GetBool("maintenance_window_reconcile"),
+			MaintenanceWindowPurgeDeleted:         viper.GetBool("maintenance_window_purge_deleted"),
+			MaintenanceWindowPurgeOldLogs:         viper.GetBool("maintenance_window_purge_old_logs"),
+			MaintenanceWindowDbOptimize:           viper.GetBool("maintenance_window_db_optimize"),
+			MaintenanceWindowLibraryScan:          viper.GetBool("maintenance_window_library_scan"),
+			MaintenanceWindowLibraryOrganize:      viper.GetBool("maintenance_window_library_organize"),
+			MaintenanceWindowMetadataRefresh:      viper.GetBool("maintenance_window_metadata_refresh"),
+			MaintenanceWindowLibrarySizeRefresh:   viper.GetBool("maintenance_window_library_size_refresh"),
+			MaintenanceWindowAcoustIDOnlineLookup: viper.GetBool("maintenance_window_acoustid_online_lookup"),
+			AcoustIDOnlineLookupNightlyLimit:      viper.GetInt("acoustid_online_lookup_nightly_limit"),
 
-		// iTunes sync
-		ITunesSyncEnabled:      viper.GetBool("itunes_sync_enabled"),
-		ITunesSyncInterval:     viper.GetInt("itunes_sync_interval"),
-		ITLWriteBackEnabled:    viper.GetBool("itl_write_back_enabled"),
-		ITunesLibraryWritePath: viper.GetString("itunes_library_write_path"),
-		ITunesLibraryReadPath:  viper.GetString("itunes_library_read_path"),
-		ITunesAutoWriteBack:    viper.GetBool("itunes_auto_write_back"),
-		ITunesPathTrimEnabled:  viper.GetBool("itunes_path_trim_enabled"),
-		ITunesWindowsRootPath:  viper.GetString("itunes_windows_root_path"),
-		ITunesMediaRoot:        viper.GetString("itunes_media_root"),
+			// iTunes sync
+			ITunesSyncEnabled:      viper.GetBool("itunes_sync_enabled"),
+			ITunesSyncInterval:     viper.GetInt("itunes_sync_interval"),
+			ITLWriteBackEnabled:    viper.GetBool("itl_write_back_enabled"),
+			ITunesLibraryWritePath: viper.GetString("itunes_library_write_path"),
+			ITunesLibraryReadPath:  viper.GetString("itunes_library_read_path"),
+			ITunesAutoWriteBack:    viper.GetBool("itunes_auto_write_back"),
+			ITunesPathTrimEnabled:  viper.GetBool("itunes_path_trim_enabled"),
+			ITunesWindowsRootPath:  viper.GetString("itunes_windows_root_path"),
+			ITunesMediaRoot:        viper.GetString("itunes_media_root"),
 
-		// Download client integration
-		DownloadClient: DownloadClientConfig{
-			Torrent: TorrentClientConfig{
-				Type: viper.GetString("download_client.torrent.type"),
-				Deluge: DelugeConfig{
-					Host:     viper.GetString("download_client.torrent.deluge.host"),
-					Port:     viper.GetInt("download_client.torrent.deluge.port"),
-					Username: viper.GetString("download_client.torrent.deluge.username"),
-					Password: viper.GetString("download_client.torrent.deluge.password"),
+			// Download client integration
+			DownloadClient: DownloadClientConfig{
+				Torrent: TorrentClientConfig{
+					Type: viper.GetString("download_client.torrent.type"),
+					Deluge: DelugeConfig{
+						Host:     viper.GetString("download_client.torrent.deluge.host"),
+						Port:     viper.GetInt("download_client.torrent.deluge.port"),
+						Username: viper.GetString("download_client.torrent.deluge.username"),
+						Password: viper.GetString("download_client.torrent.deluge.password"),
+					},
+					QBittorrent: QBittorrentConfig{
+						Host:     viper.GetString("download_client.torrent.qbittorrent.host"),
+						Port:     viper.GetInt("download_client.torrent.qbittorrent.port"),
+						Username: viper.GetString("download_client.torrent.qbittorrent.username"),
+						Password: viper.GetString("download_client.torrent.qbittorrent.password"),
+						UseHTTPS: viper.GetBool("download_client.torrent.qbittorrent.use_https"),
+					},
 				},
-				QBittorrent: QBittorrentConfig{
-					Host:     viper.GetString("download_client.torrent.qbittorrent.host"),
-					Port:     viper.GetInt("download_client.torrent.qbittorrent.port"),
-					Username: viper.GetString("download_client.torrent.qbittorrent.username"),
-					Password: viper.GetString("download_client.torrent.qbittorrent.password"),
-					UseHTTPS: viper.GetBool("download_client.torrent.qbittorrent.use_https"),
-				},
-			},
-			Usenet: UsenetClientConfig{
-				Type: viper.GetString("download_client.usenet.type"),
-				SABnzbd: SABnzbdConfig{
-					Host:     viper.GetString("download_client.usenet.sabnzbd.host"),
-					Port:     viper.GetInt("download_client.usenet.sabnzbd.port"),
-					APIKey:   viper.GetString("download_client.usenet.sabnzbd.api_key"),
-					UseHTTPS: viper.GetBool("download_client.usenet.sabnzbd.use_https"),
-				},
-			},
-		},
-
-		// Path formatting & apply pipeline
-		PathFormat:           viper.GetString("path_format"),
-		SegmentTitleFormat:   viper.GetString("segment_title_format"),
-		AutoRenameOnApply:    viper.GetBool("auto_rename_on_apply"),
-		AutoWriteTagsOnApply: viper.GetBool("auto_write_tags_on_apply"),
-		VerifyAfterWrite:     viper.GetBool("verify_after_write"),
-
-		SupportedExtensions: supportedExtensions,
-		ExcludePatterns:     excludePatterns,
-	}
-
-	// Embedding-based dedup (defaults used unless DB settings override)
-	c.EmbeddingEnabled = true
-	c.EmbeddingModel = "text-embedding-3-large"
-	c.DedupBookHighThreshold = 0.95
-	c.DedupBookLowThreshold = 0.85
-	c.DedupAuthorHighThreshold = 0.92
-	c.DedupAuthorLowThreshold = 0.80
-	c.DedupAutoMergeEnabled = true
-	c.DedupLLMAutoMergeHighConfidence = false  // opt-in
-	c.DedupOnImportViaScheduler = false        // opt-in — keep eager path until M4 is confirmed
-
-	// Metadata candidate scoring (defaults used unless DB settings override)
-	c.MetadataEmbeddingScoringEnabled = true
-	c.MetadataEmbeddingMinScore = 0.50
-	c.MetadataEmbeddingBestMatchMin = 0.70
-	c.MetadataLLMScoringEnabled = false
-	c.MetadataLLMRerankEpsilon = 0.01
-	c.MetadataLLMRerankTopK = 5
-	c.WriteBackupBeforeTagWrite = false
-
-	// Default Open Library dump dir to {RootDir}/openlibrary-dumps if not set
-	if c.OpenLibraryDumpDir == "" && c.RootDir != "" {
-		c.OpenLibraryDumpDir = filepath.Join(c.RootDir, "openlibrary-dumps")
-	}
-
-	// API Keys (Goodreads deprecated Dec 2020, removed)
-
-	// Load metadata sources from config or use defaults
-	if viper.IsSet("metadata_sources") {
-		viper.UnmarshalKey("metadata_sources", &c.MetadataSources)
-	} else {
-		// Set default metadata sources
-		c.MetadataSources = []MetadataSource{
-			{
-				ID:           "audible",
-				Name:         "Audible",
-				Enabled:      true,
-				Priority:     1,
-				RequiresAuth: false,
-				Credentials:  make(map[string]string),
-			},
-			{
-				ID:           "openlibrary",
-				Name:         "Open Library",
-				Enabled:      true,
-				Priority:     2,
-				RequiresAuth: false,
-				Credentials:  make(map[string]string),
-			},
-			{
-				ID:           "audnexus",
-				Name:         "Audnexus",
-				Enabled:      true,
-				Priority:     3,
-				RequiresAuth: false,
-				Credentials:  make(map[string]string),
-			},
-			{
-				ID:           "google-books",
-				Name:         "Google Books",
-				Enabled:      false,
-				Priority:     4,
-				RequiresAuth: true,
-				Credentials: map[string]string{
-					"apiKey": "",
+				Usenet: UsenetClientConfig{
+					Type: viper.GetString("download_client.usenet.type"),
+					SABnzbd: SABnzbdConfig{
+						Host:     viper.GetString("download_client.usenet.sabnzbd.host"),
+						Port:     viper.GetInt("download_client.usenet.sabnzbd.port"),
+						APIKey:   viper.GetString("download_client.usenet.sabnzbd.api_key"),
+						UseHTTPS: viper.GetBool("download_client.usenet.sabnzbd.use_https"),
+					},
 				},
 			},
-			{
-				ID:           "hardcover",
-				Name:         "Hardcover",
-				Enabled:      false,
-				Priority:     5,
-				RequiresAuth: true,
-				Credentials:  make(map[string]string),
-			},
-			{
-				ID:           "wikipedia",
-				Name:         "Wikipedia",
-				Enabled:      false, // Disabled by default — Wikipedia API returns 403
-				Priority:     6,
-				RequiresAuth: false,
-				Credentials:  make(map[string]string),
-			},
+
+			// Path formatting & apply pipeline
+			PathFormat:           viper.GetString("path_format"),
+			SegmentTitleFormat:   viper.GetString("segment_title_format"),
+			AutoRenameOnApply:    viper.GetBool("auto_rename_on_apply"),
+			AutoWriteTagsOnApply: viper.GetBool("auto_write_tags_on_apply"),
+			VerifyAfterWrite:     viper.GetBool("verify_after_write"),
+
+			SupportedExtensions: supportedExtensions,
+			ExcludePatterns:     excludePatterns,
 		}
-	}
 
-	// Backward compatibility: map old config key names to new ones
-	if c.ITunesLibraryWritePath == "" {
-		c.ITunesLibraryWritePath = viper.GetString("itunes_library_itl_path")
-	}
-	if c.ITunesLibraryReadPath == "" {
-		c.ITunesLibraryReadPath = viper.GetString("itunes_library_xml_path")
-	}
+		// Embedding-based dedup (defaults used unless DB settings override)
+		c.EmbeddingEnabled = true
+		c.EmbeddingModel = "text-embedding-3-large"
+		c.DedupBookHighThreshold = 0.95
+		c.DedupBookLowThreshold = 0.85
+		c.DedupAuthorHighThreshold = 0.92
+		c.DedupAuthorLowThreshold = 0.80
+		c.DedupAutoMergeEnabled = true
+		c.DedupLLMAutoMergeHighConfidence = false // opt-in
+		c.DedupOnImportViaScheduler = false       // opt-in — keep eager path until M4 is confirmed
 
-	// Auto-enable ITL write-back when a write path is configured
-	if c.ITunesLibraryWritePath != "" && !c.ITLWriteBackEnabled {
-		c.ITLWriteBackEnabled = true
-	}
+		// Metadata candidate scoring (defaults used unless DB settings override)
+		c.MetadataEmbeddingScoringEnabled = true
+		c.MetadataEmbeddingMinScore = 0.50
+		c.MetadataEmbeddingBestMatchMin = 0.70
+		c.MetadataLLMScoringEnabled = false
+		c.MetadataLLMRerankEpsilon = 0.01
+		c.MetadataLLMRerankTopK = 5
+		c.WriteBackupBeforeTagWrite = false
 
-	// Normalize database type
-	if c.DatabaseType == "sqlite3" {
-		c.DatabaseType = "sqlite"
-	}
-	if c.DatabaseType == "" {
-		c.DatabaseType = "pebble"
-	}
+		// Default Open Library dump dir to {RootDir}/openlibrary-dumps if not set
+		if c.OpenLibraryDumpDir == "" && c.RootDir != "" {
+			c.OpenLibraryDumpDir = filepath.Join(c.RootDir, "openlibrary-dumps")
+		}
+
+		// API Keys (Goodreads deprecated Dec 2020, removed)
+
+		// Load metadata sources from config or use defaults
+		if viper.IsSet("metadata_sources") {
+			viper.UnmarshalKey("metadata_sources", &c.MetadataSources)
+		} else {
+			// Set default metadata sources
+			c.MetadataSources = []MetadataSource{
+				{
+					ID:           "audible",
+					Name:         "Audible",
+					Enabled:      true,
+					Priority:     1,
+					RequiresAuth: false,
+					Credentials:  make(map[string]string),
+				},
+				{
+					ID:           "openlibrary",
+					Name:         "Open Library",
+					Enabled:      true,
+					Priority:     2,
+					RequiresAuth: false,
+					Credentials:  make(map[string]string),
+				},
+				{
+					ID:           "audnexus",
+					Name:         "Audnexus",
+					Enabled:      true,
+					Priority:     3,
+					RequiresAuth: false,
+					Credentials:  make(map[string]string),
+				},
+				{
+					ID:           "google-books",
+					Name:         "Google Books",
+					Enabled:      false,
+					Priority:     4,
+					RequiresAuth: true,
+					Credentials: map[string]string{
+						"apiKey": "",
+					},
+				},
+				{
+					ID:           "hardcover",
+					Name:         "Hardcover",
+					Enabled:      false,
+					Priority:     5,
+					RequiresAuth: true,
+					Credentials:  make(map[string]string),
+				},
+				{
+					ID:           "wikipedia",
+					Name:         "Wikipedia",
+					Enabled:      false, // Disabled by default — Wikipedia API returns 403
+					Priority:     6,
+					RequiresAuth: false,
+					Credentials:  make(map[string]string),
+				},
+			}
+		}
+
+		// Backward compatibility: map old config key names to new ones
+		if c.ITunesLibraryWritePath == "" {
+			c.ITunesLibraryWritePath = viper.GetString("itunes_library_itl_path")
+		}
+		if c.ITunesLibraryReadPath == "" {
+			c.ITunesLibraryReadPath = viper.GetString("itunes_library_xml_path")
+		}
+
+		// Auto-enable ITL write-back when a write path is configured
+		if c.ITunesLibraryWritePath != "" && !c.ITLWriteBackEnabled {
+			c.ITLWriteBackEnabled = true
+		}
+
+		// Normalize database type
+		if c.DatabaseType == "sqlite3" {
+			c.DatabaseType = "sqlite"
+		}
+		if c.DatabaseType == "" {
+			c.DatabaseType = "pebble"
+		}
 	}) // end Mutate
 }
 
@@ -1016,235 +1016,235 @@ func ResetToDefaults() {
 	// deadlock (Mutate is not re-entrant).
 	cur := Snapshot()
 	Mutate(func(c *Config) {
-	*c = Config{
-		// Core paths — preserve existing paths; reset everything else
-		RootDir:       cur.RootDir,
-		DatabasePath:  cur.DatabasePath,
-		DatabaseType:  "pebble",
-		EnableSQLite:  false,
-		PlaylistDir:   cur.PlaylistDir,
-		SetupComplete: false,
+		*c = Config{
+			// Core paths — preserve existing paths; reset everything else
+			RootDir:       cur.RootDir,
+			DatabasePath:  cur.DatabasePath,
+			DatabaseType:  "pebble",
+			EnableSQLite:  false,
+			PlaylistDir:   cur.PlaylistDir,
+			SetupComplete: false,
 
-		// Library organization
-		OrganizationStrategy:    "auto",
-		ScanOnStartup:           false,
-		AutoOrganize:            true,
-		AutoScanEnabled:         false,
-		AutoScanDebounceSeconds: 30,
-		FolderNamingPattern:     "{author}/{series}/{title} ({print_year})",
-		FileNamingPattern:       "{title} - {author} - read by {narrator}",
-		CreateBackups:           true,
+			// Library organization
+			OrganizationStrategy:    "auto",
+			ScanOnStartup:           false,
+			AutoOrganize:            true,
+			AutoScanEnabled:         false,
+			AutoScanDebounceSeconds: 30,
+			FolderNamingPattern:     "{author}/{series}/{title} ({print_year})",
+			FileNamingPattern:       "{title} - {author} - read by {narrator}",
+			CreateBackups:           true,
 
-		// Storage quotas
-		EnableDiskQuota:    false,
-		DiskQuotaPercent:   80,
-		EnableUserQuotas:   false,
-		DefaultUserQuotaGB: 100,
+			// Storage quotas
+			EnableDiskQuota:    false,
+			DiskQuotaPercent:   80,
+			EnableUserQuotas:   false,
+			DefaultUserQuotaGB: 100,
 
-		// Metadata
-		AutoFetchMetadata: true,
-		EmbedCoverArt:     false,
-		Language:          "en",
+			// Metadata
+			AutoFetchMetadata: true,
+			EmbedCoverArt:     false,
+			Language:          "en",
 
-		// Open Library dumps
-		OpenLibraryDumpEnabled: false,
-		OpenLibraryDumpDir:     "",
+			// Open Library dumps
+			OpenLibraryDumpEnabled: false,
+			OpenLibraryDumpDir:     "",
 
-		// AI parsing
-		EnableAIParsing:     true,
-		OpenAIAPIKey:        "",
-		AcoustIDAPIKey:      "",
-		DedupReviewModel:    "gpt-5-mini",
-		MetadataReviewModel: "gpt-5-mini",
-		FilenameParseModel:  "gpt-5-mini",
-		CoverArtModel:       "gpt-5-mini",
+			// AI parsing
+			EnableAIParsing:     true,
+			OpenAIAPIKey:        "",
+			AcoustIDAPIKey:      "",
+			DedupReviewModel:    "gpt-5-mini",
+			MetadataReviewModel: "gpt-5-mini",
+			FilenameParseModel:  "gpt-5-mini",
+			CoverArtModel:       "gpt-5-mini",
 
-		// Performance
-		ConcurrentScans:         max(runtime.NumCPU(), 4),
-		OperationTimeoutMinutes: 30,
-		MinBookSizeBytes:        5 * 1024 * 1024,
-		APIRateLimitPerMinute:   100,
-		AuthRateLimitPerMinute:  10,
-		JSONBodyLimitMB:         1,
-		UploadBodyLimitMB:       10,
-		EnableAuth:              true,
-		EnableRateLimit:         true,
-		BasicAuthEnabled:        false,
-		BasicAuthUsername:       "",
-		BasicAuthPassword:       "",
+			// Performance
+			ConcurrentScans:         max(runtime.NumCPU(), 4),
+			OperationTimeoutMinutes: 30,
+			MinBookSizeBytes:        5 * 1024 * 1024,
+			APIRateLimitPerMinute:   100,
+			AuthRateLimitPerMinute:  10,
+			JSONBodyLimitMB:         1,
+			UploadBodyLimitMB:       10,
+			EnableAuth:              true,
+			EnableRateLimit:         true,
+			BasicAuthEnabled:        false,
+			BasicAuthUsername:       "",
+			BasicAuthPassword:       "",
 
-		// Memory management
-		MemoryLimitType:    "items",
-		CacheSize:          1000,
-		MemoryLimitPercent: 25,
-		MemoryLimitMB:      512,
+			// Memory management
+			MemoryLimitType:    "items",
+			CacheSize:          1000,
+			MemoryLimitPercent: 25,
+			MemoryLimitMB:      512,
 
-		// Lifecycle / retention
-		PurgeSoftDeletedAfterDays:      30,
-		PurgeSoftDeletedDeleteFiles:    false,
-		ActivityLogRetentionChangeDays: 90,
-		ActivityLogRetentionDebugDays:  30,
-		ActivityLogCompactionDays:      14,
+			// Lifecycle / retention
+			PurgeSoftDeletedAfterDays:      30,
+			PurgeSoftDeletedDeleteFiles:    false,
+			ActivityLogRetentionChangeDays: 90,
+			ActivityLogRetentionDebugDays:  30,
+			ActivityLogCompactionDays:      14,
 
-		// Embedding-based dedup
-		EmbeddingEnabled:                true,
-		EmbeddingModel:                  "text-embedding-3-large",
-		DedupBookHighThreshold:          0.95,
-		DedupBookLowThreshold:           0.85,
-		DedupAuthorHighThreshold:        0.92,
-		DedupAuthorLowThreshold:         0.80,
-		DedupAutoMergeEnabled:           true,
-		DedupLLMAutoMergeHighConfidence: false,
-		DedupOnImportViaScheduler:       false, // opt-in
+			// Embedding-based dedup
+			EmbeddingEnabled:                true,
+			EmbeddingModel:                  "text-embedding-3-large",
+			DedupBookHighThreshold:          0.95,
+			DedupBookLowThreshold:           0.85,
+			DedupAuthorHighThreshold:        0.92,
+			DedupAuthorLowThreshold:         0.80,
+			DedupAutoMergeEnabled:           true,
+			DedupLLMAutoMergeHighConfidence: false,
+			DedupOnImportViaScheduler:       false, // opt-in
 
-		// Metadata candidate scoring (PR1)
-		MetadataEmbeddingScoringEnabled: true,
-		MetadataEmbeddingMinScore:       0.50,
-		MetadataEmbeddingBestMatchMin:   0.70,
+			// Metadata candidate scoring (PR1)
+			MetadataEmbeddingScoringEnabled: true,
+			MetadataEmbeddingMinScore:       0.50,
+			MetadataEmbeddingBestMatchMin:   0.70,
 
-		// Metadata LLM rerank tier (PR2)
-		MetadataLLMScoringEnabled: false,
-		MetadataLLMRerankEpsilon:  0.01,
-		MetadataLLMRerankTopK:     5,
+			// Metadata LLM rerank tier (PR2)
+			MetadataLLMScoringEnabled: false,
+			MetadataLLMRerankEpsilon:  0.01,
+			MetadataLLMRerankTopK:     5,
 
-		// Tag-write backup default OFF — old default was always-on and
-		// accumulated tens of thousands of stale backup files across
-		// the library (multi-TB apparent size). Opt-in if you want it.
-		WriteBackupBeforeTagWrite: false,
+			// Tag-write backup default OFF — old default was always-on and
+			// accumulated tens of thousands of stale backup files across
+			// the library (multi-TB apparent size). Opt-in if you want it.
+			WriteBackupBeforeTagWrite: false,
 
-		// Logging
-		LogLevel:          "info",
-		LogFormat:         "text",
-		EnableJsonLogging: false,
+			// Logging
+			LogLevel:          "info",
+			LogFormat:         "text",
+			EnableJsonLogging: false,
 
-		// Auto-update
-		AutoUpdateEnabled:      false,
-		AutoUpdateChannel:      "stable",
-		AutoUpdateCheckMinutes: 60,
-		AutoUpdateWindowStart:  1,
-		AutoUpdateWindowEnd:    4,
+			// Auto-update
+			AutoUpdateEnabled:      false,
+			AutoUpdateChannel:      "stable",
+			AutoUpdateCheckMinutes: 60,
+			AutoUpdateWindowStart:  1,
+			AutoUpdateWindowEnd:    4,
 
-		// Maintenance window
-		MaintenanceWindowEnabled:          true,
-		MaintenanceWindowStart:            1,
-		MaintenanceWindowEnd:              4,
-		MaintenanceWindowDedupRefresh:     true,
-		MaintenanceWindowSeriesPrune:      true,
-		MaintenanceWindowAuthorSplit:      true,
-		MaintenanceWindowTombstoneCleanup: true,
-		MaintenanceWindowReconcile:        true,
-		MaintenanceWindowPurgeDeleted:     true,
-		MaintenanceWindowPurgeOldLogs:     true,
-		MaintenanceWindowDbOptimize:       true,
-		MaintenanceWindowLibraryScan:      false,
-		MaintenanceWindowLibraryOrganize:  false,
-		MaintenanceWindowMetadataRefresh:  false,
-		// AcoustID online lookup is OFF by default — uses third-party
-		// quota and only helps users who set ACOUSTID_API_KEY. Opt-in
-		// via setting + env key.
-		MaintenanceWindowAcoustIDOnlineLookup: false,
-		AcoustIDOnlineLookupNightlyLimit:      5000,
+			// Maintenance window
+			MaintenanceWindowEnabled:          true,
+			MaintenanceWindowStart:            1,
+			MaintenanceWindowEnd:              4,
+			MaintenanceWindowDedupRefresh:     true,
+			MaintenanceWindowSeriesPrune:      true,
+			MaintenanceWindowAuthorSplit:      true,
+			MaintenanceWindowTombstoneCleanup: true,
+			MaintenanceWindowReconcile:        true,
+			MaintenanceWindowPurgeDeleted:     true,
+			MaintenanceWindowPurgeOldLogs:     true,
+			MaintenanceWindowDbOptimize:       true,
+			MaintenanceWindowLibraryScan:      false,
+			MaintenanceWindowLibraryOrganize:  false,
+			MaintenanceWindowMetadataRefresh:  false,
+			// AcoustID online lookup is OFF by default — uses third-party
+			// quota and only helps users who set ACOUSTID_API_KEY. Opt-in
+			// via setting + env key.
+			MaintenanceWindowAcoustIDOnlineLookup: false,
+			AcoustIDOnlineLookupNightlyLimit:      5000,
 
-		// iTunes sync
-		ITunesSyncEnabled:      true,
-		ITunesSyncInterval:     30,
-		ITLWriteBackEnabled:    false,
-		ITunesLibraryWritePath: "",
+			// iTunes sync
+			ITunesSyncEnabled:      true,
+			ITunesSyncInterval:     30,
+			ITLWriteBackEnabled:    false,
+			ITunesLibraryWritePath: "",
 
-		// Download client integration
-		DownloadClient: DownloadClientConfig{
-			Torrent: TorrentClientConfig{
-				Type: "",
-				Deluge: DelugeConfig{
-					Host:     "",
-					Port:     0,
-					Username: "",
-					Password: "",
+			// Download client integration
+			DownloadClient: DownloadClientConfig{
+				Torrent: TorrentClientConfig{
+					Type: "",
+					Deluge: DelugeConfig{
+						Host:     "",
+						Port:     0,
+						Username: "",
+						Password: "",
+					},
+					QBittorrent: QBittorrentConfig{
+						Host:     "",
+						Port:     0,
+						Username: "",
+						Password: "",
+						UseHTTPS: false,
+					},
 				},
-				QBittorrent: QBittorrentConfig{
-					Host:     "",
-					Port:     0,
-					Username: "",
-					Password: "",
-					UseHTTPS: false,
-				},
-			},
-			Usenet: UsenetClientConfig{
-				Type: "",
-				SABnzbd: SABnzbdConfig{
-					Host:     "",
-					Port:     0,
-					APIKey:   "",
-					UseHTTPS: false,
-				},
-			},
-		},
-
-		// Path formatting & apply pipeline
-		PathFormat:           "{author}/{series_prefix}{title}/{track_title}.{ext}",
-		SegmentTitleFormat:   "{title} - {track}/{total_tracks}",
-		AutoRenameOnApply:    true,
-		AutoWriteTagsOnApply: true,
-		VerifyAfterWrite:     true,
-
-		SupportedExtensions: []string{
-			".m4b", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".wma",
-		},
-		ExcludePatterns: []string{},
-
-		// Default metadata sources
-		MetadataSources: []MetadataSource{
-			{
-				ID:           "audible",
-				Name:         "Audible",
-				Enabled:      true,
-				Priority:     1,
-				RequiresAuth: false,
-				Credentials:  make(map[string]string),
-			},
-			{
-				ID:           "openlibrary",
-				Name:         "Open Library",
-				Enabled:      true,
-				Priority:     2,
-				RequiresAuth: false,
-				Credentials:  make(map[string]string),
-			},
-			{
-				ID:           "audnexus",
-				Name:         "Audnexus",
-				Enabled:      true,
-				Priority:     3,
-				RequiresAuth: false,
-				Credentials:  make(map[string]string),
-			},
-			{
-				ID:           "google-books",
-				Name:         "Google Books",
-				Enabled:      false,
-				Priority:     4,
-				RequiresAuth: true,
-				Credentials: map[string]string{
-					"apiKey": "",
+				Usenet: UsenetClientConfig{
+					Type: "",
+					SABnzbd: SABnzbdConfig{
+						Host:     "",
+						Port:     0,
+						APIKey:   "",
+						UseHTTPS: false,
+					},
 				},
 			},
-			{
-				ID:           "hardcover",
-				Name:         "Hardcover",
-				Enabled:      false,
-				Priority:     5,
-				RequiresAuth: true,
-				Credentials:  make(map[string]string),
+
+			// Path formatting & apply pipeline
+			PathFormat:           "{author}/{series_prefix}{title}/{track_title}.{ext}",
+			SegmentTitleFormat:   "{title} - {track}/{total_tracks}",
+			AutoRenameOnApply:    true,
+			AutoWriteTagsOnApply: true,
+			VerifyAfterWrite:     true,
+
+			SupportedExtensions: []string{
+				".m4b", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".wma",
 			},
-			{
-				ID:           "wikipedia",
-				Name:         "Wikipedia",
-				Enabled:      false, // Disabled by default — Wikipedia API returns 403
-				Priority:     6,
-				RequiresAuth: false,
-				Credentials:  make(map[string]string),
+			ExcludePatterns: []string{},
+
+			// Default metadata sources
+			MetadataSources: []MetadataSource{
+				{
+					ID:           "audible",
+					Name:         "Audible",
+					Enabled:      true,
+					Priority:     1,
+					RequiresAuth: false,
+					Credentials:  make(map[string]string),
+				},
+				{
+					ID:           "openlibrary",
+					Name:         "Open Library",
+					Enabled:      true,
+					Priority:     2,
+					RequiresAuth: false,
+					Credentials:  make(map[string]string),
+				},
+				{
+					ID:           "audnexus",
+					Name:         "Audnexus",
+					Enabled:      true,
+					Priority:     3,
+					RequiresAuth: false,
+					Credentials:  make(map[string]string),
+				},
+				{
+					ID:           "google-books",
+					Name:         "Google Books",
+					Enabled:      false,
+					Priority:     4,
+					RequiresAuth: true,
+					Credentials: map[string]string{
+						"apiKey": "",
+					},
+				},
+				{
+					ID:           "hardcover",
+					Name:         "Hardcover",
+					Enabled:      false,
+					Priority:     5,
+					RequiresAuth: true,
+					Credentials:  make(map[string]string),
+				},
+				{
+					ID:           "wikipedia",
+					Name:         "Wikipedia",
+					Enabled:      false, // Disabled by default — Wikipedia API returns 403
+					Priority:     6,
+					RequiresAuth: false,
+					Credentials:  make(map[string]string),
+				},
 			},
-		},
-	}
+		}
 	}) // end Mutate
 }
