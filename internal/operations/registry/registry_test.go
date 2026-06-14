@@ -1,7 +1,7 @@
 // file: internal/operations/registry/registry_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: d0e1f2a3-b4c5-6d7e-8f9a-0b1c2d3e4f5a
-// last-edited: 2026-05-06
+// last-edited: 2026-06-13
 
 package registry_test
 
@@ -254,5 +254,132 @@ func TestEnqueueOp_PublishesOpCreated(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected an op.created event, got events: %+v", bus.events)
+	}
+}
+
+// --- Task 4: enqueue parking tests ---
+
+// TestEnqueueOp_ParksWhenRequirementUnmet asserts that an op whose def has
+// Requires is parked as "waiting_deps" when the requirement is not satisfied.
+// The fakeStore's GetDepRev/GetOpCompletion stubs return 0/false, so any
+// op_completed requirement is always unmet.
+func TestEnqueueOp_ParksWhenRequirementUnmet(t *testing.T) {
+	r, store := newTestRegistry(t)
+	def := makeValidDef("test.park-unmet")
+	def.Requires = []registry.Requirement{
+		{Kind: registry.ReqOpCompleted, OpType: "test.prereq"},
+	}
+	if err := r.RegisterOp(def); err != nil {
+		t.Fatalf("RegisterOp: %v", err)
+	}
+
+	params := map[string]string{"book_id": "b1"}
+	opID, err := r.EnqueueOp(context.Background(), "test.park-unmet", params)
+	if err != nil {
+		t.Fatalf("EnqueueOp: %v", err)
+	}
+
+	row, err := store.GetOperationV2(opID)
+	if err != nil || row == nil {
+		t.Fatalf("GetOperationV2: %v", err)
+	}
+	if row.Status != "waiting_deps" {
+		t.Errorf("expected status=waiting_deps, got %q", row.Status)
+	}
+	if row.SubjectType != "book" {
+		t.Errorf("expected SubjectType=book, got %q", row.SubjectType)
+	}
+	if row.SubjectID != "b1" {
+		t.Errorf("expected SubjectID=b1, got %q", row.SubjectID)
+	}
+	if row.Requirements == "" {
+		t.Error("expected Requirements JSON to be persisted")
+	}
+}
+
+// TestEnqueueOp_NoRequirements_StillQueued asserts that an op with no
+// requirements goes straight to "queued" (additive guarantee: no new branches).
+func TestEnqueueOp_NoRequirements_StillQueued(t *testing.T) {
+	r, store := newTestRegistry(t)
+	def := makeValidDef("test.no-reqs")
+	if err := r.RegisterOp(def); err != nil {
+		t.Fatalf("RegisterOp: %v", err)
+	}
+
+	opID, err := r.EnqueueOp(context.Background(), "test.no-reqs", nil)
+	if err != nil {
+		t.Fatalf("EnqueueOp: %v", err)
+	}
+	if store.statusOf(opID) != "queued" {
+		t.Errorf("expected status=queued for op without requirements, got %q", store.statusOf(opID))
+	}
+}
+
+// TestEnqueueOp_CycleInDef_RejectsRegistration asserts that RegisterOp
+// rejects an OperationDef that would form a requirement cycle once a
+// second def creating the cycle is registered.
+func TestEnqueueOp_CycleInDef_RejectsRegistration(t *testing.T) {
+	r, _ := newTestRegistry(t)
+
+	defA := makeValidDef("test.cycle-a")
+	defA.Requires = []registry.Requirement{{Kind: registry.ReqOpCompleted, OpType: "test.cycle-b"}}
+	defB := makeValidDef("test.cycle-b")
+	defB.Requires = []registry.Requirement{{Kind: registry.ReqOpCompleted, OpType: "test.cycle-a"}}
+
+	// First registration is fine (no cycle yet with only one node).
+	if err := r.RegisterOp(defA); err != nil {
+		t.Fatalf("RegisterOp(defA): %v", err)
+	}
+	// Second registration closes the cycle → must be rejected.
+	if err := r.RegisterOp(defB); err == nil {
+		t.Fatal("expected RegisterOp to reject a def that creates a requirement cycle")
+	}
+}
+
+// TestEnqueueOp_WithRequiresOption_Parks verifies that per-enqueue requirements
+// added via WithRequires also cause parking when unmet.
+func TestEnqueueOp_WithRequiresOption_Parks(t *testing.T) {
+	r, store := newTestRegistry(t)
+	def := makeValidDef("test.park-via-option")
+	if err := r.RegisterOp(def); err != nil {
+		t.Fatalf("RegisterOp: %v", err)
+	}
+
+	params := map[string]string{"book_id": "b2"}
+	opID, err := r.EnqueueOp(context.Background(), "test.park-via-option", params,
+		registry.WithRequires(registry.Requirement{Kind: registry.ReqOpCompleted, OpType: "test.other"}))
+	if err != nil {
+		t.Fatalf("EnqueueOp: %v", err)
+	}
+	if store.statusOf(opID) != "waiting_deps" {
+		t.Errorf("expected status=waiting_deps, got %q", store.statusOf(opID))
+	}
+}
+
+// TestEnqueueOp_NoBookID_EmptySubject verifies that an op with requirements
+// but no book_id in params still enqueues (parks) with an empty subject —
+// the system degrades gracefully rather than returning an error.
+func TestEnqueueOp_NoBookID_EmptySubject(t *testing.T) {
+	r, store := newTestRegistry(t)
+	def := makeValidDef("test.park-no-bookid")
+	def.Requires = []registry.Requirement{
+		{Kind: registry.ReqOpCompleted, OpType: "test.prereq"},
+	}
+	if err := r.RegisterOp(def); err != nil {
+		t.Fatalf("RegisterOp: %v", err)
+	}
+
+	// No book_id in params.
+	opID, err := r.EnqueueOp(context.Background(), "test.park-no-bookid", map[string]string{})
+	if err != nil {
+		t.Fatalf("EnqueueOp: %v", err)
+	}
+	row, _ := store.GetOperationV2(opID)
+	if row == nil {
+		t.Fatal("op row not found")
+	}
+	// With no subject, requirements cannot be evaluated → park conservatively.
+	if row.Status != "waiting_deps" {
+		t.Errorf("expected status=waiting_deps for op with requirements but no subject, got %q", row.Status)
 	}
 }
